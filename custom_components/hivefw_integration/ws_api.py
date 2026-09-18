@@ -567,6 +567,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_contacts_paginated)
     websocket_api.async_register_command(hass, ws_get_node_counts)
     websocket_api.async_register_command(hass, ws_clear_discovered_contacts)
+    websocket_api.async_register_command(hass, ws_import_contacts)
 
     # Message store commands
     websocket_api.async_register_command(hass, ws_get_stored_messages)
@@ -843,6 +844,149 @@ async def ws_clear_discovered_contacts(
         coordinator.async_set_updated_data(updated_data)
 
     connection.send_result(msg["id"], {"removed": removed})
+
+
+# ─── hivefw/import_contacts ─────────────────────────────────────────
+# Additive import of MeshCore app discovered_contacts exports.
+# Existing public keys are NEVER modified; only previously unseen keys
+# are inserted into the upstream meshcore coordinator's discovered store.
+
+
+def _meshcore_import_contact(raw: dict) -> dict | None:
+    """Convert one MeshCore app export record to meshcore-ha contact shape."""
+    if not isinstance(raw, dict):
+        return None
+
+    public_key = str(raw.get("public_key") or "").strip().lower()
+    if len(public_key) != 64 or any(ch not in "0123456789abcdef" for ch in public_key):
+        return None
+
+    try:
+        node_type = int(raw.get("type", 0))
+        flags = int(raw.get("flags", 0))
+        last_advert = int(raw.get("last_advert", 0) or 0)
+        last_modified = int(raw.get("last_modified", 0) or 0)
+        latitude = float(raw.get("latitude", 0) or 0)
+        longitude = float(raw.get("longitude", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+
+    if not (0 <= node_type <= 255 and 0 <= flags <= 255):
+        return None
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return None
+    if last_advert < 0 or last_modified < 0:
+        return None
+
+    advert_path = str(raw.get("advert_path_list") or "").strip().lower()
+    out_path = ""
+    out_path_len = -1
+    out_path_hash_mode = -1
+
+    if advert_path:
+        hops = [hop.strip().removeprefix("0x") for hop in advert_path.split(",")]
+        if (
+            not hops
+            or any(not hop for hop in hops)
+            or any(len(hop) not in (2, 4, 6) for hop in hops)
+            or len({len(hop) for hop in hops}) != 1
+            or any(any(ch not in "0123456789abcdef" for ch in hop) for hop in hops)
+        ):
+            return None
+
+        hop_chars = len(hops[0])
+        out_path_hash_mode = hop_chars // 2 - 1
+        out_path_len = len(hops)
+        out_path = "".join(hops)
+
+    return {
+        "public_key": public_key,
+        "type": node_type,
+        "flags": flags,
+        "out_path_hash_mode": out_path_hash_mode,
+        "out_path_len": out_path_len,
+        "out_path": out_path,
+        "adv_name": str(raw.get("name") or ""),
+        "last_advert": last_advert,
+        "adv_lat": latitude,
+        "adv_lon": longitude,
+        "lastmod": last_modified,
+    }
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/import_contacts",
+        vol.Required("contacts"): [dict],
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_import_contacts(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict,
+) -> None:
+    """Import only contacts whose public_key is not already known.
+
+    Existing added OR discovered contacts are intentionally immutable in this
+    operation. The import is additive-only: duplicate keys in the file or in
+    the coordinator are counted as skipped and never overwrite any field.
+    """
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator:
+        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        return
+
+    try:
+        existing_keys = {
+            str(contact.get("public_key") or "").strip().lower()
+            for contact in (coordinator.get_all_contacts() or [])
+            if isinstance(contact, dict) and contact.get("public_key")
+        }
+
+        imported = 0
+        skipped_existing = 0
+        invalid = 0
+        seen_in_file: set[str] = set()
+
+        for raw in msg.get("contacts", []):
+            contact = _meshcore_import_contact(raw)
+            if contact is None:
+                invalid += 1
+                continue
+
+            public_key = contact["public_key"]
+            if public_key in existing_keys or public_key in seen_in_file:
+                skipped_existing += 1
+                continue
+
+            seen_in_file.add(public_key)
+            coordinator._discovered_contacts[public_key] = contact
+            coordinator.mark_contact_dirty(public_key)
+            imported += 1
+
+        if imported:
+            await coordinator._store.async_save(coordinator._discovered_contacts)
+            updated_data = dict(coordinator.data) if coordinator.data else {}
+            updated_data["contacts"] = coordinator.get_all_contacts()
+            coordinator.async_set_updated_data(updated_data)
+
+        connection.send_result(
+            msg["id"],
+            {
+                "success": True,
+                "imported": imported,
+                "skipped_existing": skipped_existing,
+                "invalid": invalid,
+                "total_received": len(msg.get("contacts", [])),
+            },
+        )
+    except Exception as ex:
+        _ws_send_error_safe(
+            connection, msg["id"], ex, handler="ws_import_contacts"
+        )
 
 
 # ─── meshcore/get_channels ──────────────────────────────────────────

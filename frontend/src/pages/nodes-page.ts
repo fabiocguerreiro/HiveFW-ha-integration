@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { Contact, Channel, HomeAssistant, PanelConfig } from '../types';
 import {
-  getContacts, getContactsPaginated, getNodeCounts, clearDiscoveredContacts,
+  getContacts, getContactsPaginated, getNodeCounts, clearDiscoveredContacts, importContacts,
 } from '../api';
 import type {
   PrimaryCategory, TypeCounts, NodeCounts,
@@ -535,7 +535,10 @@ export class NodesPage extends LitElement {
               ${this._renderL1Button('all', 'All')}
               ${this._renderL1Button('added', '★ Added')}
               ${this._renderL1Button('discovered', 'Discovered')}
-              <button class="l1-btn export-btn" @click=${() => this._exportContacts()}>Exportar Contactos</button>
+              <button class="l1-btn export-btn" @click=${() => this._exportContacts()}>Exportar</button>
+              <button class="l1-btn" @click=${() => this._pickImportFile()}>Importar</button>
+              <input id="contact-import-file" hidden type="file" accept=".json,application/json"
+                @change=${this._onImportFile}>
             </div>
 
             ${this._primaryFilter !== 'all' ? html`
@@ -961,6 +964,49 @@ export class NodesPage extends LitElement {
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
+  private _pickImportFile() {
+    const input = this.renderRoot.querySelector<HTMLInputElement>('#contact-import-file');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  private _onImportFile = async (event: Event) => {
+    if (!this.hass) return;
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text()) as {
+        discovered_contacts?: Array<Record<string, unknown>>;
+      };
+      if (!Array.isArray(parsed.discovered_contacts)) {
+        window.alert('Ficheiro inválido: falta discovered_contacts.');
+        return;
+      }
+
+      const result = await importContacts(
+        this.hass,
+        parsed.discovered_contacts,
+        this.config?.entry_id,
+      );
+
+      await Promise.all([this._loadPage(true), this._loadCounts()]);
+      this.dispatchEvent(new CustomEvent('contacts-changed', { bubbles: true, composed: true }));
+
+      window.alert(
+        `Importação concluída: ${result.imported} novos, ${result.skipped_existing} já existentes` +
+        (result.invalid ? `, ${result.invalid} inválidos.` : '.')
+      );
+    } catch (error) {
+      console.error('Failed to import contacts:', error);
+      window.alert('Não foi possível importar este ficheiro.');
+    } finally {
+      input.value = '';
+    }
+  };
 
   private _syncAll() {
     this._loadPage(true);

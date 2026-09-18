@@ -1517,7 +1517,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
   async __exportMeshCoreContacts(button) {
     if(!this.hass)return;
-    const original=button?.textContent||"Exportar Contactos";
+    const original=button?.textContent||"Exportar";
     if(button){
       button.disabled=true;
       button.textContent="A exportar…";
@@ -1579,6 +1579,65 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
   }
 
+  async __importMeshCoreContacts(file,button,page) {
+    if(!this.hass||!file)return;
+    const original=button?.textContent||"Importar";
+    if(button){
+      button.disabled=true;
+      button.textContent="A importar…";
+    }
+
+    try{
+      const text=await file.text();
+      const parsed=JSON.parse(text);
+      const contacts=parsed?.discovered_contacts;
+      if(!Array.isArray(contacts)){
+        throw new Error("Ficheiro inválido: falta discovered_contacts");
+      }
+
+      const msg={
+        type:"hivefw_integration/import_contacts",
+        contacts,
+      };
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+
+      const result=await this.hass.callWS(msg);
+
+      // Force a fresh list + map snapshot after an additive import.
+      this.__nodesMapContacts=null;
+      this.__nodesMapLoadedEntry=null;
+      this.__nodesMapSignature="";
+      page?._syncAll?.();
+      if(this.__nodesMapPane?.isConnected){
+        await this.__loadNodesMapContacts();
+        void this.__ensureSplitMap(page,this.__nodesMapPane);
+      }
+
+      if(button){
+        const imported=Number(result?.imported||0);
+        const skipped=Number(result?.skipped_existing||0);
+        const invalid=Number(result?.invalid||0);
+        button.textContent=invalid
+          ? `+${imported} · ${skipped} iguais · ${invalid} inválidos`
+          : `+${imported} · ${skipped} iguais`;
+        window.setTimeout(()=>{
+          if(button.isConnected)button.textContent=original;
+        },2600);
+      }
+    }catch(error){
+      console.error("HiveFW contact import failed:",error);
+      if(button){
+        button.textContent="Ficheiro inválido";
+        window.setTimeout(()=>{
+          if(button.isConnected)button.textContent=original;
+        },2200);
+      }
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+
   __ensureNodeExportControls(nroot,page) {
     const filters=nroot?.querySelector(".l1-filters");
     const actions=nroot?.querySelector(".header-actions");
@@ -1596,6 +1655,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       style.textContent=`
         .l1-filters .hive-export-btn{
           margin-left:auto;
+        }
+        .l1-filters .hive-export-btn,
+        .l1-filters .hive-import-btn{
           white-space:nowrap;
         }
         .map-selection{
@@ -1606,12 +1668,33 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     if(filters.querySelector(".hive-export-btn"))return;
+
     const exportButton=document.createElement("button");
     exportButton.className="l1-btn hive-export-btn";
-    exportButton.textContent="Exportar Contactos";
+    exportButton.textContent="Exportar";
     exportButton.title="Exportar no formato discovered_contacts da app MeshCore";
     exportButton.addEventListener("click",()=>void this.__exportMeshCoreContacts(exportButton));
-    filters.appendChild(exportButton);
+
+    const importButton=document.createElement("button");
+    importButton.className="l1-btn hive-import-btn";
+    importButton.textContent="Importar";
+    importButton.title="Importar apenas contactos novos; contactos existentes nunca são alterados";
+
+    const input=document.createElement("input");
+    input.type="file";
+    input.accept=".json,application/json";
+    input.hidden=true;
+    input.addEventListener("change",()=>{
+      const file=input.files?.[0];
+      if(file)void this.__importMeshCoreContacts(file,importButton,page);
+      input.value="";
+    });
+    importButton.addEventListener("click",()=>{
+      input.value="";
+      input.click();
+    });
+
+    filters.append(exportButton,importButton,input);
   }
 
   __enhanceNodesPage() {

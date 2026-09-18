@@ -47,6 +47,31 @@ export async function getContacts(
   }
 }
 
+export interface ImportContactsResult {
+  success: boolean;
+  imported: number;
+  skipped_existing: number;
+  invalid: number;
+  total_received: number;
+}
+
+/**
+ * Add contacts from a MeshCore app discovered_contacts export.
+ * Existing public keys are never modified by the backend.
+ */
+export async function importContacts(
+  hass: HomeAssistant,
+  contacts: Array<Record<string, unknown>>,
+  entryId?: string,
+): Promise<ImportContactsResult> {
+  const msg: Record<string, unknown> = {
+    type: 'hivefw_integration/import_contacts',
+    contacts,
+  };
+  if (entryId) msg.entry_id = entryId;
+  return hass.callWS<ImportContactsResult>(msg);
+}
+
 /**
  * Get list of channels
  */

@@ -4,6 +4,14 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.10] - 2026-09-19
+
+- Renamed **Exportar Contactos** to **Exportar** and added **Importar** beside it in the Nodes filter row.
+- Added additive-only MeshCore `discovered_contacts` import: existing public keys are never modified; only unknown keys are appended.
+- Import converts MeshCore app `advert_path_list` back to meshcore-ha `out_path`, `out_path_len`, and 1/2/3-byte `out_path_hash_mode` fields.
+- Import persists new discovered contacts to the upstream meshcore store and refreshes the Nodes list/map immediately.
+- Import reports counts for new, already-existing, and invalid records.
+
 ## [0.10.9] - 2026-09-18
 
 - Replaced marker-bound node details with a standalone Leaflet popup so it survives marker/layer refreshes.
