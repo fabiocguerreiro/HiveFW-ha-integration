@@ -44,7 +44,7 @@ PANEL_URL = "/meshcore_chat_panel/meshcore-chat-panel.js"
 PANEL_FRONTEND_PATH = str(Path(__file__).parent / "meshcore-chat-panel.js")
 
 PANEL_ICON = "mdi:radio-handheld"
-PANEL_TITLE = "MeshCore Chat"
+PANEL_TITLE = "MeshCore Repeater"
 
 # Sidebar URL slug — the panel will be reachable at /meshcore-chat in the HA UI.
 PANEL_URL_PATH = "meshcore-chat"
