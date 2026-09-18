@@ -9,6 +9,7 @@ import { UnreadController } from './chat/unread-controller';
 import './pages/chat-page';
 import './pages/devices-page';
 import './pages/nodes-page';
+import './pages/repeater-page';
 import './pages/neighbors-page';
 import './pages/settings-page';
 import './components/trace-dialog';
@@ -21,7 +22,7 @@ export class MeshCorePanel extends LitElement {
   @property({ type: Object }) panel?: Record<string, unknown>;
 
   @state() private _config: PanelConfig | null = null;
-  @state() private _activeTab: 'chat' | 'devices' | 'nodes' | 'neighbors' | 'settings' = 'chat';
+  @state() private _activeTab: 'chat' | 'devices' | 'nodes' | 'repeater' | 'neighbors' | 'settings' = 'chat';
   // managedDevices removed — devices-page.ts fetches its own data
   @state() private _devices: MeshCoreDevice[] = [];
   @state() private _contacts: Contact[] = [];
@@ -810,6 +811,11 @@ export class MeshCorePanel extends LitElement {
             Nodes
           </button>
           <button
+            class=${this._activeTab === 'repeater' ? 'active' : ''}
+            @click=${() => (this._activeTab = 'repeater')}>
+            Repeater
+          </button>
+          <button
             class=${this._activeTab === 'neighbors' ? 'active' : ''}
             @click=${() => (this._activeTab = 'neighbors')}>
             Vizinhos
@@ -877,6 +883,12 @@ export class MeshCorePanel extends LitElement {
             .narrow=${this.narrow}
             @node-action=${this._handleNodeAction}
             @contacts-changed=${() => this._loadDeviceData()}></meshcore-nodes-page>`;
+      case 'repeater':
+        return html`
+          <meshcore-repeater-page
+            .hass=${this.hass}
+            .config=${this._config}
+            .narrow=${this.narrow}></meshcore-repeater-page>`;
       case 'neighbors':
         return html`
           <meshcore-neighbors-page
