@@ -48,6 +48,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapMarkerElements = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
+    this.__nodesMapInitialViewEntry = null;
     this.__mapLoadStarted = false;
 
     this.__hiveNeighbors = null;
@@ -107,6 +108,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__nodesMapLoadedEntry = null;
       this.__nodesMapSignature = "";
       this.__nodesMapFocusId = "";
+      this.__nodesMapInitialViewEntry = null;
     }
 
     if (this._activeTab !== "neighbors") {
@@ -1572,6 +1574,30 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return source.filter((c)=>this.__nodeCoords(c)!==null);
   }
 
+  __localRepeaterMapContact() {
+    const status=this.__repeaterStatus;
+    const location=status?.location||{};
+    const lat=Number(location.latitude);
+    const lon=Number(location.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+    if(lat < -90 || lat > 90 || lon < -180 || lon > 180)return null;
+    if(lat===0&&lon===0)return null;
+    const name=this._selectedDevice?.name
+      || status?.name
+      || this._config?.name
+      || "HiveFW";
+    return {
+      public_key:"__hivefw_local__",
+      pubkey_prefix:"LOCAL",
+      adv_name:name,
+      adv_lat:lat,
+      adv_lon:lon,
+      latitude:lat,
+      longitude:lon,
+      __hivefw_local:true,
+    };
+  }
+
   __mapEntities(contacts) {
     return contacts
       .filter((c)=>c?.map_entity_id && this.hass?.states?.[c.map_entity_id])
@@ -1618,12 +1644,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return contacts.map((contact)=>{
       const coords=this.__nodeCoords(contact);
       if(!coords)return null;
+      const isLocal=!!contact.__hivefw_local;
       const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
-      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true});
-      marker.bindTooltip?.(name,{direction:"top",offset:[0,-12]});
+      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0});
+      marker.bindTooltip?.(isLocal?`${name} · local`:name,{
+        direction:"top",
+        offset:[0,-12],
+        permanent:isLocal,
+      });
       marker.on?.("click",()=>{
         this.__focusNodeOnMap(contact);
-        page?._openNodeDetail?.(contact);
+        if(!isLocal)page?._openNodeDetail?.(contact);
       });
       return marker;
     }).filter(Boolean);
@@ -1632,6 +1663,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
+    if(!this.__repeaterStatus && !this.__repeaterLoading){
+      await this.__loadRepeaterStatus();
+    }
     if(!Array.isArray(this.__nodesMapContacts)||this.__nodesMapLoadedEntry!==entryId){
       if(!pane.querySelector(".hive-map-note")){
         const note=document.createElement("div");
@@ -1647,6 +1681,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
     const contacts=this.__validMapContacts();
+    const localRepeater=this.__localRepeaterMapContact();
+    const mapContacts=localRepeater?[localRepeater,...contacts]:contacts;
 
     if(!ready){
       if(!this.__nodesMapElement?.isConnected){
@@ -1683,9 +1719,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
       pane.appendChild(selected);
 
       const map=document.createElement("ha-map");
-      map.autoFit=true;
+      map.autoFit=false;
       map.clusterMarkers=true;
       map.scaleRuler=true;
+      map.themeMode="light";
       map.addEventListener("editable-location-clicked",(e)=>{
         const id=e.detail?.id;
         const contact=this.__validMapContacts().find((c)=>this.__nodeId(c)===id);
@@ -1699,13 +1736,15 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__nodesMapSignature="";
     }
 
-    const signature=contacts.map((c)=>{
+    const signature=mapContacts.map((c)=>{
       const p=this.__nodeCoords(c);
       return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}`;
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
-    if(count)count.textContent=`${contacts.length} com localização · ${source.length} nós`;
+    if(count)count.textContent=localRepeater
+      ? `${contacts.length} nós com localização · centro: ${localRepeater.adv_name}`
+      : `${contacts.length} com localização · ${source.length} nós`;
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
     // It does expose Leaflet layers, so use real Leaflet markers there.
@@ -1714,14 +1753,27 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const map=this.__nodesMapElement;
       if("layers" in map && await this.__waitForLegacyLeaflet(map)){
         map.entities=[];
-        map.layers=this.__legacyLeafletLayers(map,contacts,page);
+        map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
       }else{
-        map.entities=this.__mapEntities(contacts);
+        map.entities=this.__mapEntities(mapContacts);
         if("editableLocations" in map){
-          map.editableLocations=this.__mapLocations(contacts);
+          map.editableLocations=this.__mapLocations(mapContacts);
         }
       }
       this.__nodesMapSignature=signature;
+    }
+
+    if(localRepeater && this.__nodesMapInitialViewEntry!==entryId){
+      const map=this.__nodesMapElement;
+      if(await this.__waitForLegacyLeaflet(map)){
+        const coords=this.__nodeCoords(localRepeater);
+        if(coords){
+          const L=map.Leaflet;
+          const radiusBounds=L.circle(coords,{radius:100000}).getBounds();
+          map.leafletMap.fitBounds(radiusBounds,{animate:false});
+          this.__nodesMapInitialViewEntry=entryId;
+        }
+      }
     }
   }
 
@@ -1740,11 +1792,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const contacts=this.__validMapContacts();
     const map=this.__nodesMapElement;
-    if(!("layers" in map)){
+    if(map.leafletMap){
+      map.leafletMap.setView(coords,12,{animate:true});
+    }else if(!("layers" in map)){
       map.entities=this.__mapEntities(contacts);
       if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
+      map.setView?.(coords,12);
     }
-    map.setView?.(coords,15);
   }
 
     __settingsSelect(label, options, value) {

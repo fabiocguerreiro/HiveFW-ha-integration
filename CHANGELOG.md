@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-09-18
+
+- Added the local HiveFW repeater as the map anchor using its dynamically reported name and advertised location.
+- Nodes map now opens centered on the local repeater with an approximately 100 km radius instead of fitting every remote node.
+- Fixed list-to-map focus on Home Assistant 2026.9 by calling the underlying Leaflet map directly.
+- Forced the Nodes map to Home Assistant light map mode for improved daytime readability.
+
 ## [0.10.2] - 2026-09-18
 
 - Fixed Nodes map pins on Home Assistant 2026.9 by using the stable `ha-map.layers` Leaflet API.
