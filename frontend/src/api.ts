@@ -420,10 +420,9 @@ export async function getNeighbors(
 }
 
 /**
- * Get HiveFW direct zero-hop repeater neighbors.
- *
- * The backend reads HiveFW's local neighbor table over the Companion
- * connection. No LoRa packet is transmitted by this request.
+ * Get direct zero-hop Repeater neighbors using the Companion's existing
+ * advert-path cache. This is a local Companion query and does not transmit
+ * anything over LoRa or require custom HiveFW firmware support.
  */
 export async function getHiveNeighbors(
   hass: HomeAssistant,
