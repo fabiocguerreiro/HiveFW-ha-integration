@@ -132,6 +132,16 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const style = document.createElement("style");
     style.id = "meshcore-repeater-fork-styles";
     style.textContent = `
+      .tab-bar {
+        overflow-x: auto !important;
+        scrollbar-width: none;
+      }
+      .tab-bar::-webkit-scrollbar { display: none; }
+      :host([narrow]) .tab-bar button {
+        flex: 0 0 auto !important;
+        min-width: 88px;
+      }
+
       .mcr-page {
         height: 100%;
         overflow-y: auto;
