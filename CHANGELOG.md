@@ -4,6 +4,12 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-09-18
+
+- Reworked MeshCore contact export against a real MeshCore app export: exact field types, compact coordinate strings, no trailing newline, and correct 1/2/3-byte path-hash chunking from `out_path`.
+- Moved **Exportar Contactos** to the same row as All / Added / Discovered; restored Sync to its original place.
+- Changed the map badge to **XX nós com localização - CENTRAR**; CENTRAR returns to the local HiveFW repeater with the initial ~100 km view.
+
 ## [0.10.5] - 2026-09-18
 
 - Added **Exportar Contactos** above Sync on the Nodes page.

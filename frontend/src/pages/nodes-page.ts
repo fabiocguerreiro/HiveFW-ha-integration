@@ -348,15 +348,8 @@ export class NodesPage extends LitElement {
       gap: 8px;
     }
 
-    .sync-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-
-    .sync-stack .sync-btn {
-      width: 100%;
+    .export-btn {
+      margin-left: auto;
       white-space: nowrap;
     }
 
@@ -542,6 +535,7 @@ export class NodesPage extends LitElement {
               ${this._renderL1Button('all', 'All')}
               ${this._renderL1Button('added', '★ Added')}
               ${this._renderL1Button('discovered', 'Discovered')}
+              <button class="l1-btn export-btn" @click=${() => this._exportContacts()}>Exportar Contactos</button>
             </div>
 
             ${this._primaryFilter !== 'all' ? html`
@@ -577,10 +571,7 @@ export class NodesPage extends LitElement {
                 title="Remove discovered contacts older than the configured threshold">
                 Clear Stale
               </button>
-              <div class="sync-stack">
-                <button class="sync-btn" @click=${() => this._exportContacts()}>Exportar Contactos</button>
-                <button class="sync-btn" @click=${() => this._syncAll()}>⟳ Sync</button>
-              </div>
+              <button class="sync-btn" @click=${() => this._syncAll()}>⟳ Sync</button>
             </div>
           </div>
 
@@ -750,7 +741,7 @@ export class NodesPage extends LitElement {
       return html`<div class="map-note">0 nós com localização · ${total} nós no total.<br>Os nós sem GPS anunciado permanecem na lista à esquerda.</div>`;
     }
     return html`
-      <div class="map-count">(${contacts.length}) nós com localização</div>
+      <div class="map-count">${contacts.length} nós com localização - CENTRAR</div>
       ${selected ? html`<div class="map-selection">${selected.adv_name || selected.pubkey_prefix}</div>` : nothing}
       <ha-map
         .entities=${this._mapEntities()}
@@ -893,22 +884,45 @@ export class NodesPage extends LitElement {
   }
 
   private _exportPath(contact: Contact): string {
-    const raw = contact.advert_path_list ?? contact.out_path ?? contact.path ?? '';
-    if (Array.isArray(raw)) {
-      return raw.map((part) => {
-        if (typeof part === 'number' && Number.isFinite(part)) return part.toString(16).padStart(2, '0');
-        return String(part ?? '').trim().replace(/^0x/i, '').toLowerCase();
-      }).filter(Boolean).join(',');
+    const existing = contact.advert_path_list;
+    if (Array.isArray(existing)) {
+      return existing.map((part) =>
+        String(part ?? '').trim().replace(/^0x/i, '').toLowerCase()
+      ).filter(Boolean).join(',');
     }
-    return String(raw ?? '').split(',').map((part) =>
-      part.trim().replace(/^0x/i, '').toLowerCase()
-    ).filter(Boolean).join(',');
+    if (typeof existing === 'string' && existing.includes(',')) {
+      return existing.split(',').map((part) =>
+        part.trim().replace(/^0x/i, '').toLowerCase()
+      ).filter(Boolean).join(',');
+    }
+
+    const rawHex = String(contact.out_path ?? contact.path ?? existing ?? '')
+      .replace(/[^0-9a-f]/gi, '')
+      .toLowerCase();
+    const outPathLen = Number(contact.out_path_len);
+    if (!rawHex || !Number.isInteger(outPathLen) || outPathLen <= 0) return '';
+
+    const mode = Number(contact.out_path_hash_mode ?? contact.path_hash_mode);
+    let hopChars = Number.isInteger(mode) && mode >= 0 && mode <= 2 ? (mode + 1) * 2 : 0;
+    if (rawHex.length % outPathLen === 0) {
+      const inferred = rawHex.length / outPathLen;
+      if ([2, 4, 6].includes(inferred) && (!hopChars || hopChars * outPathLen !== rawHex.length)) {
+        hopChars = inferred;
+      }
+    }
+    if (!hopChars || hopChars * outPathLen !== rawHex.length) return '';
+
+    const hops: string[] = [];
+    for (let i = 0; i < outPathLen; i++) {
+      hops.push(rawHex.slice(i * hopChars, (i + 1) * hopChars));
+    }
+    return hops.join(',');
   }
 
   private _exportCoord(value: unknown): string {
     const number = Number(value);
     if (!Number.isFinite(number) || number === 0) return '0.0';
-    return String(value ?? '').trim() || String(number);
+    return String(number);
   }
 
   private async _exportContacts() {
@@ -921,13 +935,13 @@ export class NodesPage extends LitElement {
       if (!/^[0-9a-f]{64}$/.test(publicKey)) continue;
       const row = {
         type: Number(contact.type ?? 0) || 0,
-        name: String(contact.adv_name ?? contact.name ?? '').trim(),
+        name: String(contact.adv_name ?? contact.name ?? ''),
         public_key: publicKey,
         flags: Number(contact.flags ?? 0) || 0,
         latitude: this._exportCoord(contact.adv_lat ?? contact.latitude),
         longitude: this._exportCoord(contact.adv_lon ?? contact.longitude),
-        last_advert: Number(contact.last_advert ?? contact.lastmod ?? 0) || 0,
-        last_modified: Number(contact.last_modified ?? contact.lastmod ?? contact.last_advert ?? 0) || 0,
+        last_advert: Math.trunc(Number(contact.last_advert ?? 0)) || 0,
+        last_modified: Math.trunc(Number(contact.lastmod ?? contact.last_modified ?? 0)) || 0,
         advert_path_list: this._exportPath(contact),
       };
       const previous = byKey.get(publicKey);
@@ -940,7 +954,7 @@ export class NodesPage extends LitElement {
       (a, b) => Number(b.last_modified ?? 0) - Number(a.last_modified ?? 0)
     );
     const blob = new Blob(
-      [JSON.stringify({ discovered_contacts: contacts }, null, 2) + '\n'],
+      [JSON.stringify({ discovered_contacts: contacts }, null, 2)],
       { type: 'application/json;charset=utf-8' }
     );
     const url = URL.createObjectURL(blob);

@@ -1420,22 +1420,52 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   __meshcoreExportPath(contact) {
-    const raw=contact?.advert_path_list ?? contact?.out_path ?? contact?.path ?? "";
-    if(Array.isArray(raw)){
-      return raw.map((part)=>{
-        if(typeof part==="number" && Number.isFinite(part))return part.toString(16).padStart(2,"0");
-        return String(part??"").trim().replace(/^0x/i,"").toLowerCase();
-      }).filter(Boolean).join(",");
+    const existing=contact?.advert_path_list;
+    if(Array.isArray(existing)){
+      return existing.map((part)=>
+        String(part??"").trim().replace(/^0x/i,"").toLowerCase()
+      ).filter(Boolean).join(",");
     }
-    return String(raw??"").split(",").map((part)=>
-      part.trim().replace(/^0x/i,"").toLowerCase()
-    ).filter(Boolean).join(",");
+    if(typeof existing==="string" && existing.includes(",")){
+      return existing.split(",").map((part)=>
+        part.trim().replace(/^0x/i,"").toLowerCase()
+      ).filter(Boolean).join(",");
+    }
+
+    const rawHex=String(contact?.out_path ?? contact?.path ?? existing ?? "")
+      .replace(/[^0-9a-f]/gi,"")
+      .toLowerCase();
+    const outPathLen=Number(contact?.out_path_len);
+    if(!rawHex || !Number.isInteger(outPathLen) || outPathLen<=0)return "";
+
+    const modeRaw=contact?.out_path_hash_mode ?? contact?.path_hash_mode;
+    const mode=Number(modeRaw);
+    let hopChars=Number.isInteger(mode) && mode>=0 && mode<=2
+      ? (mode+1)*2
+      : 0;
+
+    // Old stored contacts can have a missing/defaulted hash mode. The wire
+    // path length lets us recover the real width exactly: 1/2/3-byte hashes
+    // are 2/4/6 hex chars per hop.
+    if(rawHex.length % outPathLen===0){
+      const inferred=rawHex.length/outPathLen;
+      if([2,4,6].includes(inferred) && (!hopChars || hopChars*outPathLen!==rawHex.length)){
+        hopChars=inferred;
+      }
+    }
+    if(!hopChars || hopChars*outPathLen!==rawHex.length)return "";
+
+    const hops=[];
+    for(let i=0;i<outPathLen;i++){
+      hops.push(rawHex.slice(i*hopChars,(i+1)*hopChars));
+    }
+    return hops.join(",");
   }
 
   __meshcoreExportCoord(value) {
     const number=Number(value);
     if(!Number.isFinite(number) || number===0)return "0.0";
-    return String(value).trim() || String(number);
+    return String(number);
   }
 
   async __exportMeshCoreContacts(button) {
@@ -1458,13 +1488,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
         if(!/^[0-9a-f]{64}$/.test(publicKey))continue;
         const row={
           type:Number(contact?.type??0) || 0,
-          name:String(contact?.adv_name ?? contact?.name ?? "").trim(),
+          name:String(contact?.adv_name ?? contact?.name ?? ""),
           public_key:publicKey,
           flags:Number(contact?.flags??0) || 0,
           latitude:this.__meshcoreExportCoord(contact?.adv_lat ?? contact?.latitude),
           longitude:this.__meshcoreExportCoord(contact?.adv_lon ?? contact?.longitude),
-          last_advert:Number(contact?.last_advert ?? contact?.lastmod ?? 0) || 0,
-          last_modified:Number(contact?.last_modified ?? contact?.lastmod ?? contact?.last_advert ?? 0) || 0,
+          last_advert:Math.trunc(Number(contact?.last_advert ?? 0)) || 0,
+          last_modified:Math.trunc(Number(contact?.lastmod ?? contact?.last_modified ?? 0)) || 0,
           advert_path_list:this.__meshcoreExportPath(contact),
         };
         const previous=byKey.get(publicKey);
@@ -1472,7 +1502,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       }
 
       const contacts=[...byKey.values()].sort((a,b)=>b.last_modified-a.last_modified);
-      const json=JSON.stringify({discovered_contacts:contacts},null,2)+"\n";
+      const json=JSON.stringify({discovered_contacts:contacts},null,2);
       const blob=new Blob([json],{type:"application/json;charset=utf-8"});
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
@@ -1503,49 +1533,35 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   __ensureNodeExportControls(nroot,page) {
+    const filters=nroot?.querySelector(".l1-filters");
     const actions=nroot?.querySelector(".header-actions");
-    if(!actions)return;
+    if(!filters||!actions)return;
+
+    // Clean up the 0.10.5 stacked layout if this page survived a hot reload.
+    actions.querySelector(".hive-sync-stack")?.remove();
     const originalSync=actions.querySelector(":scope > .sync-btn:not(.hive-export-btn):not(.hive-sync-proxy)");
-    if(!originalSync)return;
+    if(originalSync)originalSync.style.display="";
 
     let style=nroot.querySelector("#hive-node-export-style");
     if(!style){
       style=document.createElement("style");
       style.id="hive-node-export-style";
       style.textContent=`
-        .hive-sync-stack{
-          display:flex;
-          flex-direction:column;
-          gap:4px;
-          flex:0 0 auto;
-        }
-        .hive-sync-stack .sync-btn{
-          width:100%;
+        .l1-filters .hive-export-btn{
+          margin-left:auto;
           white-space:nowrap;
         }
       `;
       nroot.appendChild(style);
     }
 
-    if(actions.querySelector(".hive-sync-stack"))return;
-    originalSync.style.display="none";
-
-    const stack=document.createElement("div");
-    stack.className="hive-sync-stack";
-
+    if(filters.querySelector(".hive-export-btn"))return;
     const exportButton=document.createElement("button");
-    exportButton.className="sync-btn hive-export-btn";
+    exportButton.className="l1-btn hive-export-btn";
     exportButton.textContent="Exportar Contactos";
-    exportButton.title="Exportar contactos no formato discovered_contacts da app MeshCore";
+    exportButton.title="Exportar no formato discovered_contacts da app MeshCore";
     exportButton.addEventListener("click",()=>void this.__exportMeshCoreContacts(exportButton));
-
-    const syncButton=document.createElement("button");
-    syncButton.className="sync-btn hive-sync-proxy";
-    syncButton.textContent="⟳ Sync";
-    syncButton.addEventListener("click",()=>originalSync.click());
-
-    stack.append(exportButton,syncButton);
-    actions.appendChild(stack);
+    filters.appendChild(exportButton);
   }
 
   __enhanceNodesPage() {
@@ -1617,7 +1633,18 @@ class MeshCoreRepeaterPanel extends BasePanel {
           background:color-mix(in srgb,var(--card-background-color) 90%,transparent);
           color:var(--primary-text-color);border:1px solid var(--divider-color);
           font-size:11px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.18);
-          pointer-events:none
+          pointer-events:auto
+        }
+        .hive-map-count button{
+          border:0;
+          padding:0;
+          background:transparent;
+          color:var(--primary-color,#03a9f4);
+          font:inherit;
+          font-weight:700;
+          cursor:pointer;
+          text-decoration:underline;
+          text-underline-offset:2px;
         }
         .hive-map-selection{
           position:absolute;left:10px;bottom:10px;z-index:30;
@@ -1859,6 +1886,26 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }).filter(Boolean);
   }
 
+  async __centerNodesMapOnLocalRepeater() {
+    const localRepeater=this.__localRepeaterMapContact();
+    const map=this.__nodesMapElement;
+    if(!localRepeater||!map)return false;
+    if(await this.__waitForLegacyLeaflet(map)){
+      const coords=this.__nodeCoords(localRepeater);
+      if(!coords)return false;
+      map.leafletMap.closePopup?.();
+      const bounds=map.Leaflet.circle(coords,{radius:100000}).getBounds();
+      map.leafletMap.fitBounds(bounds,{animate:true});
+      return true;
+    }
+    const coords=this.__nodeCoords(localRepeater);
+    if(coords && map.setView){
+      map.setView(coords,10);
+      return true;
+    }
+    return false;
+  }
+
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
@@ -1940,7 +1987,21 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
-    if(count)count.textContent=`(${contacts.length}) nós com localização`;
+    if(count){
+      count.replaceChildren();
+      const label=document.createElement("span");
+      label.textContent=`${contacts.length} nós com localização - `;
+      const center=document.createElement("button");
+      center.type="button";
+      center.textContent="CENTRAR";
+      center.title="Centrar no repetidor local";
+      center.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        void this.__centerNodesMapOnLocalRepeater();
+      });
+      count.append(label,center);
+    }
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
     // It does expose Leaflet layers, so use real Leaflet markers there.
@@ -1960,15 +2021,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     if(localRepeater && this.__nodesMapInitialViewEntry!==entryId){
-      const map=this.__nodesMapElement;
-      if(await this.__waitForLegacyLeaflet(map)){
-        const coords=this.__nodeCoords(localRepeater);
-        if(coords){
-          const L=map.Leaflet;
-          const radiusBounds=L.circle(coords,{radius:100000}).getBounds();
-          map.leafletMap.fitBounds(radiusBounds,{animate:false});
-          this.__nodesMapInitialViewEntry=entryId;
-        }
+      if(await this.__centerNodesMapOnLocalRepeater()){
+        this.__nodesMapInitialViewEntry=entryId;
       }
     }
   }
