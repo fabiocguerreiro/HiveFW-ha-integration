@@ -7,6 +7,7 @@ import type {
   DeviceConfig,
   NeighborInfo,
   HiveNeighborsResponse,
+  LocalRepeaterStatus,
   StoredMessage,
   FloodScopes,
 } from './types';
@@ -417,6 +418,20 @@ export async function getNeighbors(
   } catch {
     return [];
   }
+}
+
+/**
+ * Get local HiveFW/Companion Repeater state and RF statistics.
+ */
+export async function getLocalRepeaterStatus(
+  hass: HomeAssistant,
+  entryId?: string,
+): Promise<LocalRepeaterStatus> {
+  const msg: Record<string, unknown> = {
+    type: 'meshcore_chat/get_local_repeater_status',
+  };
+  if (entryId) msg.entry_id = entryId;
+  return hass.callWS<LocalRepeaterStatus>(msg);
 }
 
 /**
