@@ -374,3 +374,24 @@ export interface NeighborInfo {
   seen_48h?: number;
   entity_ids?: Record<string, string>;
 }
+
+/**
+ * Direct zero-hop repeater heard by HiveFW while repeater mode is enabled.
+ * Reading this table is local to the Companion connection and creates no
+ * additional LoRa traffic.
+ */
+export interface HiveNeighborInfo {
+  name: string;
+  pubkey_prefix: string;
+  snr: number;
+  last_seen: string;
+  secs_ago: number;
+  known_contact: boolean;
+}
+
+export interface HiveNeighborsResponse {
+  supported: boolean;
+  repeater_enabled: boolean;
+  count: number;
+  neighbors: HiveNeighborInfo[];
+}
