@@ -101,25 +101,55 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const tabBar = root.querySelector(".tab-bar");
     if (!tabBar) return;
 
-    // HiveFW is the central device: remote managed devices are folded into
-    // Dispositivo instead of occupying their own top-level page.
+    // Never move/remove Lit-managed tab buttons. Moving them with appendChild()
+    // breaks Lit's internal child-part bookkeeping after the injected Vizinhos
+    // page renders, which can leave the original tabs visually present but
+    // no longer navigable.
     const buttons = [...tabBar.querySelectorAll("button")];
     const byLabel = (...labels) => buttons.find((button) =>
       labels.includes(button.textContent?.trim())
     );
 
-    byLabel("Devices")?.remove();
-
     const settings = byLabel("Settings", "Dispositivo");
     const chat = byLabel("Chat", "Chat & Canais");
     const nodes = byLabel("Nodes", "Nós");
+    const devices = byLabel("Devices");
+    let neighbors = byLabel("Vizinhos");
 
-    if (settings) settings.textContent = "Dispositivo";
-    if (chat) chat.textContent = "Chat & Canais";
-    if (nodes) nodes.textContent = "Nós";
+    if (settings) {
+      settings.textContent = "Dispositivo";
+      settings.style.order = "1";
+    }
+    if (chat) {
+      chat.textContent = "Chat & Canais";
+      chat.style.order = "2";
+    }
+    if (nodes) {
+      nodes.textContent = "Nós";
+      nodes.style.order = "3";
+    }
 
-    let neighbors = tabBar.querySelector("[data-hive-neighbors-tab]")
-      || byLabel("Vizinhos");
+    // The committed production bundle still contains the old Devices tab.
+    // Reuse that existing Lit-managed button as Vizinhos instead of deleting
+    // it and inserting/moving DOM nodes. Its original click sets "devices";
+    // this listener runs immediately afterwards and changes the final state
+    // to "neighbors" before Lit performs the batched update.
+    if (!neighbors && devices) {
+      neighbors = devices;
+      neighbors.textContent = "Vizinhos";
+      neighbors.dataset.hiveNeighborsTab = "1";
+
+      if (!neighbors.dataset.hiveNeighborsBound) {
+        neighbors.dataset.hiveNeighborsBound = "1";
+        neighbors.addEventListener("click", () => {
+          this._activeTab = "neighbors";
+          this.requestUpdate();
+        });
+      }
+    }
+
+    // Fallback for a future bundle that has neither the legacy Devices button
+    // nor the canonical Vizinhos button. Normally this branch is never used.
     if (!neighbors) {
       neighbors = document.createElement("button");
       neighbors.dataset.hiveNeighborsTab = "1";
@@ -128,13 +158,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
         this._activeTab = "neighbors";
         this.requestUpdate();
       });
+      tabBar.appendChild(neighbors);
     }
 
-    for (const button of [settings, chat, nodes, neighbors]) {
-      if (button) tabBar.appendChild(button);
-    }
+    neighbors.style.order = "4";
+    neighbors.classList.toggle("active", this._activeTab === "neighbors");
 
-    neighbors?.classList.toggle("active", this._activeTab === "neighbors");
+    // If the legacy Devices handler ran first, make sure its active class
+    // cannot survive once this button is acting as Vizinhos.
+    if (this._activeTab !== "neighbors") {
+      neighbors.classList.remove("active");
+    }
   }
 
   __ensureRepeaterStyles(root) {
