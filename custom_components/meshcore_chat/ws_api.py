@@ -1075,6 +1075,8 @@ async def ws_get_local_repeater_status(hass, connection, msg):
         battery = await _payload(commands.get_bat) or {}
         tuning = await _payload(commands.get_tuning) or {}
         device_clock = await _payload(commands.get_time) or {}
+        telemetry = await _payload(commands.get_self_telemetry) or {}
+        repeat_freqs = await _payload(commands.get_allowed_repeat_freq) or {}
         core = await _payload(commands.get_stats_core) or {}
         radio = await _payload(commands.get_stats_radio) or {}
         packets = await _payload(commands.get_stats_packets) or {}
@@ -1099,6 +1101,20 @@ async def ws_get_local_repeater_status(hass, connection, msg):
                 "name": coordinator.name or self_info.get("name") or "",
                 "firmware": device.get("ver") or coordinator.device_info.get("sw_version", ""),
                 "model": device.get("model") or coordinator.device_info.get("model", ""),
+                # BLE PIN is intentionally not exposed. This integration is
+                # used over Wi-Fi and the PIN adds no operational value.
+                "device_info": {
+                    "protocol_version": device.get("fw ver"),
+                    "firmware_build": device.get("fw_build"),
+                    "model": device.get("model"),
+                    "version": device.get("ver"),
+                    "max_contacts": device.get("max_contacts"),
+                    "max_channels": device.get("max_channels"),
+                    "repeat": device.get("repeat"),
+                    "path_hash_mode": device.get("path_hash_mode"),
+                },
+                "telemetry": telemetry.get("lpp", []),
+                "allowed_repeat_frequencies": repeat_freqs.get("freqs", []),
                 "radio": {
                     "frequency": self_info.get("radio_freq"),
                     "bandwidth": self_info.get("radio_bw"),

@@ -303,6 +303,61 @@ export class SettingsPage extends LitElement {
         grid-column: 1 / -1;
       }
 
+      .hivefw-info-card {
+        grid-column: 1 / -1;
+      }
+
+      .hivefw-info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 14px;
+      }
+
+      .hivefw-info-item {
+        min-width: 0;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--secondary-background-color, #f5f5f5);
+      }
+
+      .hivefw-info-label {
+        color: var(--secondary-text-color);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+      }
+
+      .hivefw-info-value {
+        margin-top: 3px;
+        overflow-wrap: anywhere;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .hivefw-telemetry-list {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 2px;
+      }
+
+      .hivefw-telemetry-chip {
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--primary-color) 9%, var(--secondary-background-color));
+        color: var(--primary-text-color);
+        font-size: 10px;
+      }
+
+      @media (max-width: 900px) {
+        .hivefw-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 520px) {
+        .hivefw-info-grid { grid-template-columns: 1fr; }
+      }
+
       .managed-devices-summary {
         display: flex;
         flex-wrap: wrap;
@@ -871,6 +926,11 @@ export class SettingsPage extends LitElement {
               ${this._renderDeviceInfo()}
             </div>
 
+            <div id="hivefw-info-card" data-native="1" class="device-section hivefw-info-card">
+              <div class="card-title">Informação HiveFW</div>
+              ${this._renderHiveFwInfo()}
+            </div>
+
             <!-- Radio & RF Settings -->
             <div class="device-section">
               <div class="card-title">Radio</div>
@@ -1086,14 +1146,6 @@ export class SettingsPage extends LitElement {
           <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('send_advert', {flood: true}, 'Flood Advert')}>Flood Advert</button>
           <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('set_time', {val: Math.floor(Date.now() / 1000)}, 'Sync Clock')}>Sync Clock</button>
           <button class="action-btn" ?disabled=${!isOnline} @click=${this._onCompanionTrace}>Trace</button>
-        </div>
-
-        <div class="actions-row" style="margin-top:8px;">
-          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._loadDeviceConfig()}>Refresh HiveFW</button>
-          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_self_telemetry', undefined, 'Telemetry')}>Telemetry</button>
-          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_bat', undefined, 'Battery / Storage')}>Battery / Storage</button>
-          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('send_device_query', undefined, 'Device Info')}>Device Info</button>
-          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_allowed_repeat_freq', undefined, 'Repeater Frequencies')}>Repeater Frequencies</button>
           <button class="action-btn danger" ?disabled=${!isOnline} @click=${() => {
             if (window.confirm('Reiniciar agora o HiveFW?')) {
               void this._executeCompanionAction('reboot', undefined, 'Reboot');
@@ -1412,6 +1464,70 @@ export class SettingsPage extends LitElement {
   // _renderLocationSource removed — merged into _renderLocation
 
   // Config backup, diagnostics, and backup & recovery removed — low value
+
+  private _renderHiveFwInfo() {
+    const status = this._repeaterStatus;
+    if (!status) {
+      return html`<div style="font-size:12px;color:var(--secondary-text-color);">Sem informação HiveFW disponível.</div>`;
+    }
+
+    const info = status.device_info || {};
+    const pathHashLabels = ['1 byte', '2 bytes', '3 bytes'];
+    const pathHash = info.path_hash_mode == null
+      ? '—'
+      : pathHashLabels[Number(info.path_hash_mode)] ?? String(info.path_hash_mode);
+
+    const ranges = (status.allowed_repeat_frequencies || []).map((r) => {
+      const lo = Number(r.min) / 1000;
+      const hi = Number(r.max) / 1000;
+      return lo === hi ? `${lo.toFixed(3)} MHz` : `${lo.toFixed(3)}–${hi.toFixed(3)} MHz`;
+    }).join(', ') || '—';
+
+    const batteryMv = Number(status.battery?.level);
+    const battery = Number.isFinite(batteryMv) ? `${(batteryMv / 1000).toFixed(3)} V` : '—';
+    const storage = status.battery?.total_kb
+      ? `${status.battery.used_kb ?? 0} / ${status.battery.total_kb} KB`
+      : '—';
+
+    const rows: Array<[string, string]> = [
+      ['Nome', status.name || this.selectedDevice?.name || '—'],
+      ['Modelo', info.model || status.model || '—'],
+      ['Firmware', info.version || status.firmware || '—'],
+      ['Build', info.firmware_build || '—'],
+      ['Protocolo', info.protocol_version != null ? `v${info.protocol_version}` : '—'],
+      ['Modo Repeater', status.repeat ? 'Ativo' : 'Desligado'],
+      ['Path Hash', pathHash],
+      ['Máx. contactos', info.max_contacts != null ? String(info.max_contacts) : '—'],
+      ['Máx. canais', info.max_channels != null ? String(info.max_channels) : '—'],
+      ['Bateria', battery],
+      ['Storage', storage],
+      ['Frequências Repeater', ranges],
+    ];
+
+    return html`
+      <div class="hivefw-info-grid">
+        ${rows.map(([label, value]) => html`
+          <div class="hivefw-info-item">
+            <div class="hivefw-info-label">${label}</div>
+            <div class="hivefw-info-value">${value}</div>
+          </div>
+        `)}
+
+        ${status.telemetry?.length
+          ? html`
+              <div class="hivefw-telemetry-list">
+                ${status.telemetry.map((item) => html`
+                  <span class="hivefw-telemetry-chip">
+                    ${item.type || 'telemetry'}${item.channel != null ? ` ch${item.channel}` : ''}:
+                    ${typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value ?? '—')}
+                  </span>
+                `)}
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
 
   private _renderManagedDevices() {
     const repeaters = this._managedDevices.repeaters || [];

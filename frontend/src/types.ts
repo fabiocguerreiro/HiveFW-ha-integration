@@ -411,6 +411,25 @@ export interface LocalRepeaterStatus {
   name: string;
   firmware: string;
   model: string;
+  device_info: {
+    protocol_version?: number;
+    firmware_build?: string;
+    model?: string;
+    version?: string;
+    max_contacts?: number;
+    max_channels?: number;
+    repeat?: boolean;
+    path_hash_mode?: number;
+  };
+  telemetry: Array<{
+    channel?: number;
+    type?: string;
+    value?: unknown;
+  }>;
+  allowed_repeat_frequencies: Array<{
+    min: number;
+    max: number;
+  }>;
   radio: {
     frequency?: number;
     bandwidth?: number;

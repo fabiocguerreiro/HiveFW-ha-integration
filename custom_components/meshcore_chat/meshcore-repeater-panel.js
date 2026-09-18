@@ -55,17 +55,29 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!root) return;
 
     const title = root.querySelector(".panel-title");
-    if (title && !title.querySelector(".hivefw-header-logo")) {
-      title.textContent = "";
-      const logo = document.createElement("span");
-      logo.className = "hivefw-header-logo";
-      logo.setAttribute("aria-hidden", "true");
-      const product = document.createElement("span");
-      product.className = "hivefw-header-product";
-      product.textContent = "Repeater";
-      title.setAttribute("aria-label", "HiveFW Repeater");
-      title.append(logo, product);
+    if (title) {
+      let logo = title.querySelector(".hivefw-header-logo");
+      let product = title.querySelector(".hivefw-header-product");
+      if (!logo || !product) {
+        title.textContent = "";
+        logo = document.createElement("span");
+        logo.className = "hivefw-header-logo";
+        logo.setAttribute("aria-hidden", "true");
+        product = document.createElement("span");
+        product.className = "hivefw-header-product";
+        title.append(logo, product);
+      }
+      const radioName = this._selectedDevice?.name
+        || this.__repeaterStatus?.name
+        || this._config?.name
+        || "HiveFW";
+      product.textContent = `– ${radioName}`;
+      title.setAttribute("aria-label", `HiveFW – ${radioName}`);
     }
+
+    // The HiveFW radio is the integration's primary device. Keep the right
+    // side of the header deliberately minimal: connection state + battery.
+    root.querySelectorAll(".header-right .device-info-wrap").forEach((el) => el.remove());
 
     this.__ensureRepeaterStyles(root);
     this.__ensureTabs(root);
@@ -708,10 +720,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!grid) return;
 
     this.__renderSettingsRepeaterCard(sroot, grid);
+    this.__renderHiveInfoCard(sroot, grid);
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
-    this.__enhanceHiveTools(sroot);
+    this.__ensureRebootAction(sroot);
 
     this.__settingsObserver?.takeRecords();
     this.__settingsObserver?.observe(sroot, { childList: true, subtree: true });
@@ -933,47 +946,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
   }
 
-  __enhanceHiveTools(sroot) {
-    const deviceSection = sroot.querySelector(".device-section");
-    if (!deviceSection) return;
-    const rows = [...deviceSection.querySelectorAll(".actions-row")];
-    if (!rows.length || deviceSection.querySelector("#hivefw-tools-row")) return;
-
-    const row=document.createElement("div");
-    row.id="hivefw-tools-row";
-    row.className="actions-row";
-    row.style.marginTop="8px";
-    const settingsPage=sroot.host;
-    const run=(command,args,label)=>async()=>{
-      try{
-        const msg={type:"meshcore_chat/execute_local",command};
-        if(args) msg.args=args;
-        const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
-        const result=await this.hass.callWS(msg);
-        settingsPage._showStatusMessage?.(`HiveFW: ${label} → ${result?.response||"OK"}`,"success");
-        if(["send_device_query","get_bat","get_self_telemetry"].includes(command)) void this.__loadRepeaterStatus();
-      }catch(error){
-        settingsPage._showStatusMessage?.(`HiveFW: ${label} failed — ${String(error)}`,"error");
-      }
-    };
-    const specs=[
-      ["Refresh HiveFW",null,null],
-      ["Telemetry","get_self_telemetry",null],
-      ["Battery / Storage","get_bat",null],
-      ["Device Info","send_device_query",null],
-      ["Repeater Frequencies","get_allowed_repeat_freq",null],
-    ];
-    for(const [label,command,args] of specs){
-      const b=document.createElement("button"); b.className="action-btn"; b.textContent=label;
-      b.addEventListener("click",command?run(command,args,label):()=>{ void this.__loadRepeaterStatus(); settingsPage._loadDeviceConfig?.(); });
-      row.appendChild(b);
-    }
-    const reboot=document.createElement("button"); reboot.className="action-btn danger"; reboot.textContent="Reboot";
-    reboot.addEventListener("click",()=>{ if(window.confirm("Reiniciar agora o HiveFW?")) void run("reboot",null,"Reboot")(); });
-    row.appendChild(reboot);
-    rows[rows.length-1].after(row);
-  }
-
   async __loadManagedDevices() {
     if (!this.hass || this.__managedDevicesLoading) return;
     this.__managedDevicesLoading = true;
@@ -1020,6 +992,35 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     meta.prepend(role);
     meta.append(nodes, channels);
+  }
+
+  __ensureRebootAction(sroot) {
+    const deviceSection = sroot.querySelector(".device-section");
+    if (!deviceSection) return;
+
+    const actionRows = [...deviceSection.querySelectorAll(".actions-row")];
+    const row = actionRows.find((el) =>
+      [...el.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Trace")
+    );
+    if (!row) return;
+    if ([...row.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Reboot")) return;
+
+    const reboot = document.createElement("button");
+    reboot.className = "action-btn danger";
+    reboot.textContent = "Reboot";
+    reboot.addEventListener("click", async () => {
+      if (!window.confirm("Reiniciar agora o HiveFW?")) return;
+      try {
+        const msg = { type: "meshcore_chat/execute_local", command: "reboot" };
+        const entryId = this.__entryId();
+        if (entryId) msg.entry_id = entryId;
+        await this.hass.callWS(msg);
+      } catch (error) {
+        const page = sroot.host;
+        page?._showStatusMessage?.(`HiveFW: Reboot failed — ${String(error)}`, "error");
+      }
+    });
+    row.appendChild(reboot);
   }
 
   __renderManagedDevicesCard(sroot, grid) {
@@ -1112,6 +1113,94 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     card.appendChild(list);
+  }
+
+  __renderHiveInfoCard(sroot, grid) {
+    let card = sroot.querySelector("#hivefw-info-card");
+    if (card?.dataset.native === "1") return;
+
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "hivefw-info-card";
+      card.className = "device-section";
+      card.style.gridColumn = "1 / -1";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = "Informação HiveFW";
+    card.appendChild(title);
+
+    const status = this.__repeaterStatus;
+    if (!status) {
+      const empty = document.createElement("div");
+      empty.className = "hive-settings-note";
+      empty.textContent = "Sem informação HiveFW disponível.";
+      card.appendChild(empty);
+      return;
+    }
+
+    const info = status.device_info || {};
+    const pathLabels = ["1 byte", "2 bytes", "3 bytes"];
+    const ranges = (status.allowed_repeat_frequencies || []).map((r) => {
+      const lo = Number(r.min) / 1000;
+      const hi = Number(r.max) / 1000;
+      return lo === hi ? `${lo.toFixed(3)} MHz` : `${lo.toFixed(3)}–${hi.toFixed(3)} MHz`;
+    }).join(", ") || "—";
+    const batteryMv = Number(status.battery?.level);
+    const rows = [
+      ["Nome", status.name || this._selectedDevice?.name || "—"],
+      ["Modelo", info.model || status.model || "—"],
+      ["Firmware", info.version || status.firmware || "—"],
+      ["Build", info.firmware_build || "—"],
+      ["Protocolo", info.protocol_version != null ? `v${info.protocol_version}` : "—"],
+      ["Modo Repeater", status.repeat ? "Ativo" : "Desligado"],
+      ["Path Hash", info.path_hash_mode == null ? "—" : (pathLabels[Number(info.path_hash_mode)] || String(info.path_hash_mode))],
+      ["Máx. contactos", info.max_contacts ?? "—"],
+      ["Máx. canais", info.max_channels ?? "—"],
+      ["Bateria", Number.isFinite(batteryMv) ? `${(batteryMv / 1000).toFixed(3)} V` : "—"],
+      ["Storage", status.battery?.total_kb ? `${status.battery.used_kb ?? 0} / ${status.battery.total_kb} KB` : "—"],
+      ["Frequências Repeater", ranges],
+    ];
+
+    const gridInfo = document.createElement("div");
+    gridInfo.style.cssText =
+      "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px 12px;";
+    for (const [label, value] of rows) {
+      const item = document.createElement("div");
+      item.style.cssText =
+        "padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);";
+      const l = document.createElement("div");
+      l.style.cssText =
+        "color:var(--secondary-text-color);font-size:10px;text-transform:uppercase;letter-spacing:.05em;";
+      l.textContent = label;
+      const v = document.createElement("div");
+      v.style.cssText =
+        "margin-top:3px;overflow-wrap:anywhere;font-size:12px;font-weight:600;";
+      v.textContent = String(value);
+      item.append(l, v);
+      gridInfo.appendChild(item);
+    }
+    card.appendChild(gridInfo);
+
+    if (Array.isArray(status.telemetry) && status.telemetry.length) {
+      const telemetry = document.createElement("div");
+      telemetry.style.cssText =
+        "display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;";
+      for (const item of status.telemetry) {
+        const chip = document.createElement("span");
+        chip.style.cssText =
+          "padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--primary-color) 9%,var(--secondary-background-color));font-size:10px;";
+        const value = typeof item.value === "object"
+          ? JSON.stringify(item.value)
+          : String(item.value ?? "—");
+        chip.textContent = `${item.type || "telemetry"}${item.channel != null ? ` ch${item.channel}` : ""}: ${value}`;
+        telemetry.appendChild(chip);
+      }
+      card.appendChild(telemetry);
+    }
   }
 
   __settingsSelect(label, options, value) {

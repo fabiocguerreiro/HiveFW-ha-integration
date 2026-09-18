@@ -722,7 +722,7 @@ export class MeshCorePanel extends LitElement {
               : html``}
             <div class="panel-title" aria-label="HiveFW Repeater">
               <span class="hivefw-wordmark" aria-hidden="true"></span>
-              <span class="panel-product-name">Repeater</span>
+              <span class="panel-product-name">– ${device?.name || 'HiveFW'}</span>
             </div>
           </div>
           <div class="header-right">
@@ -743,51 +743,6 @@ export class MeshCorePanel extends LitElement {
                     <span class="battery-pct">${this._getBatteryLevel(device)}%</span>
                   </span>`
               : html``}
-            ${this._devices.length > 1
-              ? html`
-                  <div class="device-info-wrap">
-                    <button
-                      type="button"
-                      class="device-switcher"
-                      aria-haspopup="listbox"
-                      aria-expanded=${this._deviceDropdownOpen ? 'true' : 'false'}
-                      @click=${this._toggleDeviceDropdown}>
-                      <span class="device-name">${device?.name || ''}</span>
-                      <span class="device-prefix">(${device?.pubkey_prefix?.substring(0, 6) || ''})</span>
-                      <span class="device-switcher-caret" aria-hidden="true">▾</span>
-                    </button>
-                    ${this._deviceDropdownOpen
-                      ? html`
-                          <ul class="device-switcher-menu" role="listbox">
-                            ${this._devices.map(
-                              (d) => html`
-                                <li
-                                  role="option"
-                                  aria-selected=${d.entry_id === this._selectedEntryId
-                                    ? 'true'
-                                    : 'false'}
-                                  class=${d.entry_id === this._selectedEntryId ? 'active' : ''}
-                                  @click=${() => this._selectDevice(d.entry_id)}>
-                                  <span class="device-name">
-                                    ${d.name}${d.connected ? '' : ' — offline'}
-                                  </span>
-                                  <span class="device-prefix">
-                                    (${d.pubkey_prefix?.substring(0, 6) || '?'})
-                                  </span>
-                                </li>
-                              `,
-                            )}
-                          </ul>
-                        `
-                      : ''}
-                  </div>
-                `
-              : html`
-                  <div class="device-info-wrap">
-                    <span class="device-name">${device?.name || ''}</span>
-                    <span class="device-prefix">(${device?.pubkey_prefix?.substring(0, 6) || ''})</span>
-                  </div>
-                `}
           </div>
         </div>
 
