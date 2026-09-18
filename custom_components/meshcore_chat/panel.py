@@ -1,11 +1,11 @@
-"""MeshCore Repeater sidebar panel registration.
+"""HiveFW Repeater sidebar panel registration.
 
 Adapted from the upstream meshcore integration's panel registration.
 
 Differences vs. upstream:
 - All HTTP/sidebar URLs are scoped under `meshcore_chat` so the companion
   panel co-exists with upstream's panel if both are installed.
-- Sidebar title is "MeshCore Repeater" for the HiveFW Companion+Repeater UI.
+- Sidebar title is "HiveFW Repeater" for the HiveFW Companion+Repeater UI.
 - A small wrapper loads the existing production bundle and adds HiveFW-specific UI
   until the canonical TypeScript bundle is rebuilt.
 """
@@ -44,14 +44,14 @@ PANEL_FRONTEND_PATH = str(Path(__file__).parent / "meshcore-chat-panel.js")
 PANEL_WRAPPER_PATH = str(Path(__file__).parent / "meshcore-repeater-panel.js")
 
 PANEL_ICON = "mdi:radio-handheld"
-PANEL_TITLE = "MeshCore Repeater"
+PANEL_TITLE = "HiveFW Repeater"
 
 # Sidebar URL slug — the panel will be reachable at /meshcore-chat in the HA UI.
 PANEL_URL_PATH = "meshcore-chat"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
-    """Register the MeshCore Repeater sidebar panel.
+    """Register the HiveFW Repeater sidebar panel.
 
     Static-path registration is gated on the module-level
     `_static_path_registered` flag — it runs exactly once per HA process
@@ -73,7 +73,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             ]
         )
         _static_path_registered = True
-        _LOGGER.debug("Registered MeshCore Chat panel static path %s", PANEL_URL)
+        _LOGGER.debug("Registered HiveFW Repeater panel static path %s", PANEL_URL)
     async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -88,11 +88,11 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         },
         require_admin=False,
     )
-    _LOGGER.debug("Registered MeshCore Chat sidebar panel")
+    _LOGGER.debug("Registered HiveFW Repeater sidebar panel")
 
 
 async def async_remove_panel(hass: HomeAssistant) -> None:
-    """Remove the MeshCore Repeater sidebar panel.
+    """Remove the HiveFW Repeater sidebar panel.
 
     The static path registered in `async_register_panel` is intentionally
     NOT torn down — `hass.http` has no public unregister API, and aiohttp
@@ -102,4 +102,4 @@ async def async_remove_panel(hass: HomeAssistant) -> None:
     static paths are process-lifetime, sidebar entries are entry-lifetime.
     """
     frontend_async_remove_panel(hass, PANEL_URL_PATH)
-    _LOGGER.debug("Removed MeshCore Chat sidebar panel")
+    _LOGGER.debug("Removed HiveFW Repeater sidebar panel")

@@ -1,10 +1,10 @@
-<p align="center"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/banner.png" alt="MeshCore Chat for Home Assistant" width="800"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/banner.png" alt="HiveFW HA Integration" width="800"></p>
 
-# MeshCore Chat for Home Assistant
+# HiveFW HA Integration
 
-A sidebar chat panel and persistent message store for the [MeshCore](https://meshcore.io) mesh radio network that was written by an agent, thoroughly reviewed and carefully tested by a human.
+Home Assistant interface for **HiveFW Companion-Repeater**, combining local device management, Repeater controls and diagnostics with MeshCore chat, channels, nodes and zero-hop neighbor visibility.
 
-Works as a **companion** to the [core meshcore integration](https://github.com/meshcore-dev/meshcore-ha) — install both. This integration does not drive the radio itself; it adds a chat UI, message persistence, and search on top of the events and services exposed by the core integration.
+Works on top of the [core meshcore integration](https://github.com/meshcore-dev/meshcore-ha) and is tailored to HiveFW's **Client-Repeater** architecture. The internal Home Assistant domain remains `meshcore_chat` for upgrade compatibility.
 
 > **Status:** v0.3 in active development.
 

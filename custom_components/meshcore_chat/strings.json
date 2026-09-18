@@ -2,19 +2,19 @@
   "config": {
     "step": {
       "user": {
-        "title": "MeshCore Chat",
-        "description": "Add the MeshCore Chat companion integration. The core meshcore integration must also be installed for the panel to receive messages."
+        "title": "HiveFW HA Integration",
+        "description": "Add the HiveFW HA Integration for HiveFW Companion-Repeater management, chat, channels, nodes and diagnostics. The core meshcore integration must also be installed for the panel to receive messages."
       }
     },
     "abort": {
-      "single_instance_allowed": "MeshCore Chat is already configured.",
+      "single_instance_allowed": "HiveFW HA Integration is already configured.",
       "meshcore_not_installed": "The MeshCore integration is not installed. Install it from HACS first, then add MeshCore Chat."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "MeshCore Chat options",
+        "title": "HiveFW HA Integration options",
         "description": "Tune how long the message store retains conversation history. Changes take effect on the next message save and at the next Home Assistant restart.",
         "data": {
           "max_messages_per_conversation": "Max messages per conversation",
@@ -33,8 +33,8 @@
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "MeshCore Chat needs the MeshCore integration",
-            "description": "MeshCore Chat is a companion to the core meshcore integration, but no MeshCore device is currently configured. Install and configure the meshcore integration first (Settings → Devices & Services → Add Integration → MeshCore), or remove MeshCore Chat if you no longer need it.\n\nClick Submit to acknowledge this issue. It will clear automatically once a MeshCore device is configured."
+            "title": "HiveFW HA Integration needs the MeshCore integration",
+            "description": "HiveFW HA Integration uses the core meshcore integration, but no MeshCore device is currently configured. Install and configure the meshcore integration first (Settings → Devices & Services → Add Integration → MeshCore), or remove MeshCore Chat if you no longer need it.\n\nClick Submit to acknowledge this issue. It will clear automatically once a MeshCore device is configured."
           }
         }
       }

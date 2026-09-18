@@ -7,9 +7,7 @@ import { MESHCORE_PRESET, DEFAULT_PANEL_CONFIG } from './constants';
 import { getDevices, getContacts, getChannels, getUnreadAndLastRead, markConversationRead, removeContact, addContact, traceContact, type TracePathMode } from './api';
 import { UnreadController } from './chat/unread-controller';
 import './pages/chat-page';
-import './pages/devices-page';
 import './pages/nodes-page';
-import './pages/repeater-page';
 import './pages/neighbors-page';
 import './pages/settings-page';
 import './components/trace-dialog';
@@ -22,7 +20,7 @@ export class MeshCorePanel extends LitElement {
   @property({ type: Object }) panel?: Record<string, unknown>;
 
   @state() private _config: PanelConfig | null = null;
-  @state() private _activeTab: 'chat' | 'devices' | 'nodes' | 'repeater' | 'neighbors' | 'settings' = 'chat';
+  @state() private _activeTab: 'chat' | 'nodes' | 'neighbors' | 'settings' = 'settings';
   // managedDevices removed — devices-page.ts fetches its own data
   @state() private _devices: MeshCoreDevice[] = [];
   @state() private _contacts: Contact[] = [];
@@ -722,7 +720,7 @@ export class MeshCorePanel extends LitElement {
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
                 </button>`
               : html``}
-            <div class="panel-title">MeshCore Repeater</div>
+            <div class="panel-title">HiveFW Repeater</div>
           </div>
           <div class="header-right">
             ${device && this._getNodeStatus(device) !== null
@@ -796,34 +794,24 @@ export class MeshCorePanel extends LitElement {
 
         <div class="tab-bar">
           <button
-            class=${this._activeTab === 'chat' ? 'active' : ''}
-            @click=${() => (this._activeTab = 'chat')}>
-            Chat
+            class=${this._activeTab === 'settings' ? 'active' : ''}
+            @click=${() => (this._activeTab = 'settings')}>
+            Dispositivo
           </button>
           <button
-            class=${this._activeTab === 'devices' ? 'active' : ''}
-            @click=${() => (this._activeTab = 'devices')}>
-            Devices
+            class=${this._activeTab === 'chat' ? 'active' : ''}
+            @click=${() => (this._activeTab = 'chat')}>
+            Chat &amp; Canais
           </button>
           <button
             class=${this._activeTab === 'nodes' ? 'active' : ''}
             @click=${() => (this._activeTab = 'nodes')}>
-            Nodes
-          </button>
-          <button
-            class=${this._activeTab === 'repeater' ? 'active' : ''}
-            @click=${() => (this._activeTab = 'repeater')}>
-            Repeater
+            Nós
           </button>
           <button
             class=${this._activeTab === 'neighbors' ? 'active' : ''}
             @click=${() => (this._activeTab = 'neighbors')}>
             Vizinhos
-          </button>
-          <button
-            class=${this._activeTab === 'settings' ? 'active' : ''}
-            @click=${() => (this._activeTab = 'settings')}>
-            Settings
           </button>
         </div>
 
@@ -866,13 +854,6 @@ export class MeshCorePanel extends LitElement {
             @active-entity-changed=${this._onActiveEntityChanged}
             @contacts-changed=${() => this._loadDeviceData()}
             @channels-changed=${() => this._loadDeviceData()}></meshcore-chat-page>`;
-      case 'devices':
-        return html`
-          <meshcore-devices-page
-            .hass=${this.hass}
-            .config=${this._config}
-            .selectedDevice=${this._selectedDevice}
-            .narrow=${this.narrow}></meshcore-devices-page>`;
       case 'nodes':
         return html`
           <meshcore-nodes-page
@@ -883,12 +864,6 @@ export class MeshCorePanel extends LitElement {
             .narrow=${this.narrow}
             @node-action=${this._handleNodeAction}
             @contacts-changed=${() => this._loadDeviceData()}></meshcore-nodes-page>`;
-      case 'repeater':
-        return html`
-          <meshcore-repeater-page
-            .hass=${this.hass}
-            .config=${this._config}
-            .narrow=${this.narrow}></meshcore-repeater-page>`;
       case 'neighbors':
         return html`
           <meshcore-neighbors-page
@@ -901,6 +876,8 @@ export class MeshCorePanel extends LitElement {
             .hass=${this.hass}
             .config=${this._config}
             .selectedDevice=${this._selectedDevice}
+            .contactCount=${this._contacts.length}
+            .channelCount=${this._channels.length}
             .narrow=${this.narrow}
             @companion-trace-requested=${this._onCompanionTraceRequested}
             @device-renamed=${this._onDeviceRenamed}></meshcore-settings-page>`;

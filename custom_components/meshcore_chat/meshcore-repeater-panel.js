@@ -1,7 +1,7 @@
 import "./meshcore-chat-panel.js";
 
 /*
- * MeshCore Repeater / HiveFW compatibility layer.
+ * HiveFW Repeater compatibility layer.
  *
  * The committed production bundle still comes from the upstream Chat panel.
  * This wrapper keeps that bundle intact and adds the Repeater-oriented pages
@@ -18,12 +18,19 @@ class MeshCoreRepeaterPanel extends BasePanel {
   constructor() {
     super();
 
+    this._activeTab = "settings";
+
     this.__repeaterStatus = null;
     this.__repeaterLoading = false;
     this.__repeaterError = null;
     this.__repeaterMessage = null;
     this.__repeaterLoadedEntry = null;
     this.__repeaterEdit = {};
+    this.__settingsObserver = null;
+    this.__settingsObservedRoot = null;
+    this.__managedDevices = { repeaters: [], clients: [] };
+    this.__managedDevicesLoading = false;
+    this.__managedDevicesLoadedEntry = null;
 
     this.__hiveNeighbors = null;
     this.__hiveNeighborsLoading = false;
@@ -48,14 +55,14 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!root) return;
 
     const title = root.querySelector(".panel-title");
-    if (title) title.textContent = "MeshCore Repeater";
+    if (title) title.textContent = "HiveFW Repeater";
 
     this.__ensureRepeaterStyles(root);
     this.__ensureTabs(root);
 
     const entryId = this.__entryId() || null;
 
-    if (this._activeTab === "repeater") {
+    if (this._activeTab === "settings") {
       if (entryId !== this.__repeaterLoadedEntry) {
         this.__repeaterStatus = null;
         this.__repeaterError = null;
@@ -63,13 +70,12 @@ class MeshCoreRepeaterPanel extends BasePanel {
         this.__repeaterEdit = {};
         this.__repeaterLoadedEntry = entryId;
       }
-
-      const container = root.querySelector(".page-container");
-      if (!container) return;
-      this.__renderRepeater(container);
-
+      this.__enhanceSettingsPage();
       if (!this.__repeaterStatus && !this.__repeaterLoading) {
         void this.__loadRepeaterStatus();
+      }
+      if (this.__managedDevicesLoadedEntry !== entryId && !this.__managedDevicesLoading) {
+        void this.__loadManagedDevices();
       }
       return;
     }
@@ -95,22 +101,25 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const tabBar = root.querySelector(".tab-bar");
     if (!tabBar) return;
 
-    const settings = [...tabBar.querySelectorAll("button")]
-      .find((item) => item.textContent?.trim() === "Settings");
+    // HiveFW is the central device: remote managed devices are folded into
+    // Dispositivo instead of occupying their own top-level page.
+    const buttons = [...tabBar.querySelectorAll("button")];
+    const byLabel = (...labels) => buttons.find((button) =>
+      labels.includes(button.textContent?.trim())
+    );
 
-    let repeater = tabBar.querySelector("[data-hive-repeater-tab]");
-    if (!repeater) {
-      repeater = document.createElement("button");
-      repeater.dataset.hiveRepeaterTab = "1";
-      repeater.textContent = "Repeater";
-      repeater.addEventListener("click", () => {
-        this._activeTab = "repeater";
-        this.requestUpdate();
-      });
-      tabBar.insertBefore(repeater, settings || null);
-    }
+    byLabel("Devices")?.remove();
 
-    let neighbors = tabBar.querySelector("[data-hive-neighbors-tab]");
+    const settings = byLabel("Settings", "Dispositivo");
+    const chat = byLabel("Chat", "Chat & Canais");
+    const nodes = byLabel("Nodes", "Nós");
+
+    if (settings) settings.textContent = "Dispositivo";
+    if (chat) chat.textContent = "Chat & Canais";
+    if (nodes) nodes.textContent = "Nós";
+
+    let neighbors = tabBar.querySelector("[data-hive-neighbors-tab]")
+      || byLabel("Vizinhos");
     if (!neighbors) {
       neighbors = document.createElement("button");
       neighbors.dataset.hiveNeighborsTab = "1";
@@ -119,11 +128,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
         this._activeTab = "neighbors";
         this.requestUpdate();
       });
-      tabBar.insertBefore(neighbors, settings || null);
     }
 
-    repeater.classList.toggle("active", this._activeTab === "repeater");
-    neighbors.classList.toggle("active", this._activeTab === "neighbors");
+    for (const button of [settings, chat, nodes, neighbors]) {
+      if (button) tabBar.appendChild(button);
+    }
+
+    neighbors?.classList.toggle("active", this._activeTab === "neighbors");
   }
 
   __ensureRepeaterStyles(root) {
@@ -586,6 +597,404 @@ class MeshCoreRepeaterPanel extends BasePanel {
     root.appendChild(style);
   }
 
+  __enhanceSettingsPage() {
+    const settingsPage = this.shadowRoot?.querySelector("meshcore-settings-page");
+    const sroot = settingsPage?.shadowRoot;
+    if (!sroot) return;
+
+    if (this.__settingsObservedRoot !== sroot) {
+      this.__settingsObserver?.disconnect();
+      this.__settingsObservedRoot = sroot;
+      this.__settingsObserver = new MutationObserver(() => {
+        queueMicrotask(() => {
+          if (this._activeTab === "settings") this.__enhanceSettingsPage();
+        });
+      });
+    }
+
+    // Ignore mutations caused by our own injected cards. Reconnect the
+    // observer only after rendering so it reacts to Lit replacing Settings,
+    // not to replaceChildren()/appendChild() below.
+    this.__settingsObserver?.disconnect();
+
+    if (!sroot.querySelector("#hive-settings-extension-style")) {
+      const style = document.createElement("style");
+      style.id = "hive-settings-extension-style";
+      style.textContent = `
+        .hive-settings-pill {
+          display:inline-flex;align-items:center;gap:6px;padding:4px 8px;
+          border-radius:999px;font-size:11px;font-weight:650;
+          background:var(--secondary-background-color);color:var(--secondary-text-color);
+        }
+        .hive-settings-pill.on { color:#2e7d32;background:rgba(76,175,80,.13); }
+        .hive-settings-controls { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+        .hive-settings-field { display:flex;flex-direction:column;gap:5px; }
+        .hive-settings-field label { font-size:11px;color:var(--secondary-text-color); }
+        .hive-settings-field input,.hive-settings-field select {
+          box-sizing:border-box;width:100%;min-height:38px;border:1px solid var(--divider-color);
+          border-radius:8px;padding:8px;background:var(--primary-background-color);
+          color:var(--primary-text-color);font:inherit;font-size:12px;
+        }
+        .hive-settings-note { margin-top:10px;font-size:11px;line-height:1.45;color:var(--secondary-text-color); }
+        @media(max-width:600px){.hive-settings-controls{grid-template-columns:1fr}}
+      `;
+      sroot.appendChild(style);
+    }
+
+    const grid = sroot.querySelector(".settings-grid");
+    if (!grid) return;
+
+    this.__renderSettingsRepeaterCard(sroot, grid);
+    this.__renderManagedDevicesCard(sroot, grid);
+    this.__enhanceCompanionMeta(sroot);
+    this.__enhanceCompanionHero(sroot);
+
+    this.__settingsObserver?.takeRecords();
+    this.__settingsObserver?.observe(sroot, { childList: true, subtree: true });
+  }
+
+  __renderSettingsRepeaterCard(sroot, grid) {
+    let card = sroot.querySelector("#hive-repeater-settings-card");
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "hive-repeater-settings-card";
+      card.className = "device-section";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = "Repeater";
+    card.appendChild(title);
+
+    if (this.__repeaterLoading && !this.__repeaterStatus) {
+      card.append("A consultar o rádio…");
+      return;
+    }
+    if (this.__repeaterError) {
+      const error = document.createElement("div");
+      error.style.color = "var(--error-color)";
+      error.style.fontSize = "12px";
+      error.textContent = this.__repeaterError;
+      card.appendChild(error);
+      return;
+    }
+
+    const status = this.__repeaterStatus;
+    if (!status?.supported) {
+      const note = document.createElement("div");
+      note.className = "hive-settings-note";
+      note.textContent = "Esta versão do Companion não anuncia suporte ao modo Repeater integrado.";
+      card.appendChild(note);
+      return;
+    }
+
+    const pill = document.createElement("div");
+    pill.className = `hive-settings-pill ${status.repeat ? "on" : ""}`;
+    pill.textContent = status.repeat ? "● Repeater ativo" : "● Repeater desligado";
+    card.appendChild(pill);
+
+    const controls = document.createElement("div");
+    controls.className = "hive-settings-controls";
+    controls.style.marginTop = "12px";
+
+    const repeat = this.__settingsSelect(
+      "Modo Repeater",
+      [["1", "Ativo"], ["0", "Desligado"]],
+      this.__repeaterEdit.repeat ? "1" : "0"
+    );
+    repeat.select.addEventListener("change", () => {
+      this.__repeaterEdit.repeat = repeat.select.value === "1";
+    });
+
+    const multi = this.__settingsSelect(
+      "Multi ACKs",
+      [["1", "Ligado"], ["0", "Desligado"]],
+      String(Number(this.__repeaterEdit.multi_acks ?? 0))
+    );
+    multi.select.addEventListener("change", () => {
+      this.__repeaterEdit.multi_acks = Number(multi.select.value);
+    });
+
+    const rx = this.__settingsNumber("RX Delay", this.__repeaterEdit.rx_delay ?? 0, "0.001");
+    rx.input.addEventListener("input", () => {
+      this.__repeaterEdit.rx_delay = Number(rx.input.value);
+    });
+
+    const af = this.__settingsNumber("Airtime Factor", this.__repeaterEdit.airtime_factor ?? 0, "0.001");
+    af.input.addEventListener("input", () => {
+      this.__repeaterEdit.airtime_factor = Number(af.input.value);
+    });
+
+    controls.append(repeat.field, multi.field, rx.field, af.field);
+    card.appendChild(controls);
+
+    const actions = document.createElement("div");
+    actions.className = "actions-row";
+    actions.style.marginTop = "12px";
+    const save = document.createElement("button");
+    save.className = "action-btn";
+    save.textContent = this.__repeaterLoading ? "Applying…" : "Apply Repeater Settings";
+    save.disabled = this.__repeaterLoading;
+    save.addEventListener("click", () => {
+      void this.__saveRepeaterSettings({
+        repeat: !!this.__repeaterEdit.repeat,
+        multi_acks: Number(this.__repeaterEdit.multi_acks ?? 0),
+        rx_delay: Number(this.__repeaterEdit.rx_delay ?? 0),
+        airtime_factor: Number(this.__repeaterEdit.airtime_factor ?? 0),
+      }, "Repeater settings applied.");
+    });
+    actions.appendChild(save);
+    card.appendChild(actions);
+
+    const note = document.createElement("div");
+    note.className = "hive-settings-note";
+    note.textContent =
+      "RF, TX Power e Path Hash permanecem no cartão Radio; adverts, sync e reboot permanecem no cartão do Companion.";
+    card.appendChild(note);
+  }
+
+  __enhanceCompanionHero(sroot) {
+    const summary = sroot.querySelector("meshcore-node-summary");
+    const nroot = summary?.shadowRoot;
+    const hero = nroot?.querySelector(".hero-row");
+    const status = this.__repeaterStatus;
+    if (!hero || !status?.supported) return;
+    if (nroot.querySelector('[data-repeater-extra]')) return;
+
+    const classify = {
+      uptime: (h) => h < 1 ? "bad" : h < 24 ? "warn" : "good",
+      noise: (v) => v > -105 ? "bad" : v > -115 ? "warn" : "good",
+      queue: (v) => v > 10 ? "bad" : v > 5 ? "warn" : "good",
+    };
+    const makeTile = (title, primary, secondary, value, min, max, band, marker) => {
+      const tile = document.createElement("div");
+      tile.className = "hero-tile hive-repeater-extra";
+      tile.dataset.repeaterExtra = marker;
+      const head = document.createElement("div");
+      head.className = "hero-tile-head";
+      const label = document.createElement("span");
+      label.textContent = title;
+      const dot = document.createElement("span");
+      dot.className = `status-dot ${band}`;
+      head.append(label, dot);
+      const valueRow = document.createElement("div");
+      valueRow.className = "hero-tile-value";
+      const main = document.createElement("span");
+      main.className = "primary";
+      main.textContent = primary;
+      valueRow.appendChild(main);
+      if (secondary) {
+        const sub = document.createElement("span");
+        sub.className = "secondary";
+        sub.textContent = secondary;
+        valueRow.appendChild(sub);
+      }
+      const bar = document.createElement("meshcore-stat-bar");
+      bar.value = value; bar.min = min; bar.max = max; bar.band = band;
+      tile.append(head, valueRow, bar);
+      return tile;
+    };
+
+    const active = !!status.repeat;
+    hero.appendChild(makeTile("Repeater mode", active ? "Active" : "Off", "· Companion always on", active ? 100 : 0, 0, 100, active ? "good" : "info", "state"));
+
+    const uptimeSecs = Number(status.stats?.core?.uptime_secs);
+    if (Number.isFinite(uptimeSecs)) {
+      const hours = Math.max(0, uptimeSecs / 3600);
+      const display = hours >= 48 ? `${Math.floor(hours / 24)}d ${Math.floor(hours % 24)}h`
+        : hours >= 1 ? `${Math.floor(hours)}h ${Math.floor((hours % 1) * 60)}m`
+        : `${Math.floor(hours * 60)}m`;
+      hero.appendChild(makeTile("Uptime", display, "", Math.min(hours, 168), 0, 168, classify.uptime(hours), "uptime"));
+    }
+
+    const noise = Number(status.stats?.radio?.noise_floor);
+    if (Number.isFinite(noise)) {
+      hero.appendChild(makeTile("Noise floor", `${Math.round(noise)} dBm`, "", noise, -130, -90, classify.noise(noise), "noise"));
+    }
+
+    const queue = Number(status.stats?.core?.queue_len);
+    if (Number.isFinite(queue)) {
+      hero.appendChild(makeTile("TX queue", String(Math.round(queue)), "queued", Math.min(Math.max(queue, 0), 30), 0, 30, classify.queue(queue), "queue"));
+    }
+
+    for (const row of nroot.querySelectorAll(".sensor-item")) {
+      const label = row.querySelector(".si-label")?.textContent?.trim().toLowerCase() || "";
+      if (label === "noise floor" || label === "tx queue length" || label === "uptime") row.style.display = "none";
+    }
+  }
+
+  async __loadManagedDevices() {
+    if (!this.hass || this.__managedDevicesLoading) return;
+    this.__managedDevicesLoading = true;
+    try {
+      const msg = { type: "meshcore_chat/get_managed_devices" };
+      const entryId = this.__entryId();
+      if (entryId) msg.entry_id = entryId;
+      const result = await this.hass.callWS(msg);
+      this.__managedDevices = {
+        repeaters: Array.isArray(result?.repeaters) ? result.repeaters : [],
+        clients: Array.isArray(result?.clients) ? result.clients : [],
+      };
+      this.__managedDevicesLoadedEntry = entryId || null;
+    } catch {
+      this.__managedDevices = { repeaters: [], clients: [] };
+      this.__managedDevicesLoadedEntry = this.__entryId() || null;
+    } finally {
+      this.__managedDevicesLoading = false;
+      if (this._activeTab === "settings") this.__enhanceSettingsPage();
+    }
+  }
+
+  __enhanceCompanionMeta(sroot) {
+    const meta = sroot.querySelector(".device-meta");
+    if (!meta) return;
+
+    meta.querySelectorAll("[data-hive-meta]").forEach((node) => node.remove());
+
+    const role = document.createElement("span");
+    role.dataset.hiveMeta = "role";
+    role.textContent = "HiveFW Companion-Repeater";
+
+    const nodes = document.createElement("span");
+    nodes.dataset.hiveMeta = "nodes";
+    nodes.textContent = `Nós conhecidos: ${Array.isArray(this._contacts) ? this._contacts.length : 0}`;
+
+    const channels = document.createElement("span");
+    channels.dataset.hiveMeta = "channels";
+    channels.textContent = `Canais: ${Array.isArray(this._channels) ? this._channels.length : 0}`;
+
+    const existingCompanion = [...meta.querySelectorAll("span")]
+      .find((span) => span.textContent?.trim() === "Companion");
+    existingCompanion?.remove();
+
+    meta.prepend(role);
+    meta.append(nodes, channels);
+  }
+
+  __renderManagedDevicesCard(sroot, grid) {
+    let card = sroot.querySelector("#hive-managed-devices-card");
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "hive-managed-devices-card";
+      card.className = "device-section";
+      card.style.gridColumn = "1 / -1";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = "Equipamentos MeshCore geridos";
+    card.appendChild(title);
+
+    if (this.__managedDevicesLoading) {
+      const loading = document.createElement("div");
+      loading.className = "hive-settings-note";
+      loading.textContent = "A carregar equipamentos remotos…";
+      card.appendChild(loading);
+      return;
+    }
+
+    const repeaters = this.__managedDevices.repeaters || [];
+    const clients = this.__managedDevices.clients || [];
+    const devices = [...repeaters, ...clients];
+
+    if (!devices.length) {
+      const empty = document.createElement("div");
+      empty.className = "hive-settings-note";
+      empty.textContent =
+        "Nenhum equipamento remoto está configurado. O HiveFW local acima é o equipamento principal desta integração.";
+      card.appendChild(empty);
+      return;
+    }
+
+    const summary = document.createElement("div");
+    summary.style.cssText = "display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px;";
+    const online = devices.filter((d) => d.connected || d.status === "online").length;
+    for (const text of [
+      `${devices.length} equipamentos`,
+      `${repeaters.length} repeaters`,
+      `${clients.length} clients`,
+      `${online} online`,
+    ]) {
+      const chip = document.createElement("span");
+      chip.className = "hive-settings-pill";
+      chip.textContent = text;
+      summary.appendChild(chip);
+    }
+    card.appendChild(summary);
+
+    const list = document.createElement("div");
+    list.style.cssText =
+      "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:9px;";
+
+    for (const device of devices) {
+      const isOnline = device.connected || device.status === "online";
+      const row = document.createElement("div");
+      row.style.cssText =
+        "display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--primary-background-color);";
+
+      const icon = document.createElement("div");
+      icon.style.cssText =
+        "width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--secondary-background-color);color:var(--primary-color);font-weight:700;";
+      icon.textContent = device.type === "repeater" ? "R" : "C";
+
+      const info = document.createElement("div");
+      const name = document.createElement("div");
+      name.style.cssText =
+        "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;";
+      name.textContent = device.name || "MeshCore";
+      const meta = document.createElement("div");
+      meta.style.cssText =
+        "margin-top:3px;color:var(--secondary-text-color);font-size:10px;";
+      meta.textContent =
+        `${device.type === "repeater" ? "Repeater" : "Client"} · ${String(device.pubkey_prefix || "").toUpperCase()}${device.firmware_version ? ` · FW ${device.firmware_version}` : ""}`;
+      info.append(name, meta);
+
+      const state = document.createElement("div");
+      state.style.cssText =
+        `font-size:10px;font-weight:650;white-space:nowrap;color:${isOnline ? "#2e7d32" : "var(--secondary-text-color)"};`;
+      state.textContent = isOnline ? "● Online" : "● Offline";
+
+      row.append(icon, info, state);
+      list.appendChild(row);
+    }
+
+    card.appendChild(list);
+  }
+
+  __settingsSelect(label, options, value) {
+    const field = document.createElement("div");
+    field.className = "hive-settings-field";
+    const l = document.createElement("label");
+    l.textContent = label;
+    const select = document.createElement("select");
+    for (const [v, text] of options) {
+      const option = document.createElement("option");
+      option.value = v;
+      option.textContent = text;
+      option.selected = v === value;
+      select.appendChild(option);
+    }
+    field.append(l, select);
+    return { field, select };
+  }
+
+  __settingsNumber(label, value, step) {
+    const field = document.createElement("div");
+    field.className = "hive-settings-field";
+    const l = document.createElement("label");
+    l.textContent = label;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = step;
+    input.value = String(value ?? "");
+    field.append(l, input);
+    return { field, input };
+  }
+
   async __loadRepeaterStatus() {
     if (!this.hass || this.__repeaterLoading) return;
 
@@ -688,9 +1097,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   __rerenderRepeater() {
-    if (this._activeTab !== "repeater") return;
-    const container = this.shadowRoot?.querySelector(".page-container");
-    if (container) this.__renderRepeater(container);
+    if (this._activeTab === "settings") this.__enhanceSettingsPage();
   }
 
   __renderRepeater(container) {

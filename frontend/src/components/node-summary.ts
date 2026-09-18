@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HomeAssistant, ManagedDevice } from '../types';
+import type { HomeAssistant, ManagedDevice, LocalRepeaterStatus } from '../types';
 import type { EntityInfo } from '../utils/classify-entity';
 import {
   evaluateSensor,
@@ -82,6 +82,7 @@ export class NodeSummary extends LitElement {
    *  Contact.last_advert). Used for the "Updated X ago" line beneath
    *  the coordinates in the Location hero tile. */
   @property({ type: Number }) fallbackUpdated?: number;
+  @property({ type: Object }) repeaterStatus?: LocalRepeaterStatus;
 
   /** 48h message-rate history (msg/min) for the activity chart, fetched from
    *  recorder statistics for the node's *_rate sensors. */
@@ -529,10 +530,111 @@ export class NodeSummary extends LitElement {
     return html`
       ${this._renderBatteryTile()}
       ${this._renderSignalTile()}
+      ${this._renderRepeaterStateTile()}
+      ${this._renderUptimeTile(consumed)}
+      ${this._renderNoiseFloorTile(consumed)}
+      ${this._renderQueueTile(consumed)}
       ${this._renderCompanionRadioActivityTile()}
       ${this._renderMessagesSentTile(consumed)}
       ${this._renderMessagesReceivedTile(consumed)}
       ${this._renderLocationTile()}
+    `;
+  }
+
+  private _renderRepeaterStateTile() {
+    const status = this.repeaterStatus;
+    if (!status?.supported) return nothing;
+    const active = Boolean(status.repeat);
+    return html`
+      <div class="hero-tile" data-repeater-extra="state">
+        <div class="hero-tile-head">
+          <span>Repeater mode</span>
+          <span class="status-dot ${active ? 'good' : 'info'}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${active ? 'Active' : 'Off'}</span>
+          <span class="secondary">· Companion always on</span>
+        </div>
+        <meshcore-stat-bar .value=${active ? 100 : 0} .min=${0} .max=${100} .band=${active ? 'good' : 'info'}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderUptimeTile(consumed: Set<string>) {
+    const info = this._findByMetric('uptime_hours');
+    let hours = NaN;
+    if (info) {
+      const minutes = this._readUptimeMinutes(info);
+      hours = Number.isFinite(minutes) ? minutes / 60 : NaN;
+      consumed.add(info.entity_id);
+    }
+    if (!Number.isFinite(hours)) {
+      const seconds = this.repeaterStatus?.stats.core?.uptime_secs;
+      if (seconds != null) hours = Number(seconds) / 3600;
+    }
+    if (!Number.isFinite(hours)) return nothing;
+    const ev = evaluateSensor('uptime_hours', hours);
+    const display = hours >= 48
+      ? `${Math.floor(hours / 24)}d ${Math.floor(hours % 24)}h`
+      : hours >= 1
+        ? `${Math.floor(hours)}h ${Math.floor((hours % 1) * 60)}m`
+        : `${Math.max(0, Math.floor(hours * 60))}m`;
+    return html`
+      <div class="hero-tile" data-repeater-extra="uptime" @click=${() => info && this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>Uptime${this._renderInfoTip(ev)}</span>
+          <span class="status-dot ${ev.band}"></span>
+        </div>
+        <div class="hero-tile-value"><span class="primary">${display}</span></div>
+        <meshcore-stat-bar .value=${Math.min(hours, 168)} .min=${0} .max=${168} .band=${ev.band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderNoiseFloorTile(consumed: Set<string>) {
+    const info = this._findByMetric('noise_floor');
+    let value = info ? this._readNumber(info.entity_id) : NaN;
+    if (info) consumed.add(info.entity_id);
+    if (!Number.isFinite(value)) {
+      const fallback = this.repeaterStatus?.stats.radio?.noise_floor;
+      if (fallback != null) value = Number(fallback);
+    }
+    if (!Number.isFinite(value)) return nothing;
+    const ev = evaluateSensor('noise_floor', value);
+    return html`
+      <div class="hero-tile" data-repeater-extra="noise" @click=${() => info && this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>Noise floor${this._renderInfoTip(ev)}</span>
+          <span class="status-dot ${ev.band}"></span>
+        </div>
+        <div class="hero-tile-value"><span class="primary">${this._formatNumber(value, 0)}<span class="unit">dBm</span></span></div>
+        <meshcore-stat-bar .value=${value} .min=${-130} .max=${-90} .band=${ev.band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderQueueTile(consumed: Set<string>) {
+    const info = this._findByMetric('tx_queue_len');
+    let value = info ? this._readNumber(info.entity_id) : NaN;
+    if (info) consumed.add(info.entity_id);
+    if (!Number.isFinite(value)) {
+      const fallback = this.repeaterStatus?.stats.core?.queue_len;
+      if (fallback != null) value = Number(fallback);
+    }
+    if (!Number.isFinite(value)) return nothing;
+    const ev = evaluateSensor('tx_queue_len', value);
+    return html`
+      <div class="hero-tile" data-repeater-extra="queue" @click=${() => info && this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>TX queue${this._renderInfoTip(ev)}</span>
+          <span class="status-dot ${ev.band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${this._formatCount(value)}</span>
+          <span class="secondary">queued</span>
+        </div>
+        <meshcore-stat-bar .value=${Math.min(Math.max(value, 0), 30)} .min=${0} .max=${30} .band=${ev.band}></meshcore-stat-bar>
+      </div>
     `;
   }
 

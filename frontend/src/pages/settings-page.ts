@@ -1,8 +1,10 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { HomeAssistant, PanelConfig, DeviceConfig, MeshCoreDevice } from '../types';
+import type { HomeAssistant, PanelConfig, DeviceConfig, MeshCoreDevice, LocalRepeaterStatus, ManagedDevice } from '../types';
 import {
   getDeviceConfig,
+  getLocalRepeaterStatus,
+  getManagedDevices,
   setDeviceConfig,
   executeLocal,
   subscribeIdentityChange,
@@ -88,8 +90,15 @@ export class SettingsPage extends LitElement {
   @property({ type: Object }) config?: PanelConfig;
   @property({ type: Boolean }) narrow = false;
   @property({ type: Object }) selectedDevice?: MeshCoreDevice;
+  @property({ type: Number }) contactCount = 0;
+  @property({ type: Number }) channelCount = 0;
 
   @state() private _deviceConfig: DeviceConfig | null = null;
+  @state() private _repeaterStatus: LocalRepeaterStatus | null = null;
+  @state() private _managedDevices: { repeaters: ManagedDevice[]; clients: ManagedDevice[] } = {
+    repeaters: [],
+    clients: [],
+  };
   @state() private _loading = true;
   @state() private _error: string | null = null;
   @state() private _editValues: Record<string, unknown> = {};
@@ -288,6 +297,87 @@ export class SettingsPage extends LitElement {
 
       .settings-grid > .device-section {
         margin-bottom: 0;
+      }
+
+      .managed-devices-card {
+        grid-column: 1 / -1;
+      }
+
+      .managed-devices-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .managed-devices-chip {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--secondary-background-color, #f5f5f5);
+        color: var(--secondary-text-color);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .managed-device-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .managed-device-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 10px;
+        background: var(--primary-background-color);
+      }
+
+      .managed-device-icon {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+        color: var(--primary-color);
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .managed-device-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .managed-device-meta {
+        margin-top: 3px;
+        color: var(--secondary-text-color);
+        font-size: 10px;
+      }
+
+      .managed-device-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        font-size: 10px;
+        font-weight: 650;
+      }
+
+      .managed-device-state.online { color: #2e7d32; }
+      .managed-device-state.offline { color: var(--secondary-text-color); }
+
+      @media (max-width: 768px) {
+        .managed-device-list {
+          grid-template-columns: 1fr;
+        }
       }
 
       @media (max-width: 768px) {
@@ -720,6 +810,14 @@ export class SettingsPage extends LitElement {
 
     try {
       this._deviceConfig = await getDeviceConfig(this.hass, this.config?.entry_id);
+      // Repeater status is best-effort: Settings remains usable even when an
+      // older Companion cannot answer the newer stats/tuning queries.
+      try {
+        this._repeaterStatus = await getLocalRepeaterStatus(this.hass, this.config?.entry_id);
+      } catch {
+        this._repeaterStatus = null;
+      }
+      this._managedDevices = await getManagedDevices(this.hass, this.config?.entry_id);
       // Initialize location source from backend instead of defaulting to 'manual'
       if (this._deviceConfig?.location_source) {
         this._locationSource = this._deviceConfig.location_source as 'gps' | 'manual' | 'ha_location';
@@ -779,13 +877,23 @@ export class SettingsPage extends LitElement {
               ${this._renderRadioSettings()}
             </div>
 
+            <!-- HiveFW / integrated Repeater -->
+            <div class="device-section">
+              <div class="card-title">Repeater</div>
+              ${this._renderRepeaterSettings()}
+            </div>
+
             <!-- Location -->
             <div class="device-section">
               <div class="card-title">Location</div>
               ${this._renderLocation()}
             </div>
 
-
+            <!-- Remote MeshCore devices managed by the upstream integration -->
+            <div class="device-section managed-devices-card">
+              <div class="card-title">Equipamentos MeshCore geridos</div>
+              ${this._renderManagedDevices()}
+            </div>
 
           </div>
 
@@ -939,9 +1047,11 @@ export class SettingsPage extends LitElement {
             <div>
               <div class="device-name">${d.name}</div>
               <div class="device-meta">
-                <span>Companion</span>
+                <span>HiveFW Companion-Repeater</span>
                 <span>Firmware: ${d.firmware || 'unknown'}</span>
                 <span>Key: ${d.pubkey_prefix}</span>
+                <span>Nós conhecidos: ${this.contactCount}</span>
+                <span>Canais: ${this.channelCount}</span>
                 ${addedNodes !== undefined
                   ? html`<span>Added nodes: ${addedNodes}</span>`
                   : nothing}
@@ -965,7 +1075,8 @@ export class SettingsPage extends LitElement {
                 .hass=${this.hass}
                 .device=${this._companionDescriptor(d)}
                 .entities=${entities}
-                .hiddenCount=${hiddenCount}>
+                .hiddenCount=${hiddenCount}
+                .repeaterStatus=${this._repeaterStatus}>
               </meshcore-node-summary>
             `
           : nothing}
@@ -1288,6 +1399,152 @@ export class SettingsPage extends LitElement {
   // _renderLocationSource removed — merged into _renderLocation
 
   // Config backup, diagnostics, and backup & recovery removed — low value
+
+  private _renderManagedDevices() {
+    const repeaters = this._managedDevices.repeaters || [];
+    const clients = this._managedDevices.clients || [];
+    const devices = [...repeaters, ...clients];
+
+    if (devices.length === 0) {
+      return html`
+        <div style="font-size:12px;color:var(--secondary-text-color);line-height:1.5;">
+          Nenhum equipamento remoto está configurado no meshcore-ha.
+          O HiveFW local acima é o equipamento principal desta integração.
+        </div>
+      `;
+    }
+
+    const online = devices.filter((d) => d.connected || d.status === 'online').length;
+
+    return html`
+      <div class="managed-devices-summary">
+        <span class="managed-devices-chip">${devices.length} equipamentos</span>
+        <span class="managed-devices-chip">${repeaters.length} repeaters</span>
+        <span class="managed-devices-chip">${clients.length} clients</span>
+        <span class="managed-devices-chip">${online} online</span>
+      </div>
+
+      <div class="managed-device-list">
+        ${devices.map((device) => {
+          const isOnline = device.connected || device.status === 'online';
+          const typeLabel = device.type === 'repeater' ? 'Repeater' : 'Client';
+          return html`
+            <div class="managed-device-row">
+              <div class="managed-device-icon">${device.type === 'repeater' ? 'R' : 'C'}</div>
+              <div>
+                <div class="managed-device-name">${device.name}</div>
+                <div class="managed-device-meta">
+                  ${typeLabel} · ${device.pubkey_prefix?.toUpperCase() || 'sem chave'}
+                  ${device.firmware_version ? html` · FW ${device.firmware_version}` : nothing}
+                  ${device.neighbors_enabled ? html` · vizinhos monitorizados` : nothing}
+                </div>
+              </div>
+              <div class="managed-device-state ${isOnline ? 'online' : 'offline'}">
+                <span>●</span>
+                <span>${isOnline ? 'Online' : 'Offline'}</span>
+              </div>
+            </div>
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  private _renderRepeaterSettings() {
+    const status = this._repeaterStatus;
+    if (!status?.supported) {
+      return html`
+        <div style="font-size: 12px; color: var(--secondary-text-color); line-height: 1.5;">
+          O Companion está disponível, mas esta versão não anuncia o modo Repeater integrado.
+        </div>
+      `;
+    }
+
+    const repeat = Boolean(this._editValues['repeat'] ?? status.repeat);
+    const multiAcks = Number(this._editValues['multi_acks'] ?? status.radio.multi_acks ?? 0);
+    const rxDelay = Number(this._editValues['rx_delay'] ?? status.tuning.rx_delay ?? 0);
+    const airtimeFactor = Number(this._editValues['airtime_factor'] ?? status.tuning.airtime_factor ?? 0);
+
+    return html`
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);">
+        <div>
+          <div style="font-size:13px;font-weight:600;">Modo Repeater</div>
+          <div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px;">
+            ${status.repeat ? 'Ativo no HiveFW' : 'Desligado — Companion apenas'}
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
+          <input
+            type="checkbox"
+            .checked=${repeat}
+            @change=${(e: Event) => {
+              this._editValues['repeat'] = (e.target as HTMLInputElement).checked;
+              this._editValues = { ...this._editValues };
+            }}
+          />
+          ${repeat ? 'Ativo' : 'Desligado'}
+        </label>
+      </div>
+
+      <div class="section-row">
+        <div class="form-group-inline">
+          <label class="form-label">Multi ACKs</label>
+          <select
+            class="form-select"
+            .value=${String(multiAcks)}
+            @change=${(e: Event) => {
+              this._editValues['multi_acks'] = Number((e.target as HTMLSelectElement).value);
+              this._editValues = { ...this._editValues };
+            }}>
+            <option value="0">Desligado</option>
+            <option value="1">Ligado</option>
+          </select>
+        </div>
+        <div class="form-group-inline">
+          <label class="form-label">RX Delay</label>
+          <input
+            class="form-input"
+            type="number"
+            step="0.001"
+            .value=${String(rxDelay)}
+            @input=${(e: Event) => {
+              this._editValues['rx_delay'] = Number((e.target as HTMLInputElement).value);
+              this._editValues = { ...this._editValues };
+            }}
+          />
+        </div>
+      </div>
+
+      <div class="section-row">
+        <div class="form-group-inline">
+          <label class="form-label">Airtime Factor</label>
+          <input
+            class="form-input"
+            type="number"
+            step="0.001"
+            .value=${String(airtimeFactor)}
+            @input=${(e: Event) => {
+              this._editValues['airtime_factor'] = Number((e.target as HTMLInputElement).value);
+              this._editValues = { ...this._editValues };
+            }}
+          />
+        </div>
+      </div>
+
+      <button
+        class="apply-button"
+        style="width:100%;margin-top:4px;"
+        ?disabled=${this._saving}
+        @click=${this._applyRepeaterSettings}>
+        ${this._saving ? 'Applying...' : 'Apply Repeater Settings'}
+      </button>
+
+      <div style="margin-top:10px;font-size:11px;color:var(--secondary-text-color);line-height:1.45;">
+        Frequência, BW, SF, CR, TX Power e Path Hash continuam no cartão Radio acima;
+        adverts, sync de relógio e reboot continuam no cartão do Companion.
+      </div>
+    `;
+  }
 
   private _renderIdentityManagement() {
     return html`
