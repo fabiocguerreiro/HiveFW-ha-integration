@@ -9,6 +9,7 @@ import { UnreadController } from './chat/unread-controller';
 import './pages/chat-page';
 import './pages/devices-page';
 import './pages/nodes-page';
+import './pages/neighbors-page';
 import './pages/settings-page';
 import './components/trace-dialog';
 import './components/target-picker';
@@ -20,7 +21,7 @@ export class MeshCorePanel extends LitElement {
   @property({ type: Object }) panel?: Record<string, unknown>;
 
   @state() private _config: PanelConfig | null = null;
-  @state() private _activeTab: 'chat' | 'devices' | 'nodes' | 'settings' = 'chat';
+  @state() private _activeTab: 'chat' | 'devices' | 'nodes' | 'neighbors' | 'settings' = 'chat';
   // managedDevices removed — devices-page.ts fetches its own data
   @state() private _devices: MeshCoreDevice[] = [];
   @state() private _contacts: Contact[] = [];
@@ -720,7 +721,7 @@ export class MeshCorePanel extends LitElement {
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
                 </button>`
               : html``}
-            <div class="panel-title">MeshCore Chat</div>
+            <div class="panel-title">MeshCore Repeater</div>
           </div>
           <div class="header-right">
             ${device && this._getNodeStatus(device) !== null
@@ -809,6 +810,11 @@ export class MeshCorePanel extends LitElement {
             Nodes
           </button>
           <button
+            class=${this._activeTab === 'neighbors' ? 'active' : ''}
+            @click=${() => (this._activeTab = 'neighbors')}>
+            Vizinhos
+          </button>
+          <button
             class=${this._activeTab === 'settings' ? 'active' : ''}
             @click=${() => (this._activeTab = 'settings')}>
             Settings
@@ -871,6 +877,12 @@ export class MeshCorePanel extends LitElement {
             .narrow=${this.narrow}
             @node-action=${this._handleNodeAction}
             @contacts-changed=${() => this._loadDeviceData()}></meshcore-nodes-page>`;
+      case 'neighbors':
+        return html`
+          <meshcore-neighbors-page
+            .hass=${this.hass}
+            .config=${this._config}
+            .narrow=${this.narrow}></meshcore-neighbors-page>`;
       case 'settings':
         return html`
           <meshcore-settings-page
