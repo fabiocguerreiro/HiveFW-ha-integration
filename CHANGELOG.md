@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.8] - 2026-09-18
+
+- Improved the **Dispositivo** metric layout with mixed card widths.
+- Information-rich/native cards retain the existing visual width, while short-value metrics use half-width compact cards on desktop.
+- Compact metrics: Uptime, Noise floor, TX queue, Temperature, Request tokens, Discovered contacts, Protocol / Path and Capacity.
+- Responsive breakpoints expand compact cards again on narrow screens to preserve readability.
+
 ## [0.10.7] - 2026-09-18
 
 - Node map popups now remain open until explicitly closed or another node is selected, including across marker-layer refreshes.

@@ -99,12 +99,15 @@ export class NodeSummary extends LitElement {
     /* ─── Hero row ─── */
     .hero-row {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      grid-auto-flow: dense;
       grid-auto-rows: 1fr;
       gap: 8px;
       margin-bottom: 14px;
       align-items: stretch;
     }
+    .hero-row > .hero-tile { grid-column: span 2; }
+    .hero-row > .hero-tile.hive-metric-compact { grid-column: span 1; }
     .hero-tile {
       background: var(--secondary-background-color, #f0f0f0);
       border-radius: 9px;
@@ -120,16 +123,20 @@ export class NodeSummary extends LitElement {
       box-sizing: border-box;
     }
     @container (max-width: 1050px) {
-      .hero-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .hero-row { grid-template-columns: repeat(8, minmax(0, 1fr)); }
     }
     @container (max-width: 780px) {
-      .hero-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .hero-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     }
     @container (max-width: 560px) {
-      .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .hero-row > .hero-tile,
+      .hero-row > .hero-tile.hive-metric-compact { grid-column: span 2; }
     }
     @container (max-width: 340px) {
       .hero-row { grid-template-columns: 1fr; }
+      .hero-row > .hero-tile,
+      .hero-row > .hero-tile.hive-metric-compact { grid-column: 1; }
     }
     .hero-tile:hover { border-color: var(--primary-color, #03a9f4); }
     .hero-tile-head {

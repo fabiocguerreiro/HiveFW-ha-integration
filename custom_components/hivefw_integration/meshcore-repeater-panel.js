@@ -900,15 +900,56 @@ class MeshCoreRepeaterPanel extends BasePanel {
       style = document.createElement("style");
       style.id = "hivefw-cockpit-style";
       style.textContent = `
-        .hero-row{grid-template-columns:repeat(5,minmax(0,1fr))!important;grid-auto-rows:1fr;gap:8px!important;align-items:stretch}
+        .hero-row{
+          grid-template-columns:repeat(10,minmax(0,1fr))!important;
+          grid-auto-flow:dense;
+          grid-auto-rows:1fr;
+          gap:8px!important;
+          align-items:stretch;
+        }
+        .hero-row > .hero-tile{grid-column:span 2}
+        .hero-row > .hero-tile.hive-metric-compact{grid-column:span 1}
         .hero-tile{min-height:82px!important;height:100%;box-sizing:border-box;padding:9px 10px!important;gap:5px!important}
         .hero-tile-head{font-size:10px!important}
         .hero-tile-value .primary{font-size:18px!important}
         .hero-tile-value .secondary{font-size:11px!important}
-        @container(max-width:1050px){.hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
-        @container(max-width:780px){.hero-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
-        @container(max-width:560px){.hero-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
-        @container(max-width:340px){.hero-row{grid-template-columns:1fr!important}}
+        .hero-tile.hive-metric-compact{
+          padding:9px 8px!important;
+        }
+        .hero-tile.hive-metric-compact .hero-tile-head{
+          font-size:9px!important;
+          letter-spacing:.02em!important;
+          gap:4px!important;
+          white-space:normal;
+          line-height:1.15;
+        }
+        .hero-tile.hive-metric-compact .hero-tile-value{
+          gap:3px!important;
+        }
+        .hero-tile.hive-metric-compact .hero-tile-value .primary{
+          font-size:16px!important;
+          white-space:nowrap;
+        }
+        .hero-tile.hive-metric-compact .hero-tile-value .secondary{
+          font-size:9px!important;
+          line-height:1.15;
+        }
+        @container(max-width:1050px){
+          .hero-row{grid-template-columns:repeat(8,minmax(0,1fr))!important}
+        }
+        @container(max-width:780px){
+          .hero-row{grid-template-columns:repeat(6,minmax(0,1fr))!important}
+        }
+        @container(max-width:560px){
+          .hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+          .hero-row > .hero-tile{grid-column:span 2}
+          .hero-row > .hero-tile.hive-metric-compact{grid-column:span 2}
+        }
+        @container(max-width:340px){
+          .hero-row{grid-template-columns:1fr!important}
+          .hero-row > .hero-tile,
+          .hero-row > .hero-tile.hive-metric-compact{grid-column:1!important}
+        }
       `;
       nroot.appendChild(style);
     }
@@ -927,9 +968,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       return Number.isFinite(v) ? v : NaN;
     };
     const bandForTemp = (c) => c >= 0 && c <= 50 ? "good" : c > -10 && c <= 60 ? "warn" : "bad";
-    const makeTile = (title, primary, secondary, value, min, max, band, marker, click) => {
+    const makeTile = (title, primary, secondary, value, min, max, band, marker, click, size="normal") => {
       const tile = document.createElement("div");
-      tile.className = "hero-tile hive-repeater-extra";
+      tile.className = `hero-tile hive-repeater-extra${size==="compact"?" hive-metric-compact":""}`;
       tile.dataset.repeaterExtra = marker;
       if (click) { tile.style.cursor = "pointer"; tile.addEventListener("click", click); }
       const head = document.createElement("div");
@@ -951,7 +992,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(Number.isFinite(uptimeSecs)){
       const h=Math.max(0,uptimeSecs/3600);
       const d=h>=48?`${Math.floor(h/24)}d ${Math.floor(h%24)}h`:h>=1?`${Math.floor(h)}h ${Math.floor((h%1)*60)}m`:`${Math.floor(h*60)}m`;
-      hero.appendChild(makeTile("Uptime",d,"",Math.min(h,168),0,168,h<1?"bad":h<24?"warn":"good","uptime"));
+      hero.appendChild(makeTile("Uptime",d,"",Math.min(h,168),0,168,h<1?"bad":h<24?"warn":"good","uptime",null,"compact"));
     }
 
     const clock=Number(status.clock?.timestamp);
@@ -962,17 +1003,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     const noise=Number(status.stats?.radio?.noise_floor);
-    if(Number.isFinite(noise)) hero.appendChild(makeTile("Noise floor",`${Math.round(noise)} dBm`,"",noise,-130,-90,noise>-105?"bad":noise>-115?"warn":"good","noise"));
+    if(Number.isFinite(noise)) hero.appendChild(makeTile("Noise floor",`${Math.round(noise)} dBm`,"",noise,-130,-90,noise>-105?"bad":noise>-115?"warn":"good","noise",null,"compact"));
 
     const queue=Number(status.stats?.core?.queue_len);
-    if(Number.isFinite(queue)) hero.appendChild(makeTile("TX queue",String(Math.round(queue)),"queued",Math.min(Math.max(queue,0),30),0,30,queue>10?"bad":queue>5?"warn":"good","queue"));
+    if(Number.isFinite(queue)) hero.appendChild(makeTile("TX queue",String(Math.round(queue)),"queued",Math.min(Math.max(queue,0),30),0,30,queue>10?"bad":queue>5?"warn":"good","queue",null,"compact"));
 
     const tempInfo=findEntity("temperature");
     const temp=num(tempInfo);
     if(Number.isFinite(temp)){
       const unit=stateFor(tempInfo)?.attributes?.unit_of_measurement||"°C";
       const c=String(unit).includes("F")?(temp-32)*5/9:temp;
-      hero.appendChild(makeTile("Temperature",`${c.toFixed(1)} °C`,"",c,-20,60,bandForTemp(c),"temperature",()=>summary._fireMoreInfo?.(tempInfo.entity_id)));
+      hero.appendChild(makeTile("Temperature",`${c.toFixed(1)} °C`,"",c,-20,60,bandForTemp(c),"temperature",()=>summary._fireMoreInfo?.(tempInfo.entity_id),"compact"));
     }
 
     let tokensInfo=findEntity("request_rate_limiter");
@@ -981,11 +1022,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
       if(key) tokensInfo={entity_id:key,label:"Request Tokens"};
     }
     const tokens=num(tokensInfo);
-    if(Number.isFinite(tokens)) hero.appendChild(makeTile("Request tokens",tokens.toFixed(1),"available",tokens,0,20,tokens<5?"bad":tokens<10?"warn":"good","request-tokens",()=>summary._fireMoreInfo?.(tokensInfo.entity_id)));
+    if(Number.isFinite(tokens)) hero.appendChild(makeTile("Request tokens",tokens.toFixed(1),"available",tokens,0,20,tokens<5?"bad":tokens<10?"warn":"good","request-tokens",()=>summary._fireMoreInfo?.(tokensInfo.entity_id),"compact"));
 
     const dcInfo=findEntity("discovered_contacts");
     const discovered=num(dcInfo);
-    if(Number.isFinite(discovered)) hero.appendChild(makeTile("Discovered contacts",String(Math.round(discovered)),"seen",Math.min(discovered,1000),0,1000,"info","contacts",()=>summary._fireMoreInfo?.(dcInfo.entity_id)));
+    if(Number.isFinite(discovered)) hero.appendChild(makeTile("Discovered contacts",String(Math.round(discovered)),"seen",Math.min(discovered,1000),0,1000,"info","contacts",()=>summary._fireMoreInfo?.(dcInfo.entity_id),"compact"));
 
     const used=Number(status.battery?.used_kb), total=Number(status.battery?.total_kb);
     if(Number.isFinite(used)&&Number.isFinite(total)&&total>0){
@@ -1003,7 +1044,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const pathLabels=["1 byte","2 bytes","3 bytes"];
       const protocol=info.protocol_version!=null?`v${info.protocol_version}`:"—";
       const path=info.path_hash_mode==null?"—":(pathLabels[Number(info.path_hash_mode)]||String(info.path_hash_mode));
-      hero.appendChild(makeTile("Protocol / Path",protocol,`· ${path}`,100,0,100,"info","protocol"));
+      hero.appendChild(makeTile("Protocol / Path",protocol,`· ${path}`,100,0,100,"info","protocol",null,"compact"));
     }
 
     if(info.max_contacts!=null || info.max_channels!=null){
@@ -1011,7 +1052,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         "Capacity",
         `${info.max_contacts??"—"} / ${info.max_channels??"—"}`,
         "contacts / channels",
-        100,0,100,"info","capacity"
+        100,0,100,"info","capacity",null,"compact"
       ));
     }
 
