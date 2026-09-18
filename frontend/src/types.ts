@@ -434,6 +434,10 @@ export interface LocalRepeaterStatus {
     rx_delay?: number;
     airtime_factor?: number;
   };
+  clock: {
+    timestamp?: number;
+    drift_seconds?: number;
+  };
   stats: {
     core?: Record<string, number | null>;
     radio?: Record<string, number | null>;

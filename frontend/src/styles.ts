@@ -78,6 +78,25 @@ export const panelStyles = css`
     font-weight: 500;
     color: var(--primary-text-color);
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .hivefw-wordmark {
+    display: inline-block;
+    width: 128px;
+    height: 13px;
+    flex: 0 0 auto;
+    background: var(--primary-text-color);
+    -webkit-mask: url('/meshcore_chat_panel/hivefw-wordmark.png') center / contain no-repeat;
+    mask: url('/meshcore_chat_panel/hivefw-wordmark.png') center / contain no-repeat;
+  }
+
+  .panel-product-name {
+    white-space: nowrap;
+    font-weight: 600;
   }
 
   .device-switcher {

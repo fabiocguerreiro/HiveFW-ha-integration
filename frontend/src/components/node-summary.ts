@@ -99,9 +99,11 @@ export class NodeSummary extends LitElement {
     /* ─── Hero row ─── */
     .hero-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-auto-rows: 1fr;
       gap: 12px;
       margin-bottom: 16px;
+      align-items: stretch;
     }
     .hero-tile {
       background: var(--secondary-background-color, #f0f0f0);
@@ -113,6 +115,15 @@ export class NodeSummary extends LitElement {
       cursor: pointer;
       border: 1px solid transparent;
       transition: border-color 0.15s;
+      min-height: 108px;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    @container (max-width: 900px) {
+      .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @container (max-width: 480px) {
+      .hero-row { grid-template-columns: 1fr; }
     }
     .hero-tile:hover { border-color: var(--primary-color, #03a9f4); }
     .hero-tile-head {
@@ -529,15 +540,164 @@ export class NodeSummary extends LitElement {
   private _renderCompanionHero(consumed: Set<string>) {
     return html`
       ${this._renderBatteryTile()}
+      ${this._renderTemperatureTile(consumed)}
       ${this._renderSignalTile()}
       ${this._renderRepeaterStateTile()}
+
       ${this._renderUptimeTile(consumed)}
+      ${this._renderDeviceClockTile()}
       ${this._renderNoiseFloorTile(consumed)}
       ${this._renderQueueTile(consumed)}
+
       ${this._renderCompanionRadioActivityTile()}
       ${this._renderMessagesSentTile(consumed)}
       ${this._renderMessagesReceivedTile(consumed)}
+      ${this._renderRequestTokensTile(consumed)}
+
+      ${this._renderDiscoveredContactsTile(consumed)}
+      ${this._renderStorageTile()}
+      ${this._renderRadioHealthTile(consumed)}
       ${this._renderLocationTile()}
+    `;
+  }
+
+  private _renderTemperatureTile(consumed: Set<string>) {
+    const info = this._findByMetric('temperature');
+    if (!info) return nothing;
+    const raw = this._readNumber(info.entity_id);
+    if (!Number.isFinite(raw)) return nothing;
+    consumed.add(info.entity_id);
+    const unit = (this.hass?.states[info.entity_id]?.attributes?.unit_of_measurement as string) ?? '°C';
+    const celsius = unit.includes('F') ? (raw - 32) * 5 / 9 : raw;
+    const ev = evaluateSensor('temperature', (celsius * 9 / 5) + 32);
+    return html`
+      <div class="hero-tile" data-repeater-extra="temperature"
+           @click=${() => this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>Temperature${this._renderInfoTip(ev)}</span>
+          <span class="status-dot ${ev.band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${celsius.toFixed(1)}<span class="unit">°C</span></span>
+        </div>
+        <meshcore-stat-bar .value=${celsius} .min=${-20} .max=${60} .band=${ev.band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderDeviceClockTile() {
+    const ts = Number(this.repeaterStatus?.clock?.timestamp);
+    if (!Number.isFinite(ts) || ts <= 0) return nothing;
+    const drift = Number(this.repeaterStatus?.clock?.drift_seconds ?? 0);
+    const abs = Math.abs(drift);
+    const band: Band = abs <= 2 ? 'good' : abs <= 30 ? 'warn' : 'bad';
+    const display = new Date(ts * 1000).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const driftText = abs <= 2 ? '· synchronized' : `· drift ${drift > 0 ? '+' : ''}${drift}s`;
+    return html`
+      <div class="hero-tile" data-repeater-extra="clock">
+        <div class="hero-tile-head">
+          <span>Device clock</span>
+          <span class="status-dot ${band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${display}</span>
+          <span class="secondary">${driftText}</span>
+        </div>
+        <meshcore-stat-bar .value=${Math.min(abs, 120)} .min=${0} .max=${120} .band=${band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderRequestTokensTile(consumed: Set<string>) {
+    const info = this.entities.find((e) => e.entity_id.includes('request_rate_limiter'));
+    if (!info) return nothing;
+    const value = this._readNumber(info.entity_id);
+    if (!Number.isFinite(value)) return nothing;
+    consumed.add(info.entity_id);
+    const band: Band = value < 5 ? 'bad' : value < 10 ? 'warn' : 'good';
+    return html`
+      <div class="hero-tile" data-repeater-extra="request-tokens"
+           @click=${() => this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>Request tokens</span>
+          <span class="status-dot ${band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${this._formatNumber(value, 1)}</span>
+          <span class="secondary">available</span>
+        </div>
+        <meshcore-stat-bar .value=${value} .min=${0} .max=${20} .band=${band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderDiscoveredContactsTile(consumed: Set<string>) {
+    const info = this.entities.find((e) => e.entity_id.includes('discovered_contacts'));
+    if (!info) return nothing;
+    const value = this._readNumber(info.entity_id);
+    if (!Number.isFinite(value)) return nothing;
+    consumed.add(info.entity_id);
+    return html`
+      <div class="hero-tile" data-repeater-extra="contacts"
+           @click=${() => this._fireMoreInfo(info.entity_id)}>
+        <div class="hero-tile-head">
+          <span>Discovered contacts</span>
+          <span class="status-dot info"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${this._formatCount(value)}</span>
+          <span class="secondary">seen</span>
+        </div>
+        <meshcore-stat-bar .value=${Math.min(value, 1000)} .min=${0} .max=${1000} .band=${'info'}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderStorageTile() {
+    const used = Number(this.repeaterStatus?.battery?.used_kb);
+    const total = Number(this.repeaterStatus?.battery?.total_kb);
+    if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return nothing;
+    const pct = Math.max(0, Math.min(100, used / total * 100));
+    const band: Band = pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'good';
+    return html`
+      <div class="hero-tile" data-repeater-extra="storage">
+        <div class="hero-tile-head">
+          <span>Storage</span>
+          <span class="status-dot ${band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${pct.toFixed(0)}<span class="unit">%</span></span>
+          <span class="secondary">· ${used} / ${total} KB</span>
+        </div>
+        <meshcore-stat-bar .value=${pct} .min=${0} .max=${100} .band=${band}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderRadioHealthTile(consumed: Set<string>) {
+    const faults = this.entities.filter((e) => e.booleanProblem);
+    if (faults.length === 0) return nothing;
+    faults.forEach((e) => consumed.add(e.entity_id));
+    const states = faults.map((e) => this.hass?.states[e.entity_id]?.state);
+    const detected = states.filter((state) => state === 'on').length;
+    const unknown = states.some((state) => state === undefined || state === 'unknown' || state === 'unavailable');
+    const band: Band = detected > 0 ? 'bad' : unknown ? 'info' : 'good';
+    const label = detected > 0 ? `${detected} fault${detected === 1 ? '' : 's'}` : unknown ? 'Unknown' : 'OK';
+    return html`
+      <div class="hero-tile" data-repeater-extra="radio-health"
+           @click=${() => faults[0] && this._fireMoreInfo(faults[0].entity_id)}>
+        <div class="hero-tile-head">
+          <span>Radio health</span>
+          <span class="status-dot ${band}"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${label}</span>
+          <span class="secondary">· CAD / Pool / RX</span>
+        </div>
+        <meshcore-stat-bar .value=${detected} .min=${0} .max=${3} .band=${band}></meshcore-stat-bar>
+      </div>
     `;
   }
 
@@ -1240,6 +1400,11 @@ export class NodeSummary extends LitElement {
     if (info.sortOrder === 2) return true;
     // SNR / RSSI — shown in Last message strength hero tile.
     if (info.metricKey === 'snr' || info.metricKey === 'rssi') return true;
+    if (info.metricKey === 'temperature' || info.metricKey === 'noise_floor'
+        || info.metricKey === 'tx_queue_len') return true;
+    if (info.entity_id.includes('request_rate_limiter')
+        || info.entity_id.includes('discovered_contacts')) return true;
+    if (info.booleanProblem) return true;
     // Uptime — promoted to the device header status badge ("Online · 12d 19h").
     if (info.metricKey === 'uptime_hours') return true;
     // Airtime variants — Radio Activity hero tile shows the windowed

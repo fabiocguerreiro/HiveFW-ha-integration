@@ -55,7 +55,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!root) return;
 
     const title = root.querySelector(".panel-title");
-    if (title) title.textContent = "HiveFW Repeater";
+    if (title && !title.querySelector(".hivefw-header-logo")) {
+      title.textContent = "";
+      const logo = document.createElement("span");
+      logo.className = "hivefw-header-logo";
+      logo.setAttribute("aria-hidden", "true");
+      const product = document.createElement("span");
+      product.className = "hivefw-header-product";
+      product.textContent = "Repeater";
+      title.setAttribute("aria-label", "HiveFW Repeater");
+      title.append(logo, product);
+    }
 
     this.__ensureRepeaterStyles(root);
     this.__ensureTabs(root);
@@ -177,6 +187,25 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const style = document.createElement("style");
     style.id = "meshcore-repeater-fork-styles";
     style.textContent = `
+      .hivefw-header-logo {
+        display:inline-block;
+        width:128px;
+        height:13px;
+        flex:0 0 auto;
+        background:var(--primary-text-color);
+        -webkit-mask:url('/meshcore_chat_panel/hivefw-wordmark.png') center/contain no-repeat;
+        mask:url('/meshcore_chat_panel/hivefw-wordmark.png') center/contain no-repeat;
+      }
+      .hivefw-header-product {
+        font-weight:600;
+        white-space:nowrap;
+      }
+      .panel-title {
+        display:flex !important;
+        align-items:center;
+        gap:10px;
+      }
+
       .tab-bar {
         overflow-x: auto !important;
         scrollbar-width: none;
@@ -682,6 +711,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
+    this.__enhanceHiveTools(sroot);
 
     this.__settingsObserver?.takeRecords();
     this.__settingsObserver?.observe(sroot, { childList: true, subtree: true });
@@ -795,68 +825,153 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const hero = nroot?.querySelector(".hero-row");
     const status = this.__repeaterStatus;
     if (!hero || !status?.supported) return;
-    if (nroot.querySelector('[data-repeater-extra]')) return;
 
-    const classify = {
-      uptime: (h) => h < 1 ? "bad" : h < 24 ? "warn" : "good",
-      noise: (v) => v > -105 ? "bad" : v > -115 ? "warn" : "good",
-      queue: (v) => v > 10 ? "bad" : v > 5 ? "warn" : "good",
+    let style = nroot.querySelector("#hivefw-cockpit-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "hivefw-cockpit-style";
+      style.textContent = `
+        .hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-rows:1fr;align-items:stretch}
+        .hero-tile{min-height:108px;height:100%;box-sizing:border-box}
+        @container(max-width:900px){.hero-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+        @container(max-width:480px){.hero-row{grid-template-columns:1fr!important}}
+      `;
+      nroot.appendChild(style);
+    }
+
+    nroot.querySelectorAll(".hive-repeater-extra").forEach((el) => el.remove());
+
+    const entities = Array.isArray(summary.entities) ? summary.entities : [];
+    const findEntity = (needle) => entities.find((e) =>
+      String(e.entity_id || "").includes(needle) ||
+      String(e.label || "").toLowerCase().includes(needle.toLowerCase())
+    );
+    const stateFor = (info) => info ? this.hass?.states?.[info.entity_id] : null;
+    const num = (info) => {
+      const raw = stateFor(info)?.state;
+      const v = Number.parseFloat(raw);
+      return Number.isFinite(v) ? v : NaN;
     };
-    const makeTile = (title, primary, secondary, value, min, max, band, marker) => {
+    const bandForTemp = (c) => c >= 0 && c <= 50 ? "good" : c > -10 && c <= 60 ? "warn" : "bad";
+    const makeTile = (title, primary, secondary, value, min, max, band, marker, click) => {
       const tile = document.createElement("div");
       tile.className = "hero-tile hive-repeater-extra";
       tile.dataset.repeaterExtra = marker;
+      if (click) { tile.style.cursor = "pointer"; tile.addEventListener("click", click); }
       const head = document.createElement("div");
       head.className = "hero-tile-head";
-      const label = document.createElement("span");
-      label.textContent = title;
-      const dot = document.createElement("span");
-      dot.className = `status-dot ${band}`;
-      head.append(label, dot);
-      const valueRow = document.createElement("div");
-      valueRow.className = "hero-tile-value";
-      const main = document.createElement("span");
-      main.className = "primary";
-      main.textContent = primary;
-      valueRow.appendChild(main);
-      if (secondary) {
-        const sub = document.createElement("span");
-        sub.className = "secondary";
-        sub.textContent = secondary;
-        valueRow.appendChild(sub);
-      }
-      const bar = document.createElement("meshcore-stat-bar");
-      bar.value = value; bar.min = min; bar.max = max; bar.band = band;
-      tile.append(head, valueRow, bar);
-      return tile;
+      const label = document.createElement("span"); label.textContent = title;
+      const dot = document.createElement("span"); dot.className = `status-dot ${band}`;
+      head.append(label,dot);
+      const vr = document.createElement("div"); vr.className = "hero-tile-value";
+      const main = document.createElement("span"); main.className = "primary"; main.textContent = primary; vr.appendChild(main);
+      if (secondary) { const sub=document.createElement("span"); sub.className="secondary"; sub.textContent=secondary; vr.appendChild(sub); }
+      const bar=document.createElement("meshcore-stat-bar"); bar.value=value; bar.min=min; bar.max=max; bar.band=band;
+      tile.append(head,vr,bar); return tile;
     };
 
-    const active = !!status.repeat;
-    hero.appendChild(makeTile("Repeater mode", active ? "Active" : "Off", "· Companion always on", active ? 100 : 0, 0, 100, active ? "good" : "info", "state"));
+    const active=!!status.repeat;
+    hero.appendChild(makeTile("Repeater mode",active?"Active":"Off","· Companion always on",active?100:0,0,100,active?"good":"info","state"));
 
-    const uptimeSecs = Number(status.stats?.core?.uptime_secs);
-    if (Number.isFinite(uptimeSecs)) {
-      const hours = Math.max(0, uptimeSecs / 3600);
-      const display = hours >= 48 ? `${Math.floor(hours / 24)}d ${Math.floor(hours % 24)}h`
-        : hours >= 1 ? `${Math.floor(hours)}h ${Math.floor((hours % 1) * 60)}m`
-        : `${Math.floor(hours * 60)}m`;
-      hero.appendChild(makeTile("Uptime", display, "", Math.min(hours, 168), 0, 168, classify.uptime(hours), "uptime"));
+    const uptimeSecs=Number(status.stats?.core?.uptime_secs);
+    if(Number.isFinite(uptimeSecs)){
+      const h=Math.max(0,uptimeSecs/3600);
+      const d=h>=48?`${Math.floor(h/24)}d ${Math.floor(h%24)}h`:h>=1?`${Math.floor(h)}h ${Math.floor((h%1)*60)}m`:`${Math.floor(h*60)}m`;
+      hero.appendChild(makeTile("Uptime",d,"",Math.min(h,168),0,168,h<1?"bad":h<24?"warn":"good","uptime"));
     }
 
-    const noise = Number(status.stats?.radio?.noise_floor);
-    if (Number.isFinite(noise)) {
-      hero.appendChild(makeTile("Noise floor", `${Math.round(noise)} dBm`, "", noise, -130, -90, classify.noise(noise), "noise"));
+    const clock=Number(status.clock?.timestamp);
+    if(Number.isFinite(clock)&&clock>0){
+      const drift=Number(status.clock?.drift_seconds||0), abs=Math.abs(drift);
+      const t=new Date(clock*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      hero.appendChild(makeTile("Device clock",t,abs<=2?"· synchronized":`· drift ${drift>0?"+":""}${drift}s`,Math.min(abs,120),0,120,abs<=2?"good":abs<=30?"warn":"bad","clock"));
     }
 
-    const queue = Number(status.stats?.core?.queue_len);
-    if (Number.isFinite(queue)) {
-      hero.appendChild(makeTile("TX queue", String(Math.round(queue)), "queued", Math.min(Math.max(queue, 0), 30), 0, 30, classify.queue(queue), "queue"));
+    const noise=Number(status.stats?.radio?.noise_floor);
+    if(Number.isFinite(noise)) hero.appendChild(makeTile("Noise floor",`${Math.round(noise)} dBm`,"",noise,-130,-90,noise>-105?"bad":noise>-115?"warn":"good","noise"));
+
+    const queue=Number(status.stats?.core?.queue_len);
+    if(Number.isFinite(queue)) hero.appendChild(makeTile("TX queue",String(Math.round(queue)),"queued",Math.min(Math.max(queue,0),30),0,30,queue>10?"bad":queue>5?"warn":"good","queue"));
+
+    const tempInfo=findEntity("temperature");
+    const temp=num(tempInfo);
+    if(Number.isFinite(temp)){
+      const unit=stateFor(tempInfo)?.attributes?.unit_of_measurement||"°C";
+      const c=String(unit).includes("F")?(temp-32)*5/9:temp;
+      hero.appendChild(makeTile("Temperature",`${c.toFixed(1)} °C`,"",c,-20,60,bandForTemp(c),"temperature",()=>summary._fireMoreInfo?.(tempInfo.entity_id)));
     }
 
-    for (const row of nroot.querySelectorAll(".sensor-item")) {
-      const label = row.querySelector(".si-label")?.textContent?.trim().toLowerCase() || "";
-      if (label === "noise floor" || label === "tx queue length" || label === "uptime") row.style.display = "none";
+    let tokensInfo=findEntity("request_rate_limiter");
+    if(!tokensInfo){
+      const key=Object.keys(this.hass?.states||{}).find((id)=>id.includes("request_rate_limiter"));
+      if(key) tokensInfo={entity_id:key,label:"Request Tokens"};
     }
+    const tokens=num(tokensInfo);
+    if(Number.isFinite(tokens)) hero.appendChild(makeTile("Request tokens",tokens.toFixed(1),"available",tokens,0,20,tokens<5?"bad":tokens<10?"warn":"good","request-tokens",()=>summary._fireMoreInfo?.(tokensInfo.entity_id)));
+
+    const dcInfo=findEntity("discovered_contacts");
+    const discovered=num(dcInfo);
+    if(Number.isFinite(discovered)) hero.appendChild(makeTile("Discovered contacts",String(Math.round(discovered)),"seen",Math.min(discovered,1000),0,1000,"info","contacts",()=>summary._fireMoreInfo?.(dcInfo.entity_id)));
+
+    const used=Number(status.battery?.used_kb), total=Number(status.battery?.total_kb);
+    if(Number.isFinite(used)&&Number.isFinite(total)&&total>0){
+      const pct=Math.max(0,Math.min(100,used/total*100));
+      hero.appendChild(makeTile("Storage",`${pct.toFixed(0)}%`,`· ${used} / ${total} KB`,pct,0,100,pct>=90?"bad":pct>=70?"warn":"good","storage"));
+    }
+
+    const faults=entities.filter((e)=>e.booleanProblem);
+    if(faults.length){
+      const values=faults.map((e)=>this.hass?.states?.[e.entity_id]?.state);
+      const detected=values.filter((v)=>v==="on").length;
+      const unknown=values.some((v)=>!v||v==="unknown"||v==="unavailable");
+      hero.appendChild(makeTile("Radio health",detected?`${detected} fault${detected===1?"":"s"}`:unknown?"Unknown":"OK","· CAD / Pool / RX",detected,0,3,detected?"bad":unknown?"info":"good","radio-health",()=>summary._fireMoreInfo?.(faults[0].entity_id)));
+    }
+
+    for(const row of nroot.querySelectorAll(".sensor-item")){
+      const label=(row.querySelector(".si-label")?.textContent||"").trim().toLowerCase();
+      if(["noise floor","tx queue length","uptime","temperature","request tokens","discovered contacts"].some((x)=>label.includes(x)) || label.startsWith("radio fault:")) row.style.display="none";
+    }
+  }
+
+  __enhanceHiveTools(sroot) {
+    const deviceSection = sroot.querySelector(".device-section");
+    if (!deviceSection) return;
+    const rows = [...deviceSection.querySelectorAll(".actions-row")];
+    if (!rows.length || deviceSection.querySelector("#hivefw-tools-row")) return;
+
+    const row=document.createElement("div");
+    row.id="hivefw-tools-row";
+    row.className="actions-row";
+    row.style.marginTop="8px";
+    const settingsPage=sroot.host;
+    const run=(command,args,label)=>async()=>{
+      try{
+        const msg={type:"meshcore_chat/execute_local",command};
+        if(args) msg.args=args;
+        const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
+        const result=await this.hass.callWS(msg);
+        settingsPage._showStatusMessage?.(`HiveFW: ${label} → ${result?.response||"OK"}`,"success");
+        if(["send_device_query","get_bat","get_self_telemetry"].includes(command)) void this.__loadRepeaterStatus();
+      }catch(error){
+        settingsPage._showStatusMessage?.(`HiveFW: ${label} failed — ${String(error)}`,"error");
+      }
+    };
+    const specs=[
+      ["Refresh HiveFW",null,null],
+      ["Telemetry","get_self_telemetry",null],
+      ["Battery / Storage","get_bat",null],
+      ["Device Info","send_device_query",null],
+      ["Repeater Frequencies","get_allowed_repeat_freq",null],
+    ];
+    for(const [label,command,args] of specs){
+      const b=document.createElement("button"); b.className="action-btn"; b.textContent=label;
+      b.addEventListener("click",command?run(command,args,label):()=>{ void this.__loadRepeaterStatus(); settingsPage._loadDeviceConfig?.(); });
+      row.appendChild(b);
+    }
+    const reboot=document.createElement("button"); reboot.className="action-btn danger"; reboot.textContent="Reboot";
+    reboot.addEventListener("click",()=>{ if(window.confirm("Reiniciar agora o HiveFW?")) void run("reboot",null,"Reboot")(); });
+    row.appendChild(reboot);
+    rows[rows.length-1].after(row);
   }
 
   async __loadManagedDevices() {

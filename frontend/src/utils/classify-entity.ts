@@ -105,7 +105,8 @@ export function classifyEntity(entity: any): EntityInfo | null {
   // user has no actionable signal on -- removed per iter8 review.
   if (eid.includes('full_evts')) return null;
   if (eid.includes('node_status') || eid.includes('companion_prefix')
-      || eid.includes('request_rate') || eid.includes('delivery')
+      || (eid.includes('request_rate') && !eid.includes('request_rate_limiter'))
+      || eid.includes('delivery')
       || eid.includes('path_') || eid.includes('neighbor_')) return null;
 
   // --- Step 3: classify by HA device_class, with entity_id substring as a
@@ -201,6 +202,14 @@ export function classifyEntity(entity: any): EntityInfo | null {
   if (eid.includes('contact_count')) {
     return { entity_id: eid, label: 'Contacts', icon: 'counter',
              colorScheme: 'neutral', sortOrder: 8 };
+  }
+  if (eid.includes('discovered_contacts')) {
+    return { entity_id: eid, label: 'Discovered Contacts', icon: 'counter',
+             colorScheme: 'neutral', sortOrder: 8 };
+  }
+  if (eid.includes('request_rate_limiter')) {
+    return { entity_id: eid, label: 'Request Tokens', icon: 'counter',
+             colorScheme: 'neutral', sortOrder: 13 };
   }
   if (eid.includes('channel_util')) {
     return { entity_id: eid, label: 'Channel Util', icon: 'chart',

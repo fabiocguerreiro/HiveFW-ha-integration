@@ -1087,6 +1087,19 @@ export class SettingsPage extends LitElement {
           <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('set_time', {val: Math.floor(Date.now() / 1000)}, 'Sync Clock')}>Sync Clock</button>
           <button class="action-btn" ?disabled=${!isOnline} @click=${this._onCompanionTrace}>Trace</button>
         </div>
+
+        <div class="actions-row" style="margin-top:8px;">
+          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._loadDeviceConfig()}>Refresh HiveFW</button>
+          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_self_telemetry', undefined, 'Telemetry')}>Telemetry</button>
+          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_bat', undefined, 'Battery / Storage')}>Battery / Storage</button>
+          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('send_device_query', undefined, 'Device Info')}>Device Info</button>
+          <button class="action-btn" ?disabled=${!isOnline} @click=${() => this._executeCompanionAction('get_allowed_repeat_freq', undefined, 'Repeater Frequencies')}>Repeater Frequencies</button>
+          <button class="action-btn danger" ?disabled=${!isOnline} @click=${() => {
+            if (window.confirm('Reiniciar agora o HiveFW?')) {
+              void this._executeCompanionAction('reboot', undefined, 'Reboot');
+            }
+          }}>Reboot</button>
+        </div>
       </div>
     `;
   }

@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/banner.png" alt="HiveFW HA Integration" width="800"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/banner.png" alt="HiveFW HA Integration" width="800"></p>
 
 # HiveFW HA Integration
 
@@ -6,9 +6,9 @@ Home Assistant interface for **HiveFW Companion-Repeater**, combining local devi
 
 Works on top of the [core meshcore integration](https://github.com/meshcore-dev/meshcore-ha) and is tailored to HiveFW's **Client-Repeater** architecture. The internal Home Assistant domain remains `meshcore_chat` for upgrade compatibility.
 
-> **Status:** v0.3 in active development.
+> **Status:** v0.5 in active development.
 
-## Features (v0.3)
+## Features (v0.5)
 
 - Sidebar chat panel with channels, DMs, and contact list
 - Persistent message history (survives Home Assistant restarts)
@@ -24,16 +24,16 @@ Works on top of the [core meshcore integration](https://github.com/meshcore-dev/
 
 <table>
 <tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg" alt="Chat tab"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg" alt="Devices tab"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg" alt="Chat tab"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg" alt="Devices tab"></a></td>
 </tr>
 <tr>
 <td><b>Chat</b> — channels and DMs in the left rail with All / Unread / DMs / Channels filters; messages rendered with sender, age, and delivery status (Repeated / Sent / Waiting).</td>
 <td><b>Devices</b> — per-device sensor tiles (SNR, RSSI, airtime, battery, message counts) with a neighbor table and quick-action buttons (Flood Advert, Sync Clock, Req Telemetry, Req Status).</td>
 </tr>
 <tr>
-<td><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg" alt="Nodes tab"></a></td>
-<td><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg" alt="Settings tab"></a></td>
+<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg" alt="Nodes tab"></a></td>
+<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg" alt="Settings tab"></a></td>
 </tr>
 <tr>
 <td><b>Nodes</b> — full network discovery view (All / Added / Discovered, then Clients / Repeaters), with search, last-heard sort, and stale-record cleanup.</td>
@@ -45,8 +45,8 @@ Works on top of the [core meshcore integration](https://github.com/meshcore-dev/
 
 <table>
 <tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg" alt="Message popup with route metadata"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg" alt="Manage contacts and channels"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg" alt="Message popup with route metadata"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg" alt="Manage contacts and channels"></a></td>
 </tr>
 <tr>
 <td><b>Message popup</b> — click or tap any message for Copy / Reply, plus the route metadata: hop sequence, SNR, RSSI, and exact receive timestamp.</td>
@@ -58,8 +58,8 @@ Works on top of the [core meshcore integration](https://github.com/meshcore-dev/
 
 <table>
 <tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg" alt="Node detail popup"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg" alt="Path trace dialog"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg" alt="Node detail popup"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg" alt="Path trace dialog"></a></td>
 </tr>
 <tr>
 <td><b>Node details</b> — click any node tile in the Nodes tab to open quick actions (Trace, Remove Contact), public-key prefix, type, last advert, and location.</td>
@@ -71,16 +71,16 @@ Works on top of the [core meshcore integration](https://github.com/meshcore-dev/
 
 <table>
 <tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg" alt="Device settings menu"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/device-command.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/device-command.jpg" alt="Issue command picker"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg" alt="Device settings menu"></a></td>
+<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-command.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-command.jpg" alt="Issue command picker"></a></td>
 </tr>
 <tr>
 <td><b>Device settings menu</b> — per-device gear menu: View Hidden Sensors, Issue Command, Reboot, Start OTA Update.</td>
 <td><b>Issue Command</b> — full command catalog grouped by category (Device Management, Device Info, etc.) — drives the underlying meshcore service from the panel.</td>
 </tr>
 <tr>
-<td><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg" alt="Companion settings menu"></a></td>
-<td><a href="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg"><img src="https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg" alt="Sensor tile more-info"></a></td>
+<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg" alt="Companion settings menu"></a></td>
+<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg" alt="Sensor tile more-info"></a></td>
 </tr>
 <tr>
 <td><b>Companion settings menu</b> — same gear menu pattern for the local companion device, with Key Management as an additional option.</td>
@@ -92,15 +92,15 @@ Works on top of the [core meshcore integration](https://github.com/meshcore-dev/
 
 ### HACS (custom repository)
 
-[![Open meshcore-ha-chat in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mwolter805&repository=meshcore-ha-chat&category=integration)
+[![Open meshcore-ha-chat in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fabiocguerreiro&repository=meshcore-ha-chat&category=integration)
 
 Click the badge above to open this repository in your HACS dashboard, or follow the manual steps:
 
 1. In HACS → Integrations → ⋮ → Custom repositories
-2. Add `https://github.com/mwolter805/meshcore-ha-chat` as an "Integration"
-3. Install **MeshCore Chat**
+2. Add `https://github.com/fabiocguerreiro/meshcore-ha-chat` as an "Integration"
+3. Install **HiveFW HA Integration**
 4. Restart Home Assistant
-5. Settings → Devices & Services → Add Integration → **MeshCore Chat**
+5. Settings → Devices & Services → Add Integration → **HiveFW HA Integration**
 
 ### Manual
 
@@ -121,8 +121,8 @@ For a walkthrough of common tasks (adding contacts, managing channels, issuing c
 
 Security issues can be reported privately — see [SECURITY.md](SECURITY.md). For how the integration handles untrusted, mesh-sourced data and where its trust boundaries are, see [docs/security-posture.md](docs/security-posture.md).
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/mwolter805/meshcore-ha-chat/badge)](https://scorecard.dev/viewer/?uri=github.com/mwolter805/meshcore-ha-chat)
-[![CodeQL](https://github.com/mwolter805/meshcore-ha-chat/actions/workflows/codeql.yml/badge.svg)](https://github.com/mwolter805/meshcore-ha-chat/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/fabiocguerreiro/meshcore-ha-chat/badge)](https://scorecard.dev/viewer/?uri=github.com/fabiocguerreiro/meshcore-ha-chat)
+[![CodeQL](https://github.com/fabiocguerreiro/meshcore-ha-chat/actions/workflows/codeql.yml/badge.svg)](https://github.com/fabiocguerreiro/meshcore-ha-chat/actions/workflows/codeql.yml)
 
 ## Relationship to other projects
 
@@ -131,7 +131,7 @@ Security issues can be reported privately — see [SECURITY.md](SECURITY.md). Fo
 
 ## Use cases
 
-- **Off-grid mesh chat panel.** Run a tablet in your kitchen showing the MeshCore Chat sidebar; talk to local mesh peers without leaving Home Assistant.
+- **Off-grid mesh chat panel.** Run a tablet in your kitchen showing the HiveFW Repeater sidebar; talk to local mesh peers without leaving Home Assistant.
 - **Search recent traffic.** "Who pinged the @[Repeater Cliff] node yesterday?" — date-range message search across all conversations.
 - **Path diagnostics.** Trace the route a message took (hops, SNR, RSSI per repeater) right from the message bubble.
 - **Managed-device dashboard.** Monitor battery, last-heard, neighbour SNR, and uptime on every repeater you've added — one card per device.
@@ -139,14 +139,14 @@ Security issues can be reported privately — see [SECURITY.md](SECURITY.md). Fo
 ## Known limitations
 
 - **Requires meshcore ≥ 2.7.0.** The per-channel region scope selector and "All regions" option need core-integration support that landed in v2.7.0; Trace and Get Contacts use upstream services from 2.6.0, and older cores fall back to direct coordinator reads where supported.
-- **Message archive is not a long-term log.** Default retention is 90 days, capped at 500 messages per conversation. Configurable via Settings → MeshCore Chat → Configure (range 1–365 days, 50–5000 messages).
+- **Message archive is not a long-term log.** Default retention is 90 days, capped at 500 messages per conversation. Configurable via Settings → HiveFW HA Integration → Configure (range 1–365 days, 50–5000 messages).
 - **Discover-mode traces don't always return.** Flood path discovery on multi-hop routes sometimes silently drops. If a **Discover** trace fails, switch to **Select repeaters** or **Enter path** in the trace dialog to specify the route explicitly.
 
 ## Removal
 
 To uninstall:
 
-1. Settings → Devices & Services → MeshCore Chat → ⋮ → Delete.
+1. Settings → Devices & Services → HiveFW HA Integration → ⋮ → Delete.
 2. Optional: remove the message archive from disk:
    ```bash
    rm /config/.storage/meshcore_chat.*
@@ -156,7 +156,7 @@ To uninstall:
 
 ## Development
 
-Contributions and bug reports welcome — file issues at [github.com/mwolter805/meshcore-ha-chat/issues](https://github.com/mwolter805/meshcore-ha-chat/issues).
+Contributions and bug reports welcome — file issues at [github.com/fabiocguerreiro/meshcore-ha-chat/issues](https://github.com/fabiocguerreiro/meshcore-ha-chat/issues).
 
 ### Repo layout
 

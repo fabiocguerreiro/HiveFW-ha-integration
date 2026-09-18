@@ -938,9 +938,13 @@ def ws_get_managed_devices(hass, connection, msg):
         vol.Optional("entry_id"): str,
     }
 )
-@callback
-def ws_get_device_config(hass, connection, msg):
-    """Return companion device config."""
+@websocket_api.async_response
+async def ws_get_device_config(hass, connection, msg):
+    """Return companion device config.
+
+    SELF_INFO intentionally does not contain path_hash_mode. Refresh
+    DEVICE_INFO here and use its protocol-v10 value as the source of truth.
+    """
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
         connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
@@ -955,8 +959,18 @@ def ws_get_device_config(hass, connection, msg):
         "max_channels": coordinator.max_channels,
     }
 
-    # Radio settings from self_info cache
+    # Radio settings from SELF_INFO plus capabilities/settings that only
+    # exist in DEVICE_INFO (notably path_hash_mode and repeat).
     self_info = getattr(coordinator.api, 'self_info', {}) or {}
+    device_info = {}
+    try:
+        device_query = await coordinator.api.mesh_core.commands.send_device_query()
+        payload = getattr(device_query, "payload", None)
+        if isinstance(payload, dict):
+            device_info = payload
+    except Exception as ex:
+        _LOGGER.debug("Unable to refresh DEVICE_INFO for settings: %s", ex)
+
     config["frequency"] = self_info.get("radio_freq")
     config["bandwidth"] = self_info.get("radio_bw")
     config["spreading_factor"] = self_info.get("radio_sf")
@@ -971,14 +985,16 @@ def ws_get_device_config(hass, connection, msg):
     # Repeater / advanced settings already exposed by the standard Companion
     # protocol. adv_type 2 is Repeater; HiveFW changes SELF_INFO accordingly
     # whenever its integrated Repeater mode is enabled.
-    config["repeat"] = self_info.get("adv_type") == 2
+    config["repeat"] = bool(
+        device_info.get("repeat", self_info.get("adv_type") == 2)
+    )
     config["multi_acks"] = self_info.get("multi_acks")
     config["advert_loc_policy"] = self_info.get("adv_loc_policy")
     config["telemetry_mode_base"] = self_info.get("telemetry_mode_base")
     config["telemetry_mode_loc"] = self_info.get("telemetry_mode_loc")
     config["telemetry_mode_env"] = self_info.get("telemetry_mode_env")
     config["manual_add_contacts"] = self_info.get("manual_add_contacts")
-    config["path_hash_mode"] = self_info.get("path_hash_mode")
+    config["path_hash_mode"] = device_info.get("path_hash_mode")
 
     # Location source
     config["location_source"] = getattr(coordinator, "location_source", "manual")
@@ -1058,6 +1074,7 @@ async def ws_get_local_repeater_status(hass, connection, msg):
         device = await _payload(commands.send_device_query) or {}
         battery = await _payload(commands.get_bat) or {}
         tuning = await _payload(commands.get_tuning) or {}
+        device_clock = await _payload(commands.get_time) or {}
         core = await _payload(commands.get_stats_core) or {}
         radio = await _payload(commands.get_stats_radio) or {}
         packets = await _payload(commands.get_stats_packets) or {}
@@ -1101,6 +1118,14 @@ async def ws_get_local_repeater_status(hass, connection, msg):
                 },
                 "battery": battery,
                 "tuning": tuning_view,
+                "clock": {
+                    "timestamp": device_clock.get("time"),
+                    "drift_seconds": (
+                        int(device_clock.get("time")) - int(time.time())
+                        if device_clock.get("time") is not None
+                        else None
+                    ),
+                },
                 "stats": {
                     "core": core,
                     "radio": radio,

@@ -1,13 +1,13 @@
 {
   "domain": "meshcore_chat",
   "name": "HiveFW HA Integration",
-  "codeowners": ["@mwolter805"],
+  "codeowners": ["@fabiocguerreiro"],
   "config_flow": true,
   "dependencies": ["frontend", "http", "websocket_api", "meshcore"],
-  "documentation": "https://github.com/mwolter805/meshcore-ha-chat",
+  "documentation": "https://github.com/fabiocguerreiro/meshcore-ha-chat",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/mwolter805/meshcore-ha-chat/issues",
+  "issue_tracker": "https://github.com/fabiocguerreiro/meshcore-ha-chat/issues",
   "requirements": [],
-  "version": "0.4.1"
+  "version": "0.5.0"
 }
