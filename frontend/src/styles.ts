@@ -104,6 +104,12 @@ export const panelStyles = css`
     background: var(--card-background-color, #fff);
     border-bottom: 1px solid var(--divider-color, #e0e0e0);
     flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tab-bar::-webkit-scrollbar {
+    display: none;
   }
 
   .tab-bar button {
@@ -1140,6 +1146,8 @@ export const panelStyles = css`
   }
 
   :host([narrow]) .tab-bar button {
+    flex: 0 0 auto;
+    min-width: 88px;
     font-size: 12px;
     padding: 10px 12px;
   }
