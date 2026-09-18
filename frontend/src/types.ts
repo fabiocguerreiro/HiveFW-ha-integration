@@ -307,6 +307,13 @@ export interface DeviceConfig {
   longitude?: number;
   altitude?: number;
   path_hash_mode?: number;
+  repeat?: boolean;
+  multi_acks?: number;
+  advert_loc_policy?: number;
+  telemetry_mode_base?: number;
+  telemetry_mode_loc?: number;
+  telemetry_mode_env?: number;
+  manual_add_contacts?: boolean;
   location_source?: 'manual' | 'gps' | 'home_assistant';
   connection_type?: string;
   connection_address?: string;
@@ -396,4 +403,40 @@ export interface HiveNeighborsResponse {
   repeater_enabled: boolean;
   count: number;
   neighbors: HiveNeighborInfo[];
+}
+
+export interface LocalRepeaterStatus {
+  supported: boolean;
+  repeat: boolean;
+  name: string;
+  firmware: string;
+  model: string;
+  radio: {
+    frequency?: number;
+    bandwidth?: number;
+    spreading_factor?: number;
+    coding_rate?: number;
+    tx_power?: number;
+    max_tx_power?: number;
+    path_hash_mode?: number;
+    multi_acks?: number;
+  };
+  location: {
+    latitude?: number;
+    longitude?: number;
+  };
+  battery: {
+    level?: number;
+    used_kb?: number;
+    total_kb?: number;
+  };
+  tuning: {
+    rx_delay?: number;
+    airtime_factor?: number;
+  };
+  stats: {
+    core?: Record<string, number | null>;
+    radio?: Record<string, number | null>;
+    packets?: Record<string, number | null>;
+  };
 }
