@@ -42,6 +42,12 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__regionsBusy = false;
     this.__nodesView = "list";
     this.__nodesMapOverlay = null;
+    this.__nodesMapElement = null;
+    this.__nodesMapContacts = null;
+    this.__nodesMapLoading = false;
+    this.__nodesMapLoadedEntry = null;
+    this.__nodesMapMarkerElements = new Map();
+    this.__nodesMapSignature = "";
     this.__mapLoadStarted = false;
 
     this.__hiveNeighbors = null;
@@ -1405,6 +1411,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         .hive-map-overlay{position:absolute;inset:0;z-index:10;background:var(--primary-background-color);overflow:hidden}
         .hive-map-overlay ha-map{display:block;width:100%;height:100%;min-height:420px}
         .hive-map-note{display:grid;place-items:center;height:100%;padding:24px;color:var(--secondary-text-color);text-align:center}
+        .hive-map-count{position:absolute;top:10px;right:10px;z-index:30;padding:6px 9px;border-radius:14px;background:color-mix(in srgb,var(--card-background-color) 90%,transparent);color:var(--primary-text-color);border:1px solid var(--divider-color);font-size:11px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none}
       `; nroot.appendChild(style);
     }
 
@@ -1413,8 +1420,18 @@ class MeshCoreRepeaterPanel extends BasePanel {
       sw=document.createElement("div"); sw.className="hive-view-switch";
       const list=document.createElement("button"); list.className="hive-view-btn"; list.textContent="Lista";
       const map=document.createElement("button"); map.className="hive-view-btn"; map.textContent="Mapa";
-      list.addEventListener("click",()=>{this.__nodesView="list";this.__enhanceNodesPage();});
-      map.addEventListener("click",()=>{this.__nodesView="map";void this.__renderNodesMap(page,nroot,content);this.__enhanceNodesPage();});
+      list.addEventListener("click",()=>{
+        this.__nodesView="list";
+        this.__nodesMapOverlay?.remove();
+        this.__nodesMapOverlay=null;
+        this.__nodesMapElement=null;
+        this.__enhanceNodesPage();
+      });
+      map.addEventListener("click",()=>{
+        this.__nodesView="map";
+        void this.__showNodesMap(page,nroot,content);
+        this.__enhanceNodesPage();
+      });
       sw.append(list,map); header.prepend(sw);
     }
     [...sw.querySelectorAll("button")].forEach((b,i)=>b.classList.toggle("active",(i===0&&this.__nodesView==="list")||(i===1&&this.__nodesView==="map")));
@@ -1423,39 +1440,124 @@ class MeshCoreRepeaterPanel extends BasePanel {
       el.style.display=this.__nodesView==="map"?"none":"";
     }
     content.style.position="relative";
-    if(this.__nodesView==="map") void this.__renderNodesMap(page,nroot,content);
-    else { this.__nodesMapOverlay?.remove(); this.__nodesMapOverlay=null; }
+    if(this.__nodesView==="map") void this.__showNodesMap(page,nroot,content);
+    else {
+      this.__nodesMapOverlay?.remove();
+      this.__nodesMapOverlay=null;
+      this.__nodesMapElement=null;
+    }
   }
 
-  async __renderNodesMap(page,nroot,content) {
-    const ready=await this.__ensureMapLoaded();
+  async __loadNodesMapContacts() {
+    const entryId=this.__entryId()||null;
+    if(this.__nodesMapLoading)return;
+    if(this.__nodesMapLoadedEntry===entryId && Array.isArray(this.__nodesMapContacts))return;
+    this.__nodesMapLoading=true;
+    try{
+      const msg={type:"meshcore_chat/get_contacts"};
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__nodesMapContacts=Array.isArray(result?.contacts)?result.contacts:[];
+      this.__nodesMapLoadedEntry=entryId;
+    }catch{
+      // Fallback to the parent panel's full contact list.
+      this.__nodesMapContacts=Array.isArray(this._contacts)?this._contacts:[];
+      this.__nodesMapLoadedEntry=entryId;
+    }finally{
+      this.__nodesMapLoading=false;
+    }
+  }
+
+  __validMapContacts() {
+    const source=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+    return source.filter((c)=>{
+      const lat=Number(c.adv_lat),lon=Number(c.adv_lon);
+      return Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)
+        &&lat>=-90&&lat<=90&&lon>=-180&&lon<=180;
+    });
+  }
+
+  __mapLocations(contacts) {
+    const active=new Set();
+    const locations=contacts.map((c)=>{
+      const id=c.public_key||c.pubkey_prefix;
+      active.add(id);
+      let marker=this.__nodesMapMarkerElements.get(id);
+      if(!marker){
+        marker=document.createElement("div");
+        marker.style.cssText="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--primary-color,#03a9f4);color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35)";
+        this.__nodesMapMarkerElements.set(id,marker);
+      }
+      marker.textContent=String(c.adv_name||c.pubkey_prefix||"?").slice(0,2).toUpperCase();
+      return {id,location:[Number(c.adv_lat),Number(c.adv_lon)],element:marker,elementSize:[34,34],title:c.adv_name||c.pubkey_prefix,locationEditable:false,activatable:true};
+    });
+    for(const id of this.__nodesMapMarkerElements.keys()){
+      if(!active.has(id))this.__nodesMapMarkerElements.delete(id);
+    }
+    return locations;
+  }
+
+  async __showNodesMap(page,nroot,content) {
     if(this.__nodesView!=="map")return;
     if(!this.__nodesMapOverlay?.isConnected){
-      const overlay=document.createElement("div");overlay.className="hive-map-overlay";content.appendChild(overlay);this.__nodesMapOverlay=overlay;
+      const overlay=document.createElement("div");
+      overlay.className="hive-map-overlay";
+      content.appendChild(overlay);
+      this.__nodesMapOverlay=overlay;
     }
-    const overlay=this.__nodesMapOverlay; overlay.replaceChildren();
-    const contacts=(this._contacts||[]).filter((c)=>{
-      const lat=Number(c.adv_lat),lon=Number(c.adv_lon);
-      return Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)&&lat>=-90&&lat<=90&&lon>=-180&&lon<=180;
-    });
-    if(!ready||!contacts.length){
+    const overlay=this.__nodesMapOverlay;
+
+    if(!Array.isArray(this.__nodesMapContacts) || this.__nodesMapLoadedEntry!==(this.__entryId()||null)){
+      if(!overlay.querySelector(".hive-map-note")){
+        const note=document.createElement("div");note.className="hive-map-note";note.textContent="A carregar nós…";overlay.appendChild(note);
+      }
+      await this.__loadNodesMapContacts();
+    }
+
+    const ready=await this.__ensureMapLoaded();
+    if(this.__nodesView!=="map"||!overlay.isConnected)return;
+
+    const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
+    const contacts=this.__validMapContacts();
+
+    if(!ready){
+      overlay.replaceChildren();
+      const note=document.createElement("div");note.className="hive-map-note";note.textContent="Não foi possível carregar o mapa do Home Assistant.";overlay.appendChild(note);
+      return;
+    }
+    if(!contacts.length){
+      overlay.replaceChildren();
       const note=document.createElement("div");note.className="hive-map-note";
-      note.textContent=!ready?"A carregar o mapa do Home Assistant…":"Nenhum nó tem coordenadas válidas.";
-      overlay.appendChild(note); return;
+      note.textContent=`0 nós com localização · ${source.length} nós no total. Os nós sem GPS anunciado continuam disponíveis em Lista.`;
+      overlay.appendChild(note);
+      return;
     }
-    const map=document.createElement("ha-map");
-    map.autoFit=true; map.clusterMarkers=true; map.scaleRuler=true;
-    map.editableLocations=contacts.map((c)=>{
-      const marker=document.createElement("div");
-      marker.textContent=String(c.adv_name||c.pubkey_prefix||"?").slice(0,2).toUpperCase();
-      marker.style.cssText="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--primary-color,#03a9f4);color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35)";
-      return {id:c.public_key||c.pubkey_prefix,location:[Number(c.adv_lat),Number(c.adv_lon)],element:marker,elementSize:[34,34],title:c.adv_name||c.pubkey_prefix,locationEditable:false,activatable:true};
-    });
-    map.addEventListener("editable-location-clicked",(e)=>{
-      const id=e.detail?.id; const contact=contacts.find((c)=>(c.public_key||c.pubkey_prefix)===id);
-      if(contact) page._openNodeDetail?.(contact);
-    });
-    overlay.appendChild(map);
+
+    const signature=contacts.map((c)=>`${c.public_key||c.pubkey_prefix}:${c.adv_lat}:${c.adv_lon}`).join("|");
+    if(this.__nodesMapElement?.isConnected && this.__nodesMapSignature===signature){
+      return; // Important: do not tear down a live HA map on every Lit update.
+    }
+
+    if(!this.__nodesMapElement?.isConnected){
+      overlay.replaceChildren();
+      const count=document.createElement("div");count.className="hive-map-count";overlay.appendChild(count);
+      const map=document.createElement("ha-map");
+      map.autoFit=true;map.clusterMarkers=true;map.scaleRuler=true;
+      map.addEventListener("editable-location-clicked",(e)=>{
+        const id=e.detail?.id;
+        const contact=this.__validMapContacts().find((c)=>(c.public_key||c.pubkey_prefix)===id);
+        if(contact)page._openNodeDetail?.(contact);
+      });
+      overlay.appendChild(map);
+      this.__nodesMapElement=map;
+    }
+
+    const count=overlay.querySelector(".hive-map-count");
+    if(count)count.textContent=`${contacts.length} com localização · ${source.length} nós`;
+    this.__nodesMapElement.editableLocations=this.__mapLocations(contacts);
+    this.__nodesMapSignature=signature;
   }
 
     __settingsSelect(label, options, value) {

@@ -44,6 +44,7 @@ export class NodesPage extends LitElement {
   @state() private _viewportNarrow = false;
   @state() private _viewMode: 'list' | 'map' = 'list';
   @state() private _mapReady = customElements.get('ha-map') !== undefined;
+  private _mapMarkerElements = new Map<string, HTMLElement>();
 
   // ─── Two-level filter state ─────────────────────────────────────────
   @state() private _primaryFilter: PrimaryCategory = 'all';
@@ -136,6 +137,21 @@ export class NodesPage extends LitElement {
       color:var(--secondary-text-color);
       text-align:center;
       padding:24px;
+    }
+    .map-count {
+      position:absolute;
+      top:10px;
+      right:10px;
+      z-index:3;
+      padding:6px 9px;
+      border-radius:14px;
+      background:color-mix(in srgb, var(--card-background-color) 90%, transparent);
+      color:var(--primary-text-color);
+      border:1px solid var(--divider-color);
+      font-size:11px;
+      font-weight:600;
+      box-shadow:0 1px 4px rgba(0,0,0,.18);
+      pointer-events:none;
     }
 
         /* ─── Level 1 filter buttons ────────────────────────────────────── */
@@ -588,9 +604,14 @@ export class NodesPage extends LitElement {
     }
   }
 
+  private _allMapSourceContacts(): Contact[] {
+    // The parent panel owns the full contact list. The paginated list is only
+    // a rendering optimisation for Lista and must never limit the map.
+    return this.contacts.length ? this.contacts : this._displayedContacts;
+  }
+
   private _mapContacts(): Contact[] {
-    const source = this.contacts.length ? this.contacts : this._displayedContacts;
-    return source.filter((c) => {
+    return this._allMapSourceContacts().filter((c) => {
       const lat = Number(c.adv_lat);
       const lon = Number(c.adv_lon);
       return Number.isFinite(lat) && Number.isFinite(lon)
@@ -600,17 +621,24 @@ export class NodesPage extends LitElement {
   }
 
   private _mapLocations() {
-    return this._mapContacts().map((contact) => {
-      const marker = document.createElement('div');
+    const activeIds = new Set<string>();
+    const locations = this._mapContacts().map((contact) => {
+      const id = contact.public_key || contact.pubkey_prefix;
+      activeIds.add(id);
+      let marker = this._mapMarkerElements.get(id);
+      if (!marker) {
+        marker = document.createElement('div');
+        marker.style.cssText = [
+          'width:30px','height:30px','border-radius:50%',
+          'display:grid','place-items:center','font-size:10px','font-weight:700',
+          'background:var(--primary-color,#03a9f4)','color:white',
+          'border:2px solid white','box-shadow:0 1px 5px rgba(0,0,0,.35)',
+        ].join(';');
+        this._mapMarkerElements.set(id, marker);
+      }
       marker.textContent = (contact.adv_name || contact.pubkey_prefix || '?').slice(0, 2).toUpperCase();
-      marker.style.cssText = [
-        'width:30px','height:30px','border-radius:50%',
-        'display:grid','place-items:center','font-size:10px','font-weight:700',
-        'background:var(--primary-color,#03a9f4)','color:white',
-        'border:2px solid white','box-shadow:0 1px 5px rgba(0,0,0,.35)',
-      ].join(';');
       return {
-        id: contact.public_key || contact.pubkey_prefix,
+        id,
         location: [Number(contact.adv_lat), Number(contact.adv_lon)],
         element: marker,
         elementSize: [34, 34],
@@ -619,6 +647,10 @@ export class NodesPage extends LitElement {
         activatable: true,
       };
     });
+    for (const id of this._mapMarkerElements.keys()) {
+      if (!activeIds.has(id)) this._mapMarkerElements.delete(id);
+    }
+    return locations;
   }
 
   private _onMapNodeClicked(e: CustomEvent<{ id: string }>) {
@@ -631,14 +663,16 @@ export class NodesPage extends LitElement {
 
   private _renderMap() {
     const contacts = this._mapContacts();
+    const total = this._allMapSourceContacts().length;
     if (!contacts.length) {
-      return html`<div class="map-note">Nenhum nó da lista tem coordenadas válidas para mostrar no mapa.</div>`;
+      return html`<div class="map-note">0 nós com localização · ${total} nós no total.<br>Os nós sem GPS anunciado continuam disponíveis em Lista.</div>`;
     }
     if (!this._mapReady) {
       return html`<div class="map-note">A carregar o mapa do Home Assistant…</div>`;
     }
     return html`
       <div class="map-wrap">
+        <div class="map-count">${contacts.length} com localização · ${total} nós</div>
         <ha-map
           .editableLocations=${this._mapLocations()}
           .autoFit=${true}
