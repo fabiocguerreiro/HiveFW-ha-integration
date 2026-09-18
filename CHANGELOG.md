@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.7] - 2026-09-18
+
+- Node map popups now remain open until explicitly closed or another node is selected, including across marker-layer refreshes.
+- Added **Copiar texto** inside each node popup with clipboard fallback support.
+- Removed the obsolete bottom selected-node name strip.
+- Fixed **CENTRAR** to use the already-rendered local HiveFW marker first, with repeater-status coordinates as fallback, restoring the ~100 km local-repeater view reliably.
+
 ## [0.10.6] - 2026-09-18
 
 - Reworked MeshCore contact export against a real MeshCore app export: exact field types, compact coordinate strings, no trailing newline, and correct 1/2/3-byte path-hash chunking from `out_path`.

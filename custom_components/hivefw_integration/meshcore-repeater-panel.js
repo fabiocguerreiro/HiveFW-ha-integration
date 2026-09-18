@@ -49,6 +49,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesLeafletMarkers = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
+    this.__nodesPopupId = "";
     this.__nodesMapInitialViewEntry = null;
     this.__mapLoadStarted = false;
 
@@ -109,6 +110,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__nodesMapLoadedEntry = null;
       this.__nodesMapSignature = "";
       this.__nodesMapFocusId = "";
+      this.__nodesPopupId = "";
       this.__nodesMapInitialViewEntry = null;
     }
 
@@ -1551,6 +1553,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
           margin-left:auto;
           white-space:nowrap;
         }
+        .map-selection{
+          display:none!important;
+        }
       `;
       nroot.appendChild(style);
     }
@@ -1683,6 +1688,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       container.appendChild(pane);
     }
     this.__nodesMapPane=pane;
+    pane.querySelector(".hive-map-selection")?.remove();
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -1710,6 +1716,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapPane=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
+    this.__nodesPopupId="";
   }
 
   async __loadNodesMapContacts() {
@@ -1854,6 +1861,43 @@ class MeshCoreRepeaterPanel extends BasePanel {
       row.append(key,val);
       root.appendChild(row);
     }
+
+    const copyText=[
+      String(contact.adv_name||contact.pubkey_prefix||"Nó"),
+      ...rows.map(([label,value])=>`${label}: ${value}`)
+    ].join("\n");
+
+    const copy=document.createElement("button");
+    copy.type="button";
+    copy.textContent="Copiar texto";
+    copy.style.cssText="margin-top:9px;width:100%;padding:6px 9px;border:1px solid #bbb;border-radius:6px;background:#fff;color:#333;font-size:12px;font-weight:600;cursor:pointer;";
+    copy.addEventListener("click",async(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      const original=copy.textContent;
+      try{
+        if(navigator.clipboard?.writeText){
+          await navigator.clipboard.writeText(copyText);
+        }else{
+          const area=document.createElement("textarea");
+          area.value=copyText;
+          area.style.position="fixed";
+          area.style.opacity="0";
+          document.body.appendChild(area);
+          area.focus();
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        copy.textContent="Copiado";
+      }catch{
+        copy.textContent="Não foi possível copiar";
+      }
+      window.setTimeout(()=>{
+        if(copy.isConnected)copy.textContent=original;
+      },1200);
+    });
+    root.appendChild(copy);
     return root;
   }
 
@@ -1875,10 +1919,21 @@ class MeshCoreRepeaterPanel extends BasePanel {
       });
       marker.bindPopup?.(this.__nodeMapPopup(contact),{
         autoPan:true,
+        autoClose:false,
+        closeOnClick:false,
         closeButton:true,
         maxWidth:280,
       });
+      marker.on?.("popupopen",()=>{
+        this.__nodesPopupId=id;
+      });
+      marker.on?.("popupclose",()=>{
+        if(this.__nodesLeafletMarkers.get(id)===marker && this.__nodesPopupId===id){
+          this.__nodesPopupId="";
+        }
+      });
       marker.on?.("click",()=>{
+        this.__nodesPopupId=id;
         this.__focusNodeOnMap(contact,false);
       });
       if(id)this.__nodesLeafletMarkers.set(id,marker);
@@ -1887,19 +1942,42 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   async __centerNodesMapOnLocalRepeater() {
-    const localRepeater=this.__localRepeaterMapContact();
     const map=this.__nodesMapElement;
-    if(!localRepeater||!map)return false;
+    if(!map)return false;
+
     if(await this.__waitForLegacyLeaflet(map)){
-      const coords=this.__nodeCoords(localRepeater);
+      let coords=null;
+      const localMarker=this.__nodesLeafletMarkers.get("__hivefw_local__");
+      const latLng=localMarker?.getLatLng?.();
+      if(latLng && Number.isFinite(latLng.lat) && Number.isFinite(latLng.lng)){
+        coords=[latLng.lat,latLng.lng];
+      }
+
+      if(!coords){
+        let localRepeater=this.__localRepeaterMapContact();
+        if(!localRepeater && !this.__repeaterLoading){
+          await this.__loadRepeaterStatus();
+          localRepeater=this.__localRepeaterMapContact();
+        }
+        coords=this.__nodeCoords(localRepeater);
+      }
+
       if(!coords)return false;
+      this.__nodesPopupId="";
       map.leafletMap.closePopup?.();
       const bounds=map.Leaflet.circle(coords,{radius:100000}).getBounds();
       map.leafletMap.fitBounds(bounds,{animate:true});
       return true;
     }
+
+    let localRepeater=this.__localRepeaterMapContact();
+    if(!localRepeater && !this.__repeaterLoading){
+      await this.__loadRepeaterStatus();
+      localRepeater=this.__localRepeaterMapContact();
+    }
     const coords=this.__nodeCoords(localRepeater);
     if(coords && map.setView){
+      this.__nodesPopupId="";
       map.setView(coords,10);
       return true;
     }
@@ -1959,11 +2037,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
       count.className="hive-map-count";
       pane.appendChild(count);
 
-      const selected=document.createElement("div");
-      selected.className="hive-map-selection";
-      selected.hidden=true;
-      pane.appendChild(selected);
-
       const map=document.createElement("ha-map");
       map.autoFit=false;
       map.clusterMarkers=true;
@@ -2011,6 +2084,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
       if("layers" in map && await this.__waitForLegacyLeaflet(map)){
         map.entities=[];
         map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
+        const popupId=this.__nodesPopupId;
+        if(popupId){
+          window.setTimeout(()=>{
+            const marker=this.__nodesLeafletMarkers.get(popupId);
+            marker?.openPopup?.();
+          },60);
+        }
       }else{
         map.entities=this.__mapEntities(mapContacts);
         if("editableLocations" in map){
@@ -2043,10 +2123,14 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(map.leafletMap){
       map.leafletMap.setView(coords,12,{animate:true});
       if(openPopup){
+        map.leafletMap.closePopup?.();
+        this.__nodesPopupId=id;
         const marker=this.__nodesLeafletMarkers.get(id);
         if(marker){
           marker.setZIndexOffset?.(2000);
-          window.setTimeout(()=>marker.openPopup?.(),220);
+          window.setTimeout(()=>{
+            if(this.__nodesPopupId===id)marker.openPopup?.();
+          },220);
         }
       }
     }else if(!("layers" in map)){

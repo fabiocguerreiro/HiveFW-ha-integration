@@ -730,10 +730,6 @@ export class NodesPage extends LitElement {
   private _renderMapPane() {
     const contacts = this._mapContacts();
     const total = this._allMapSourceContacts().length;
-    const selected = this._mapFocusId
-      ? this._allMapSourceContacts().find((c) => this._contactId(c) === this._mapFocusId)
-      : undefined;
-
     if (!this._mapReady) {
       return html`<div class="map-note">A carregar o mapa do Home Assistant…</div>`;
     }
@@ -742,7 +738,6 @@ export class NodesPage extends LitElement {
     }
     return html`
       <div class="map-count">${contacts.length} nós com localização - CENTRAR</div>
-      ${selected ? html`<div class="map-selection">${selected.adv_name || selected.pubkey_prefix}</div>` : nothing}
       <ha-map
         .entities=${this._mapEntities()}
         .editableLocations=${this._mapLocations()}
