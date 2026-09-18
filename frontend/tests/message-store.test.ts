@@ -144,12 +144,12 @@ afterEach(() => {
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 describe('MessageStore Phase 3 — switchEntity with anchor', () => {
-  it('routes through meshcore_chat/get_messages_around and hydrates messages', async () => {
+  it('routes through hivefw_integration/get_messages_around and hydrates messages', async () => {
     const calls: Record<string, unknown>[] = [];
     const hass = makeMockHass({
       callWS: async (msg) => {
         calls.push(msg);
-        if (msg.type === 'meshcore_chat/get_messages_around') {
+        if (msg.type === 'hivefw_integration/get_messages_around') {
           return {
             messages: [
               makeStored('id-1', '2026-05-04T12:00:00Z', 'Alice', 'older'),
@@ -172,10 +172,10 @@ describe('MessageStore Phase 3 — switchEntity with anchor', () => {
 
     // 1. Verify the new endpoint was called with the keyed payload from Change 6
     const around = calls.find(
-      (c) => c.type === 'meshcore_chat/get_messages_around',
+      (c) => c.type === 'hivefw_integration/get_messages_around',
     );
     expect(around).toMatchObject({
-      type: 'meshcore_chat/get_messages_around',
+      type: 'hivefw_integration/get_messages_around',
       entity_id: 'binary_sensor.x',
       anchor_id: 'id-2',
       before_limit: 25,
@@ -184,7 +184,7 @@ describe('MessageStore Phase 3 — switchEntity with anchor', () => {
 
     // 2. The newest-50 path must NOT be hit when an anchor is supplied
     expect(
-      calls.find((c) => c.type === 'meshcore_chat/get_stored_messages'),
+      calls.find((c) => c.type === 'hivefw_integration/get_stored_messages'),
     ).toBeUndefined();
 
     // 3. Hydration: 3 messages loaded, sorted chronologically by timestamp
@@ -204,7 +204,7 @@ describe('MessageStore Phase 3 — switchEntity with anchor', () => {
     const hass = makeMockHass({
       callWS: async (msg) => {
         calls.push(msg);
-        if (msg.type === 'meshcore_chat/get_stored_messages') {
+        if (msg.type === 'hivefw_integration/get_stored_messages') {
           return { messages: [], has_more: false };
         }
         throw new Error(`unexpected ws call: ${String(msg.type)}`);
@@ -216,10 +216,10 @@ describe('MessageStore Phase 3 — switchEntity with anchor', () => {
     await store.switchEntity('binary_sensor.x');
 
     expect(
-      calls.find((c) => c.type === 'meshcore_chat/get_messages_around'),
+      calls.find((c) => c.type === 'hivefw_integration/get_messages_around'),
     ).toBeUndefined();
     expect(
-      calls.find((c) => c.type === 'meshcore_chat/get_stored_messages'),
+      calls.find((c) => c.type === 'hivefw_integration/get_stored_messages'),
     ).toBeDefined();
     // _fetchMessages only seeds _hasOlderMessages from the response;
     // _hasNewerMessages is left at its `false` default per the
@@ -258,10 +258,10 @@ describe('MessageStore Phase 3 — loadNewerMessages', () => {
     const hass = makeMockHass({
       callWS: async (msg) => {
         calls.push(msg);
-        if (msg.type === 'meshcore_chat/get_messages_around') {
+        if (msg.type === 'hivefw_integration/get_messages_around') {
           return responses[0];
         }
-        if (msg.type === 'meshcore_chat/get_stored_messages') {
+        if (msg.type === 'hivefw_integration/get_stored_messages') {
           storedIdx++;
           return responses[storedIdx] ?? { messages: [], has_more: false };
         }
@@ -288,13 +288,13 @@ describe('MessageStore Phase 3 — loadNewerMessages', () => {
     // avoids Array#findLast (es2023; tsconfig target may be older).
     let firstAfter: Record<string, unknown> | undefined;
     for (let i = calls.length - 1; i >= 0; i--) {
-      if (calls[i].type === 'meshcore_chat/get_stored_messages') {
+      if (calls[i].type === 'hivefw_integration/get_stored_messages') {
         firstAfter = calls[i];
         break;
       }
     }
     expect(firstAfter).toMatchObject({
-      type: 'meshcore_chat/get_stored_messages',
+      type: 'hivefw_integration/get_stored_messages',
       entity_id: 'binary_sensor.x',
       limit: 50,
       after: 'anchor',
@@ -323,7 +323,7 @@ describe('MessageStore Phase 3 — _pollFetch guard', () => {
     const hass = makeMockHass({
       callWS: async (msg) => {
         calls.push(msg);
-        if (msg.type === 'meshcore_chat/get_messages_around') {
+        if (msg.type === 'hivefw_integration/get_messages_around') {
           return {
             messages: [makeStored('a', '2026-05-04T12:00:00Z')],
             anchor_index: 0,

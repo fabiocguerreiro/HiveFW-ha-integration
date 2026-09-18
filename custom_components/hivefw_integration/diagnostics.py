@@ -1,4 +1,4 @@
-"""Diagnostics support for MeshCore Chat.
+"""Diagnostics support for HiveFW.
 
 Provides a redacted snapshot of integration state via Settings → Devices
 & Services → ⋮ → Download diagnostics. The snapshot includes:
@@ -51,7 +51,7 @@ def _redact_entry_id(entry_id: str) -> str:
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostic data for a meshcore_chat config entry."""
+    """Return diagnostic data for a hivefw_integration config entry."""
     runtime = (
         entry.runtime_data
         if isinstance(entry.runtime_data, MeshCoreChatRuntimeData)

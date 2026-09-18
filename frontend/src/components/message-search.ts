@@ -362,7 +362,7 @@ export class MessageSearch extends LitElement {
 
     try {
       const msg: Record<string, unknown> = {
-        type: 'meshcore_chat/search_stored_messages',
+        type: 'hivefw_integration/search_stored_messages',
         query: trimmedQuery,
         entity_id: this.entityId,
         limit: 100,

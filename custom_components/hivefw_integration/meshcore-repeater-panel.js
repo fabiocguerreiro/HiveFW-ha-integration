@@ -1,17 +1,17 @@
-import "./meshcore-chat-panel.js";
+import "./hivefw-integration-panel.js";
 
 /*
- * HiveFW Repeater compatibility layer.
+ * HiveFW compatibility layer.
  *
  * The committed production bundle still comes from the upstream Chat panel.
  * This wrapper keeps that bundle intact and adds the Repeater-oriented pages
  * that are specific to this fork. Every status/configuration request uses the
  * existing Companion protocol exposed by the currently flashed radio.
  */
-const BasePanel = customElements.get("meshcore-chat-panel");
+const BasePanel = customElements.get("hivefw-integration-panel");
 
 if (!BasePanel) {
-  throw new Error("meshcore-chat-panel failed to register");
+  throw new Error("hivefw-integration-panel failed to register");
 }
 
 class MeshCoreRepeaterPanel extends BasePanel {
@@ -245,8 +245,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
         height:13px;
         flex:0 0 auto;
         background:var(--primary-text-color);
-        -webkit-mask:url('/meshcore_chat_panel/hivefw-wordmark.png') center/contain no-repeat;
-        mask:url('/meshcore_chat_panel/hivefw-wordmark.png') center/contain no-repeat;
+        -webkit-mask:url('/hivefw_integration_panel/hivefw-wordmark.png') center/contain no-repeat;
+        mask:url('/hivefw_integration_panel/hivefw-wordmark.png') center/contain no-repeat;
       }
       .hivefw-header-product {
         font-weight:600;
@@ -1045,7 +1045,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!this.hass || this.__managedDevicesLoading) return;
     this.__managedDevicesLoading = true;
     try {
-      const msg = { type: "meshcore_chat/get_managed_devices" };
+      const msg = { type: "hivefw_integration/get_managed_devices" };
       const entryId = this.__entryId();
       if (entryId) msg.entry_id = entryId;
       const result = await this.hass.callWS(msg);
@@ -1106,7 +1106,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     reboot.addEventListener("click", async () => {
       if (!window.confirm("Reiniciar agora o HiveFW?")) return;
       try {
-        const msg = { type: "meshcore_chat/execute_local", command: "reboot" };
+        const msg = { type: "hivefw_integration/execute_local", command: "reboot" };
         const entryId = this.__entryId();
         if (entryId) msg.entry_id = entryId;
         await this.hass.callWS(msg);
@@ -1212,7 +1212,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
   async __loadScopes() {
     try {
-      const msg = { type: "meshcore_chat/get_flood_scopes" };
+      const msg = { type: "hivefw_integration/get_flood_scopes" };
       const entryId = this.__entryId();
       if (entryId) msg.entry_id = entryId;
       const result = await this.hass.callWS(msg);
@@ -1270,7 +1270,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     save.textContent = "Guardar Scopes";
     save.addEventListener("click", async () => {
       const msg = {
-        type: "meshcore_chat/set_flood_scopes",
+        type: "hivefw_integration/set_flood_scopes",
         scopes: this.__scopeDraft.split(",").map((s) => s.trim()).filter(Boolean),
         global: this.__scopeGlobal,
       };
@@ -1354,7 +1354,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!this.__regionTarget || this.__regionsBusy) return;
     this.__regionsBusy = true; this.__renderRegionsScopesCard(sroot, sroot.querySelector(".settings-grid"));
     try {
-      const msg={type:"meshcore_chat/get_remote_regions",target_prefix:this.__regionTarget};
+      const msg={type:"hivefw_integration/get_remote_regions",target_prefix:this.__regionTarget};
       const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
       const result=await this.hass.callWS(msg);
       this.__regionText=result?.regions||"";
@@ -1369,7 +1369,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(!this.__regionTarget||this.__regionsBusy)return;
     this.__regionsBusy=true;
     try{
-      const msg={type:"meshcore_chat/execute_remote",target_prefix:this.__regionTarget,command};
+      const msg={type:"hivefw_integration/execute_remote",target_prefix:this.__regionTarget,command};
       const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
       const result=await this.hass.callWS(msg);
       sroot.host?._showStatusMessage?.(result?.response||"Region command sent",result?.success?"success":"error");
@@ -1553,7 +1553,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(this.__nodesMapLoadedEntry===entryId && Array.isArray(this.__nodesMapContacts))return;
     this.__nodesMapLoading=true;
     try{
-      const msg={type:"meshcore_chat/get_contacts"};
+      const msg={type:"hivefw_integration/get_contacts"};
       if(entryId)msg.entry_id=entryId;
       const result=await this.hass.callWS(msg);
       this.__nodesMapContacts=Array.isArray(result?.contacts)?result.contacts:[];
@@ -1737,7 +1737,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__rerenderRepeater();
 
     try {
-      const msg = { type: "meshcore_chat/get_local_repeater_status" };
+      const msg = { type: "hivefw_integration/get_local_repeater_status" };
       const entryId = this.__entryId();
       if (entryId) msg.entry_id = entryId;
 
@@ -1783,7 +1783,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     try {
       const msg = {
-        type: "meshcore_chat/set_device_config",
+        type: "hivefw_integration/set_device_config",
         settings,
       };
       const entryId = this.__entryId();
@@ -1813,7 +1813,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     try {
       const msg = {
-        type: "meshcore_chat/execute_local",
+        type: "hivefw_integration/execute_local",
         command,
       };
       if (args) msg.args = args;
@@ -2452,7 +2452,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__rerenderHivePage();
 
     try {
-      const msg = { type: "meshcore_chat/get_hive_neighbors" };
+      const msg = { type: "hivefw_integration/get_hive_neighbors" };
       const entryId = this.__entryId();
       if (entryId) msg.entry_id = entryId;
       this.__hiveNeighbors = await this.hass.callWS(msg);
@@ -2557,7 +2557,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__metric(
         "Modo",
         data.repeater_enabled ? "Ativo" : "Desligado",
-        "HiveFW Repeater"
+        "HiveFW"
       )
     );
     wrap.appendChild(summary);

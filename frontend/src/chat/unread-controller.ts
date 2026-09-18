@@ -2,7 +2,7 @@ import type { RenderItem } from '../types';
 import { MARK_READ_GRACE_PERIOD_MS } from '../constants';
 
 /**
- * Backend payload shape for `meshcore_chat/get_unread_counts`. The
+ * Backend payload shape for `hivefw_integration/get_unread_counts`. The
  * response was extended from a bare `unread` map to
  * `{ unread, last_read }`; `getUnreadAndLastRead` in `api.ts` returns
  * exactly this shape.
@@ -102,7 +102,7 @@ export interface ReadProgress {
  * (it depends on chat-page render state + a DOM probe); it only
  * *consults* the controller.
  *
- * Lifetime: constructed once by `meshcore-chat-panel.ts` and owned by
+ * Lifetime: constructed once by `hivefw-integration-panel.ts` and owned by
  * the panel. The panel is not remounted on tab switch, so the badge
  * map and the `meshcore_unread_updated` subscription state persist
  * correctly. `<chat-page>` (which IS remounted on tab switch)

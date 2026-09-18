@@ -22,7 +22,7 @@ rules:
     comment: utils.py and unread_tracking.py provide cross-handler shared helpers.
   config-flow-test-coverage:
     status: done
-    comment: tests/components/meshcore_chat/test_config_flow.py covers the single-step flow and the single-instance abort.
+    comment: tests/components/hivefw_integration/test_config_flow.py covers the single-step flow and the single-instance abort.
   config-flow:
     status: done
     comment: |
@@ -72,7 +72,7 @@ rules:
     status: done
     comment: |
       config_flow.py async_step_user aborts with single_instance_allowed
-      if a meshcore_chat entry already exists.
+      if a hivefw_integration entry already exists.
 
   # ─── Silver ──────────────────────────────────────────────────────────
   action-exceptions:
@@ -108,7 +108,7 @@ rules:
   test-coverage:
     status: done
     comment: |
-      pytest suite under tests/components/meshcore_chat/ covers config-flow,
+      pytest suite under tests/components/hivefw_integration/ covers config-flow,
       setup/unload (test_init.py), the WebSocket API (test_ws_api.py, ~150
       cases), message store, unread tracking, and channel scopes.
 

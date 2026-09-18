@@ -1,4 +1,4 @@
-"""Unit tests for ``custom_components.meshcore_chat.message_store``.
+"""Unit tests for ``custom_components.hivefw_integration.message_store``.
 
 Phase 4B of the HA Quality + Best Practices Remediation. Covers the
 behavioral guarantees of the MessageStore class plus the module-level
@@ -42,19 +42,19 @@ from homeassistant.core import HomeAssistant
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meshcore_chat.const import (
+from custom_components.hivefw_integration.const import (
     MESSAGE_STORE_IDLE_EVICTION_SECONDS,
     OPT_MAX_MESSAGES_PER_CONVERSATION,
     OPT_MESSAGE_RETENTION_DAYS,
     STORAGE_KEY_CONVERSATION,
     STORAGE_KEY_INDEX,
 )
-from custom_components.meshcore_chat.message_store import (
+from custom_components.hivefw_integration.message_store import (
     MessageStore,
     _backfill_messages,
 )
 
-DOMAIN = "meshcore_chat"
+DOMAIN = "hivefw_integration"
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ def config_entry(hass: HomeAssistant) -> MockConfigEntry:
     """A registered MockConfigEntry with default (empty) options."""
     entry = MockConfigEntry(
         domain=DOMAIN,
-        title="MeshCore Chat",
+        title="HiveFW",
         entry_id="01TEST_ENTRY",
         data={},
         options={},
@@ -406,7 +406,7 @@ async def test_ensure_loaded_runs_backfill_on_first_load(
 ) -> None:
     """Records loaded for the first time are migrated in-place."""
     storage_key = (
-        f"meshcore_chat.{config_entry.entry_id}.msgs.binary_sensor_alice"
+        f"hivefw_integration.{config_entry.entry_id}.msgs.binary_sensor_alice"
     )
     hass_storage[storage_key] = {
         "version": 1,
@@ -738,8 +738,8 @@ async def test_cleanup_old_messages_prunes_non_cached_path(
     new_ts = datetime.now().isoformat()
     eid = "binary_sensor.y"
     safe = eid.replace(".", "_")
-    conv_key = f"meshcore_chat.{config_entry.entry_id}.msgs.{safe}"
-    index_key = f"meshcore_chat.{config_entry.entry_id}.message_index"
+    conv_key = f"hivefw_integration.{config_entry.entry_id}.msgs.{safe}"
+    index_key = f"hivefw_integration.{config_entry.entry_id}.message_index"
     hass_storage[conv_key] = {
         "version": 1,
         "minor_version": 1,

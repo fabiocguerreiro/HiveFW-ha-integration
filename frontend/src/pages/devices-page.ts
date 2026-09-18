@@ -1455,7 +1455,7 @@ export class DevicesPage extends LitElement {
     if (!this.hass) return;
     try {
       const result: any = await this.hass.callWS({
-        type: 'meshcore_chat/remove_neighbor',
+        type: 'hivefw_integration/remove_neighbor',
         entry_id: this.config?.entry_id,
         target_prefix: repeaterPubkey,
         neighbor_pubkey: neighborPubkey,

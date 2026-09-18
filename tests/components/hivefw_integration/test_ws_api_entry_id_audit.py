@@ -29,11 +29,11 @@ import pathlib
 import re
 
 # Resolve ws_api.py from the test file's location. tests/ lives at the
-# repo root, ws_api.py lives at custom_components/meshcore_chat/ws_api.py.
-# parents[3]: tests/components/meshcore_chat/<this> -> tests/components/
-# meshcore_chat -> tests/components -> tests -> repo-root.
+# repo root, ws_api.py lives at custom_components/hivefw_integration/ws_api.py.
+# parents[3]: tests/components/hivefw_integration/<this> -> tests/components/
+# hivefw_integration -> tests/components -> tests -> repo-root.
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-WS_API = _REPO_ROOT / "custom_components" / "meshcore_chat" / "ws_api.py"
+WS_API = _REPO_ROOT / "custom_components" / "hivefw_integration" / "ws_api.py"
 
 # Sanctioned phrases that mark an intentional ignore. Add new phrases
 # sparingly — every addition is a place where the protocol is leaky and

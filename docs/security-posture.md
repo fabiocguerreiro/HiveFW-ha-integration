@@ -1,10 +1,10 @@
 # Security posture
 
-This document describes how MeshCore Chat handles untrusted data and where its trust boundaries are. It is a statement of design intent, not a guarantee or a point-in-time scan result. For the live signal, see the automated checks linked at the end.
+This document describes how HiveFW handles untrusted data and where its trust boundaries are. It is a statement of design intent, not a guarantee or a point-in-time scan result. For the live signal, see the automated checks linked at the end.
 
 ## Threat model
 
-MeshCore Chat displays data that originates on a mesh radio network. Any node within radio range can broadcast values the panel later renders — node advertised names (`adv_name`), message text, and channel or sender names. These are **untrusted inputs**: an attacker in range can choose them freely, and there is no character validation at the protocol level.
+HiveFW displays data that originates on a mesh radio network. Any node within radio range can broadcast values the panel later renders — node advertised names (`adv_name`), message text, and channel or sender names. These are **untrusted inputs**: an attacker in range can choose them freely, and there is no character validation at the protocol level.
 
 The relevant trust boundary is therefore the **render layer** — the point where mesh-sourced strings become what a Home Assistant user sees in the panel. The class of issue this guards against is cross-site scripting (XSS) through a hostile node name or message. This class is not hypothetical in the MeshCore ecosystem: CVE-2026-45323 was a critical node-name XSS in a different Home Assistant MeshCore component (`meshcore-card`), where advertised names were rendered without escaping.
 

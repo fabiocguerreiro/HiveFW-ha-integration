@@ -1,11 +1,11 @@
-"""HiveFW Repeater sidebar panel registration.
+"""HiveFW sidebar panel registration.
 
 Adapted from the upstream meshcore integration's panel registration.
 
 Differences vs. upstream:
-- All HTTP/sidebar URLs are scoped under `meshcore_chat` so the companion
+- All HTTP/sidebar URLs are scoped under `hivefw_integration` so the companion
   panel co-exists with upstream's panel if both are installed.
-- Sidebar title is "HiveFW Repeater" for the HiveFW Companion+Repeater UI.
+- Sidebar title is "HiveFW" for the HiveFW Companion+Repeater UI.
 - A small wrapper loads the existing production bundle and adds HiveFW-specific UI
   until the canonical TypeScript bundle is rebuilt.
 """
@@ -37,23 +37,23 @@ _LOGGER = logging.getLogger(__name__)
 _static_path_registered = False
 
 # HTTP URL the bundle is served at; module_url below points at this path.
-PANEL_URL = "/meshcore_chat_panel/meshcore-chat-panel.js"
-PANEL_WRAPPER_URL = "/meshcore_chat_panel/meshcore-repeater-panel.js"
-PANEL_LOGO_URL = "/meshcore_chat_panel/hivefw-wordmark.png"
+PANEL_URL = "/hivefw_integration_panel/hivefw-integration-panel.js"
+PANEL_WRAPPER_URL = "/hivefw_integration_panel/meshcore-repeater-panel.js"
+PANEL_LOGO_URL = "/hivefw_integration_panel/hivefw-wordmark.png"
 # Filesystem paths to the production bundle, HiveFW wrapper and shared brand.
-PANEL_FRONTEND_PATH = str(Path(__file__).parent / "meshcore-chat-panel.js")
+PANEL_FRONTEND_PATH = str(Path(__file__).parent / "hivefw-integration-panel.js")
 PANEL_WRAPPER_PATH = str(Path(__file__).parent / "meshcore-repeater-panel.js")
 PANEL_LOGO_PATH = str(Path(__file__).parent / "brand" / "hivefw-wordmark.png")
 
 PANEL_ICON = "mdi:radio-handheld"
-PANEL_TITLE = "HiveFW Repeater"
+PANEL_TITLE = "HiveFW"
 
-# Sidebar URL slug — the panel will be reachable at /meshcore-chat in the HA UI.
-PANEL_URL_PATH = "meshcore-chat"
+# Sidebar URL slug — the panel will be reachable at /hivefw in the HA UI.
+PANEL_URL_PATH = "hivefw"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
-    """Register the HiveFW Repeater sidebar panel.
+    """Register the HiveFW sidebar panel.
 
     Static-path registration is gated on the module-level
     `_static_path_registered` flag — it runs exactly once per HA process
@@ -80,7 +80,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             ]
         )
         _static_path_registered = True
-        _LOGGER.debug("Registered HiveFW Repeater panel static path %s", PANEL_URL)
+        _LOGGER.debug("Registered HiveFW panel static path %s", PANEL_URL)
     async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -95,11 +95,11 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         },
         require_admin=False,
     )
-    _LOGGER.debug("Registered HiveFW Repeater sidebar panel")
+    _LOGGER.debug("Registered HiveFW sidebar panel")
 
 
 async def async_remove_panel(hass: HomeAssistant) -> None:
-    """Remove the HiveFW Repeater sidebar panel.
+    """Remove the HiveFW sidebar panel.
 
     The static path registered in `async_register_panel` is intentionally
     NOT torn down — `hass.http` has no public unregister API, and aiohttp
@@ -109,4 +109,4 @@ async def async_remove_panel(hass: HomeAssistant) -> None:
     static paths are process-lifetime, sidebar entries are entry-lifetime.
     """
     frontend_async_remove_panel(hass, PANEL_URL_PATH)
-    _LOGGER.debug("Removed HiveFW Repeater sidebar panel")
+    _LOGGER.debug("Removed HiveFW sidebar panel")

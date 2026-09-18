@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="custom_components/meshcore_chat/brand/hivefw-wordmark.png" alt="HiveFW" width="420">
+  <img src="custom_components/hivefw_integration/brand/hivefw-wordmark.png" alt="HiveFW" width="420">
 </p>
 
-# HiveFW HA Integration
+# HiveFW
 
-**HiveFW HA Integration** is a Home Assistant interface designed specifically for
+**HiveFW** is a Home Assistant interface designed specifically for
 [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
 
 HiveFW is unusual by MeshCore standards: it is a **Companion first**, with an integrated
@@ -16,10 +16,6 @@ for a HiveFW node.
 This integration turns Home Assistant into the management and monitoring point for that
 device while keeping the MeshCore functions that still matter: **chat, channels, nodes,
 contacts, traces and direct neighbours**.
-
-> The internal Home Assistant domain remains `meshcore_chat` for upgrade compatibility
-> with existing installations. The visible product name is **HiveFW HA Integration** and
-> the sidebar panel is **HiveFW Repeater**.
 
 ## Main interface
 
@@ -122,7 +118,7 @@ The upstream [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) integrat
 still the component that connects Home Assistant to MeshCore and provides the core
 entities/services.
 
-HiveFW HA Integration builds on top of it and adds a UI/workflow specifically for a
+HiveFW builds on top of it and adds a UI/workflow specifically for a
 HiveFW Companion-Repeater:
 
 ```text
@@ -132,7 +128,7 @@ Home Assistant
       │      │
       │      └── Wi-Fi Companion connection
       │
-      └── HiveFW HA Integration
+      └── HiveFW
              │
              ├── HiveFW device cockpit
              ├── Repeater configuration
@@ -170,10 +166,10 @@ Then:
 
 1. HACS → Integrations → Custom repositories.
 2. Add the URL above as **Integration**.
-3. Install **HiveFW HA Integration**.
+3. Install **HiveFW**.
 4. Restart Home Assistant when the update includes Python/backend changes.
-5. Settings → Devices & Services → Add Integration → **HiveFW HA Integration**.
-6. Open **HiveFW Repeater** from the Home Assistant sidebar.
+5. Settings → Devices & Services → Add Integration → **HiveFW**.
+6. Open **HiveFW** from the Home Assistant sidebar.
 
 For frontend-only releases, a browser hard refresh is normally sufficient after HACS has
 updated the files.
@@ -183,7 +179,7 @@ updated the files.
 The repository and visible integration were renamed, but the internal domain remains:
 
 ```text
-meshcore_chat
+hivefw_integration
 ```
 
 This is intentional. Changing the domain would make Home Assistant treat it as a new
@@ -241,7 +237,7 @@ between Home Assistant and the radio and do not themselves consume LoRa airtime.
 ## Repository layout
 
 ```text
-custom_components/meshcore_chat/
+custom_components/hivefw_integration/
     Home Assistant backend, WebSocket API, panel wrapper and HiveFW branding
 
 frontend/
@@ -257,13 +253,13 @@ frontend/tests/
 The production frontend bundle is served from:
 
 ```text
-custom_components/meshcore_chat/meshcore-chat-panel.js
+custom_components/hivefw_integration/hivefw-integration-panel.js
 ```
 
 The HiveFW compatibility wrapper is:
 
 ```text
-custom_components/meshcore_chat/meshcore-repeater-panel.js
+custom_components/hivefw_integration/meshcore-repeater-panel.js
 ```
 
 ## Development

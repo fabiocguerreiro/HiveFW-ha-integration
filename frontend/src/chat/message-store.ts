@@ -275,7 +275,7 @@ export class MessageStore {
       );
 
       const msg: Record<string, unknown> = {
-        type: 'meshcore_chat/get_stored_messages',
+        type: 'hivefw_integration/get_stored_messages',
         entity_id: this._entityId,
         limit: 50,
       };
@@ -316,7 +316,7 @@ export class MessageStore {
    *
    * The cursor is the newest non-temporary message id in the buffer
    * (skipping ``rt_*`` and ``optimistic_*`` placeholders, which the
-   * backend never knows about). Reuses ``meshcore_chat/get_stored_
+   * backend never knows about). Reuses ``hivefw_integration/get_stored_
    * messages`` with the ``after`` query — the same endpoint the existing
    * ``_pollFetch`` consumes — and flips ``_hasNewerMessages`` from the
    * response's ``has_more`` flag so the next scroll-down knows when to
@@ -352,7 +352,7 @@ export class MessageStore {
       }
 
       const msg: Record<string, unknown> = {
-        type: 'meshcore_chat/get_stored_messages',
+        type: 'hivefw_integration/get_stored_messages',
         entity_id: this._entityId,
         limit: 50,
       };
@@ -477,7 +477,7 @@ export class MessageStore {
         messages: StoredMessage[];
         has_more: boolean;
       }>({
-        type: 'meshcore_chat/get_stored_messages',
+        type: 'hivefw_integration/get_stored_messages',
         entity_id: entityId,
         limit,
       });
@@ -526,7 +526,7 @@ export class MessageStore {
   /**
    * Fetch a window around an anchor message id.
    *
-   * Backed by ``meshcore_chat/get_messages_around``.
+   * Backed by ``hivefw_integration/get_messages_around``.
    * The window includes the anchor itself; the response carries an
    * ``anchor_index`` offset for the panel's divider-positioning logic.
    *
@@ -940,7 +940,7 @@ export class MessageStore {
       }
 
       const msg: Record<string, unknown> = {
-        type: 'meshcore_chat/get_stored_messages',
+        type: 'hivefw_integration/get_stored_messages',
         entity_id: entityId,
         limit: 50,
       };

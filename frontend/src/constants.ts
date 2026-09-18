@@ -3,7 +3,7 @@ import type { PanelConfig } from './types';
 /**
  * Panel registration name
  */
-export const PANEL_TAG = 'meshcore-chat-panel';
+export const PANEL_TAG = 'hivefw-integration-panel';
 
 /**
  * Regex patterns

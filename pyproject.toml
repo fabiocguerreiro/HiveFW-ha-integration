@@ -11,7 +11,7 @@ testpaths = ["tests"]
 timeout = 30
 
 [tool.coverage.run]
-source = ["custom_components/meshcore_chat"]
+source = ["custom_components/hivefw_integration"]
 omit = [
     # Frontend-bundled assets and tests themselves are out of scope.
     "tests/*",

@@ -148,7 +148,7 @@ export class NeighborsPage extends LitElement {
                         ${this._metric('Vizinhos', String(data.count), 'Repeaters diretos')}
                         ${this._metric('Método', 'Zero-hop', 'Advert Path')}
                         ${this._metric('Último advert', latest == null ? '—' : this._age(latest), 'mais recente')}
-                        ${this._metric('Modo', 'Ativo', 'HiveFW Repeater')}
+                        ${this._metric('Modo', 'Ativo', 'HiveFW')}
                       </section>
 
                       <div class="toolbar">

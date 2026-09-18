@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-// Minimal Vitest configuration for the meshcore-chat-panel frontend.
+// Minimal Vitest configuration for the hivefw-integration-panel frontend.
 //
 // We test pure-data utility modules (e.g. sensor-thresholds) only — Lit
 // components are exercised manually against the home HA instance during

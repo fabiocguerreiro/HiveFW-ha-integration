@@ -8,6 +8,6 @@ first because that one ships an ``__init__.py``, and our integration
 becomes unimportable from the test harness.
 
 HACS installs the per-integration directory
-(``custom_components/meshcore_chat/``) only — this top-level marker is
+(``custom_components/hivefw_integration/``) only — this top-level marker is
 not shipped to the user's HA config dir.
 """

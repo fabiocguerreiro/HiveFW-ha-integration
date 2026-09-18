@@ -1972,7 +1972,7 @@ export class SettingsPage extends LitElement {
         // closes via _onConfirmAction).
         this._closeKeyManagementModal();
         this._startIdentityFlow('regenerate', {
-          type: 'meshcore_chat/regenerate_identity',
+          type: 'hivefw_integration/regenerate_identity',
           payload: this.config?.entry_id
             ? { entry_id: this.config.entry_id }
             : {},
@@ -2012,7 +2012,7 @@ export class SettingsPage extends LitElement {
     const payload: Record<string, unknown> = { private_key: sanitized };
     if (this.config?.entry_id) payload.entry_id = this.config.entry_id;
     this._startIdentityFlow('import', {
-      type: 'meshcore_chat/import_identity',
+      type: 'hivefw_integration/import_identity',
       payload,
     });
   }
@@ -2028,7 +2028,7 @@ export class SettingsPage extends LitElement {
    */
   private _startIdentityFlow(
     flow: IdentityFlowKind,
-    request: { type: 'meshcore_chat/regenerate_identity' | 'meshcore_chat/import_identity'; payload: Record<string, unknown> },
+    request: { type: 'hivefw_integration/regenerate_identity' | 'hivefw_integration/import_identity'; payload: Record<string, unknown> },
   ) {
     if (!this.hass) return;
     // Reset any leftover subscription from a previous flow.
@@ -2420,7 +2420,7 @@ export class SettingsPage extends LitElement {
   }
 
   // Trace button on the Companion quick-actions row.  Rather
-  // than reach into the contact list (which lives on meshcore-chat-panel),
+  // than reach into the contact list (which lives on hivefw-integration-panel),
   // the page dispatches an event upward.  The panel opens the target-
   // picker dialog, and on selection routes through the same trace-
   // dialog open code path that nodes-tab uses.

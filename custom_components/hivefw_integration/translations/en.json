@@ -8,7 +8,7 @@
     },
     "abort": {
       "single_instance_allowed": "HiveFW HA Integration is already configured.",
-      "meshcore_not_installed": "The MeshCore integration is not installed. Install it from HACS first, then add MeshCore Chat."
+      "meshcore_not_installed": "The MeshCore integration is not installed. Install it from HACS first, then add HiveFW."
     }
   },
   "options": {
@@ -34,7 +34,7 @@
         "step": {
           "confirm": {
             "title": "HiveFW HA Integration needs the MeshCore integration",
-            "description": "HiveFW HA Integration uses the core meshcore integration, but no MeshCore device is currently configured. Install and configure the meshcore integration first (Settings → Devices & Services → Add Integration → MeshCore), or remove MeshCore Chat if you no longer need it.\n\nClick Submit to acknowledge this issue. It will clear automatically once a MeshCore device is configured."
+            "description": "HiveFW HA Integration uses the core meshcore integration, but no MeshCore device is currently configured. Install and configure the meshcore integration first (Settings → Devices & Services → Add Integration → MeshCore), or remove HiveFW if you no longer need it.\n\nClick Submit to acknowledge this issue. It will clear automatically once a MeshCore device is configured."
           }
         }
       }

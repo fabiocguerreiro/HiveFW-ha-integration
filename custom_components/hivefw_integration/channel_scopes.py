@@ -1,4 +1,4 @@
-"""Per-channel region-scope persistence for MeshCore Chat.
+"""Per-channel region-scope persistence for HiveFW.
 
 MeshCore channels live on the companion radio as (index, name, key)
 slots — the device-side channel record has no field for a region scope,
@@ -12,7 +12,7 @@ home: this module persists the user's chosen scope per
 Writes happen only when the user saves or removes a channel in the
 panel, so saves are immediate (no debounce). The singleton instance
 lives in the companion's domain bucket:
-``hass.data["meshcore_chat"]["channel_scopes"]``.
+``hass.data["hivefw_integration"]["channel_scopes"]``.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ STORAGE_VERSION = 1
 # One process-wide file; entries are keyed inside the payload by the
 # upstream meshcore config-entry id, then by channel index, so a single
 # store serves every upstream coordinator on multi-entry setups.
-STORAGE_KEY_CHANNEL_SCOPES = "meshcore_chat.channel_scopes"
+STORAGE_KEY_CHANNEL_SCOPES = "hivefw_integration.channel_scopes"
 
 
 class ChannelScopeStore:

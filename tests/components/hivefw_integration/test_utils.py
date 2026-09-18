@@ -1,4 +1,4 @@
-"""Unit tests for ``custom_components.meshcore_chat.utils``.
+"""Unit tests for ``custom_components.hivefw_integration.utils``.
 
 Covers the flood-scope helpers shared by the dialog scope picker
 (``ws_get_flood_scopes``) and the inbound-label self-derive:
@@ -22,11 +22,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from custom_components.meshcore_chat.const import (
+from custom_components.hivefw_integration.const import (
     CONF_FLOOD_SCOPES_UPSTREAM,
     MESHCORE_DOMAIN,
 )
-from custom_components.meshcore_chat.utils import (
+from custom_components.hivefw_integration.utils import (
     derive_flood_scope,
     hoist_flood_scope,
     parse_flood_scope_allowlist,

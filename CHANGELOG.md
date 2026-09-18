@@ -1,8 +1,16 @@
 # Changelog
 
-All notable changes to **MeshCore Chat for Home Assistant** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/) loosely; entries are most-recent-first.
+All notable changes to **HiveFW for Home Assistant** are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/) loosely; entries are most-recent-first.
 
 ## [Unreleased]
+
+## [0.10.0] - 2026-09-18
+
+- Renamed the custom integration domain and package to `hivefw_integration`.
+- Renamed the Home Assistant sidebar integration to **HiveFW** and moved the panel route to `/hivefw`.
+- Migrated HiveFW storage keys and WebSocket commands to the new domain.
+- Migrated frontend bundle paths and tests away from the former chat integration naming.
+- Kept the upstream `meshcore` dependency and service/entity domain unchanged.
 
 ## [0.3.1] - 2026-06-24
 
@@ -126,7 +134,7 @@ A pre-public-release audit landed for this version:
 
 ### Installation
 
-Via HACS — see the [README's Installation section](./README.md#installation). After install, restart HA and add the integration from **Settings → Devices & Services → Add Integration → MeshCore Chat**.
+Via HACS — see the [README's Installation section](./README.md#installation). After install, restart HA and add the integration from **Settings → Devices & Services → Add Integration → HiveFW**.
 
 ### Known issues
 

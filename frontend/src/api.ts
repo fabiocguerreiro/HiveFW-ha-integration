@@ -22,7 +22,7 @@ import type {
 export async function getDevices(hass: HomeAssistant): Promise<MeshCoreDevice[]> {
   try {
     const result = await hass.callWS<{ devices: MeshCoreDevice[] }>({
-      type: 'meshcore_chat/get_devices',
+      type: 'hivefw_integration/get_devices',
     });
     return result.devices || [];
   } catch {
@@ -38,7 +38,7 @@ export async function getContacts(
   entryId?: string,
 ): Promise<Contact[]> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_contacts' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_contacts' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<{ contacts: Contact[] }>(msg);
     return result.contacts || [];
@@ -55,7 +55,7 @@ export async function getChannels(
   entryId?: string,
 ): Promise<Channel[]> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_channels' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_channels' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<{ channels: Channel[] }>(msg);
     return result.channels || [];
@@ -130,7 +130,7 @@ export async function getManagedDevices(
   entryId?: string,
 ): Promise<{ repeaters: ManagedDevice[]; clients: ManagedDevice[] }> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_managed_devices' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_managed_devices' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<{
       repeaters: ManagedDevice[];
@@ -153,7 +153,7 @@ export async function getDeviceConfig(
   entryId?: string,
 ): Promise<DeviceConfig> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_device_config' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_device_config' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<DeviceConfig>(msg);
     return result;
@@ -196,7 +196,7 @@ export async function setDeviceConfig(
 ): Promise<SetDeviceConfigResponse> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/set_device_config',
+      type: 'hivefw_integration/set_device_config',
       settings,
     };
     if (entryId) msg.entry_id = entryId;
@@ -218,7 +218,7 @@ export async function executeLocal(
 ): Promise<{ response: string; success: boolean; timestamp: string }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/execute_local',
+      type: 'hivefw_integration/execute_local',
       command,
     };
     if (args) msg.args = args;
@@ -256,7 +256,7 @@ export async function executeRemote(
 ): Promise<{ response: string; success: boolean; timestamp: string }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/execute_remote',
+      type: 'hivefw_integration/execute_remote',
       target_prefix: targetPrefix,
       command,
     };
@@ -301,7 +301,7 @@ export async function setChannel(
 ): Promise<{ success: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/set_channel',
+      type: 'hivefw_integration/set_channel',
       channel_idx: channelIdx,
       name,
     };
@@ -329,7 +329,7 @@ export async function getFloodScopes(
   entryId?: string,
 ): Promise<FloodScopes> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_flood_scopes' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_flood_scopes' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<{ scopes?: string[]; global?: boolean }>(msg);
     return { scopes: result.scopes || [], global: !!result.global };
@@ -346,7 +346,7 @@ export async function setFloodScopes(
   entryId?: string,
 ): Promise<{ success: boolean; scopes: string[]; global: boolean }> {
   const msg: Record<string, unknown> = {
-    type: 'meshcore_chat/set_flood_scopes',
+    type: 'hivefw_integration/set_flood_scopes',
     scopes,
     global,
   };
@@ -361,7 +361,7 @@ export async function getRemoteRegions(
   entryId?: string,
 ): Promise<string> {
   const msg: Record<string, unknown> = {
-    type: 'meshcore_chat/get_remote_regions',
+    type: 'hivefw_integration/get_remote_regions',
     target_prefix: targetPrefix,
   };
   if (entryId) msg.entry_id = entryId;
@@ -379,7 +379,7 @@ export async function removeChannel(
 ): Promise<{ success: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/remove_channel',
+      type: 'hivefw_integration/remove_channel',
       channel_idx: channelIdx,
     };
     if (entryId) msg.entry_id = entryId;
@@ -401,7 +401,7 @@ export async function getStoredMessages(
 ): Promise<{ messages: StoredMessage[]; has_more: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/get_stored_messages',
+      type: 'hivefw_integration/get_stored_messages',
       entity_id: entityId,
       limit,
     };
@@ -421,7 +421,7 @@ export async function getStoredMessageCount(
 ): Promise<number> {
   try {
     const result = await hass.callWS<{ count: number }>({
-      type: 'meshcore_chat/get_stored_message_count',
+      type: 'hivefw_integration/get_stored_message_count',
       entity_id: entityId,
     });
     return result.count;
@@ -440,7 +440,7 @@ export async function getNeighbors(
 ): Promise<NeighborInfo[]> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/get_neighbors',
+      type: 'hivefw_integration/get_neighbors',
       target_prefix: targetPrefix,
     };
     if (entryId) msg.entry_id = entryId;
@@ -459,7 +459,7 @@ export async function getLocalRepeaterStatus(
   entryId?: string,
 ): Promise<LocalRepeaterStatus> {
   const msg: Record<string, unknown> = {
-    type: 'meshcore_chat/get_local_repeater_status',
+    type: 'hivefw_integration/get_local_repeater_status',
   };
   if (entryId) msg.entry_id = entryId;
   return hass.callWS<LocalRepeaterStatus>(msg);
@@ -476,7 +476,7 @@ export async function getHiveNeighbors(
 ): Promise<HiveNeighborsResponse> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/get_hive_neighbors',
+      type: 'hivefw_integration/get_hive_neighbors',
     };
     if (entryId) msg.entry_id = entryId;
     return await hass.callWS<HiveNeighborsResponse>(msg);
@@ -498,7 +498,7 @@ export async function getBlockedContacts(
   entryId?: string,
 ): Promise<Contact[]> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_blocked_contacts' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_blocked_contacts' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<{ contacts: Contact[] }>(msg);
     return result.contacts || [];
@@ -554,7 +554,7 @@ export async function traceContact(
   path?: string,
 ): Promise<TraceResult> {
   const msg: Record<string, unknown> = {
-    type: 'meshcore_chat/trace',
+    type: 'hivefw_integration/trace',
     pubkey_prefix: pubkeyPrefix,
   };
   if (entryId) msg.entry_id = entryId;
@@ -579,7 +579,7 @@ export async function toggleBlockContact(
 ): Promise<{ success: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/set_contact_blocked',
+      type: 'hivefw_integration/set_contact_blocked',
       public_key: publicKey,
       blocked,
     };
@@ -602,7 +602,7 @@ export async function addContact(
 ): Promise<{ success: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/add_contact',
+      type: 'hivefw_integration/add_contact',
       public_key: publicKey,
     };
     if (name) msg.name = name;
@@ -624,7 +624,7 @@ export async function removeContact(
 ): Promise<{ success: boolean }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/remove_contact',
+      type: 'hivefw_integration/remove_contact',
       public_key: publicKey,
     };
     if (entryId) msg.entry_id = entryId;
@@ -638,7 +638,7 @@ export async function removeContact(
 // ─── Unread Tracking ─────────────────────────────────────────────────────
 
 /**
- * Backend response shape for ``meshcore_chat/get_unread_counts``.
+ * Backend response shape for ``hivefw_integration/get_unread_counts``.
  *
  * An earlier change extended the WS payload from a single
  * ``unread`` map to ``{unread, last_read}``. The ``last_read`` map is
@@ -669,7 +669,7 @@ export async function getUnreadAndLastRead(
   hass: HomeAssistant, entryId?: string,
 ): Promise<UnreadCountsResponse> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_unread_counts' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_unread_counts' };
     if (entryId) msg.entry_id = entryId;
     const result = await hass.callWS<Partial<UnreadCountsResponse>>(msg);
     return {
@@ -690,7 +690,7 @@ export async function markConversationRead(
   hass: HomeAssistant, entityId: string, entryId?: string,
 ): Promise<{ success: boolean }> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/mark_conversation_read', entity_id: entityId };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/mark_conversation_read', entity_id: entityId };
     if (entryId) msg.entry_id = entryId;
     return await hass.callWS<{ success: boolean }>(msg);
   } catch { return { success: false }; }
@@ -699,7 +699,7 @@ export async function markConversationRead(
 // ─── Last-read anchor ─────────────────────────────────────────────────────
 
 /**
- * Backend response shape for ``meshcore_chat/get_messages_around``.
+ * Backend response shape for ``hivefw_integration/get_messages_around``.
  *
  * Mirrors the backend ``ws_get_messages_around`` handler. The
  * window includes the anchor message itself; ``anchor_index`` is the
@@ -724,7 +724,7 @@ export interface MessagesAroundResponse {
 /**
  * Fetch a window of messages around an anchor message ID.
  *
- * Thin wrapper around ``meshcore_chat/get_messages_around``. Used by
+ * Thin wrapper around ``hivefw_integration/get_messages_around``. Used by
  * ``MessageStore.switchEntity(entityId, anchorId)`` to load the
  * "last-read window" — ``beforeLimit`` messages older than the anchor
  * + ``afterLimit`` messages newer than it, in a single round-trip.
@@ -748,7 +748,7 @@ export async function getMessagesAround(
   afterLimit = 50,
 ): Promise<MessagesAroundResponse> {
   return hass.callWS<MessagesAroundResponse>({
-    type: 'meshcore_chat/get_messages_around',
+    type: 'hivefw_integration/get_messages_around',
     entity_id: entityId,
     anchor_id: anchorId,
     before_limit: beforeLimit,
@@ -825,7 +825,7 @@ interface IdentityFlowWireEvent {
  */
 export function subscribeIdentityChange(
   hass: HomeAssistant,
-  type: 'meshcore_chat/regenerate_identity' | 'meshcore_chat/import_identity',
+  type: 'hivefw_integration/regenerate_identity' | 'hivefw_integration/import_identity',
   payload: Record<string, unknown>,
   onEvent: (e: IdentityFlowEvent) => void,
 ): {
@@ -900,7 +900,7 @@ export async function setLocationSource(
   hass: HomeAssistant, source: string, entryId?: string,
 ): Promise<{ success: boolean }> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/set_location_source', source };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/set_location_source', source };
     if (entryId) msg.entry_id = entryId;
     return await hass.callWS<{ success: boolean }>(msg);
   } catch { return { success: false }; }
@@ -943,7 +943,7 @@ export async function getContactsPaginated(
 ): Promise<PaginatedContactsResponse> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/get_contacts_paginated',
+      type: 'hivefw_integration/get_contacts_paginated',
       category,
       limit: options.limit ?? 50,
       offset: options.offset ?? 0,
@@ -964,7 +964,7 @@ export async function clearDiscoveredContacts(
   entryId?: string,
 ): Promise<{ removed: number }> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/clear_discovered_contacts' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/clear_discovered_contacts' };
     if (daysThreshold !== undefined) msg.days_threshold = daysThreshold;
     if (entryId) msg.entry_id = entryId;
     return await hass.callWS<{ removed: number }>(msg);
@@ -978,7 +978,7 @@ export async function getNodeCounts(
   entryId?: string,
 ): Promise<NodeCounts> {
   try {
-    const msg: Record<string, unknown> = { type: 'meshcore_chat/get_node_counts' };
+    const msg: Record<string, unknown> = { type: 'hivefw_integration/get_node_counts' };
     if (entryId) msg.entry_id = entryId;
     return await hass.callWS<NodeCounts>(msg);
   } catch {
@@ -1007,7 +1007,7 @@ export async function searchStoredMessages(
 ): Promise<{ results: SearchResult[]; count: number }> {
   try {
     const msg: Record<string, unknown> = {
-      type: 'meshcore_chat/search_stored_messages',
+      type: 'hivefw_integration/search_stored_messages',
       query,
       limit,
     };

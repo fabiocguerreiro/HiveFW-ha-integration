@@ -1,4 +1,4 @@
-"""Unit tests for ``custom_components.meshcore_chat.unread_tracking``.
+"""Unit tests for ``custom_components.hivefw_integration.unread_tracking``.
 
 Originally Phase 1 of `Last-Read Anchor and Read-Receipt Refinement
 for Chat Panel`. Updated 2026-05-08 for Phase 1 of `Cursor-Derived
@@ -33,7 +33,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.meshcore_chat.unread_tracking import (
+from custom_components.hivefw_integration.unread_tracking import (
     EVENT_UNREAD_UPDATED,
     LAST_READ_SAVE_DEBOUNCE_MS,
     STORAGE_KEY_LAST_READ,

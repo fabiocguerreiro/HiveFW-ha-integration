@@ -1,4 +1,4 @@
-"""MeshCore Chat companion integration for Home Assistant.
+"""HiveFW companion integration for Home Assistant.
 
 Two responsibilities at runtime:
 
@@ -6,7 +6,7 @@ Two responsibilities at runtime:
      upstream ``meshcore`` integration (``meshcore_message``,
      ``meshcore_delivery_update``, ``meshcore_connected``,
      ``meshcore_disconnected``) and persists each chat message to a
-     per-conversation store. Exposes the ``meshcore_chat/*`` WebSocket
+     per-conversation store. Exposes the ``hivefw_integration/*`` WebSocket
      command namespace and an UnreadTracker singleton.
 
   2. Process-global sidebar panel registration. The Lit/TypeScript
@@ -55,7 +55,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class MeshCoreChatRuntimeData:
-    """Per-entry runtime state for the MeshCore Chat companion.
+    """Per-entry runtime state for the HiveFW companion.
 
     Stored on ``entry.runtime_data`` (HA Bronze convention, post-2024.6).
     Process-global state (panel registration, WS commands, unread tracker)
@@ -133,7 +133,7 @@ from .ws_api import async_register_ws_commands  # noqa: E402
 async def async_setup_entry(
     hass: HomeAssistant, entry: MeshCoreChatConfigEntry
 ) -> bool:
-    """Set up MeshCore Chat from a config entry."""
+    """Set up HiveFW from a config entry."""
     # Test-before-setup: refuse setup until the upstream meshcore
     # integration has at least one coordinator. The chat companion is
     # useless without it, and HA will retry async_setup_entry
@@ -143,7 +143,7 @@ async def async_setup_entry(
     # surfaces it as a generic "Setup retry" badge with no remediation
     # text. Pair it with a Repairs issue so the user gets a clickable
     # explanation of what to do (install/configure meshcore, or remove
-    # meshcore_chat) on the Settings → System → Repairs page.
+    # hivefw_integration) on the Settings → System → Repairs page.
     if not _upstream_meshcore_present(hass):
         _sync_upstream_repair_issue(hass)
         raise ConfigEntryNotReady(
@@ -183,7 +183,7 @@ async def async_setup_entry(
     if not bucket.get("_panel_registered"):
         await async_register_panel(hass)
         bucket["_panel_registered"] = True
-        _LOGGER.debug("MeshCore Chat panel registered")
+        _LOGGER.debug("HiveFW panel registered")
 
     # Unread tracker is a process-wide singleton (not per-entry) — the
     # frontend identifies conversations by entity_id, which is globally
@@ -224,7 +224,7 @@ async def async_setup_entry(
     if not bucket.get("_service_surface_logged"):
         bucket["_service_surface_logged"] = True
         _LOGGER.info(
-            "MeshCore Chat startup — companion-integration services available: "
+            "HiveFW startup — companion-integration services available: "
             "get_contacts=%s get_channels=%s trace=%s",
             hass.services.has_service(MESHCORE_DOMAIN, "get_contacts"),
             hass.services.has_service(MESHCORE_DOMAIN, "get_channels"),
@@ -257,7 +257,7 @@ async def async_setup_entry(
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     _LOGGER.info(
-        "MeshCore Chat configured for entry %s (%d conversations indexed)",
+        "HiveFW configured for entry %s (%d conversations indexed)",
         entry.entry_id,
         len(store.get_message_index()),
     )
@@ -301,7 +301,7 @@ async def async_unload_entry(
         if bucket.get("_panel_registered"):
             await async_remove_panel(hass)
             bucket.pop("_panel_registered", None)
-            _LOGGER.debug("MeshCore Chat panel removed (last entry unloaded)")
+            _LOGGER.debug("HiveFW panel removed (last entry unloaded)")
         # WS commands live for the lifetime of the HA process — there's
         # no public unregister API. _ws_registered stays so a subsequent
         # async_setup_entry doesn't try to re-register and trip HA's

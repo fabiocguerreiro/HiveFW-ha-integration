@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-MeshCore Chat is a pre-1.0 Home Assistant integration distributed through HACS. Security fixes are applied to the latest released version only — please update to the most recent release before reporting an issue.
+HiveFW is a pre-1.0 Home Assistant integration distributed through HACS. Security fixes are applied to the latest released version only — please update to the most recent release before reporting an issue.
 
 | Version | Supported |
 | ------- | --------- |
@@ -23,7 +23,7 @@ You can expect an acknowledgement **within 7 days**. Once a report is confirmed,
 
 ## Scope
 
-MeshCore Chat is a companion integration that runs inside Home Assistant. It adds a chat panel and a message store on top of the core [`meshcore`](https://github.com/meshcore-dev/meshcore-ha) integration, which owns the radio link.
+HiveFW is a companion integration that runs inside Home Assistant. It adds a chat panel and a message store on top of the core [`meshcore`](https://github.com/meshcore-dev/meshcore-ha) integration, which owns the radio link.
 
 In scope for a report against this integration:
 

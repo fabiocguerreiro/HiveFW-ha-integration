@@ -51,7 +51,7 @@ vi.mock('../src/chat/entity-resolver', () => ({
 }));
 
 // Importing chat-page triggers the @customElement decorator side effect
-// which registers <meshcore-chat-page>. Must come AFTER the vi.mock
+// which registers <hivefw-integration-page>. Must come AFTER the vi.mock
 // calls above so the module-graph references resolve to the mocked
 // versions.
 import '../src/pages/chat-page';
@@ -225,19 +225,19 @@ async function mountChatPage(opts: {
 
   render(
     html`
-      <meshcore-chat-page
+      <hivefw-integration-page
         .hass=${hass}
         .config=${config}
         .conversations=${conversations}
         .unread=${unread}
         .selectedId=${selectedId}
         .narrow=${false}
-      ></meshcore-chat-page>
+      ></hivefw-integration-page>
     `,
     container,
   );
 
-  const page = container.querySelector('meshcore-chat-page') as ChatPage;
+  const page = container.querySelector('hivefw-integration-page') as ChatPage;
   await page.updateComplete;
   return page;
 }

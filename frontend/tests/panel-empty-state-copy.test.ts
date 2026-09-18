@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import '../src/meshcore-chat-panel';
+import '../src/hivefw-integration-panel';
 
 // Phase 1 of the runtime-removal-detection proposal sharpens the
 // panel's empty-state copy: when the discovery path returns zero
@@ -18,8 +18,8 @@ afterEach(() => {
 async function mountPanelWithError(error: string) {
   const container = document.createElement('div');
   document.body.appendChild(container);
-  container.innerHTML = '<meshcore-chat-panel></meshcore-chat-panel>';
-  const panel = container.querySelector('meshcore-chat-panel') as
+  container.innerHTML = '<hivefw-integration-panel></hivefw-integration-panel>';
+  const panel = container.querySelector('hivefw-integration-panel') as
     | (HTMLElement & {
         updateComplete: Promise<unknown>;
         requestUpdate: () => void;
@@ -44,7 +44,7 @@ async function mountPanelWithError(error: string) {
   return panel;
 }
 
-describe('meshcore-chat-panel empty-state copy (Phase 1)', () => {
+describe('hivefw-integration-panel empty-state copy (Phase 1)', () => {
   it('renders Repairs + Devices&Services links when error is "No MeshCore devices found"', async () => {
     const panel = await mountPanelWithError('No MeshCore devices found');
     const root = panel.shadowRoot;

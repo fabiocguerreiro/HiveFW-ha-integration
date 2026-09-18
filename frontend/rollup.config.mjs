@@ -8,11 +8,11 @@ const dev = process.env.ROLLUP_WATCH === 'true';
 const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
 
 export default {
-  input: 'src/meshcore-chat-panel.ts',
+  input: 'src/hivefw-integration-panel.ts',
   output: {
     // Bundle ships flat at the integration root — see panel.py for the
     // matching StaticPathConfig that serves this file.
-    file: '../custom_components/meshcore_chat/meshcore-chat-panel.js',
+    file: '../custom_components/hivefw_integration/hivefw-integration-panel.js',
     format: 'es',
     sourcemap: dev,
     // Output plugins run after Rollup has assembled the bundle, in order.
@@ -52,10 +52,10 @@ export default {
                 // assembled bundle first and drops the leading detached banner
                 // comment. terser's preamble is emitted literally even when
                 // comments are otherwise stripped, so it always survives. Lets
-                // `grep <version> meshcore-chat-panel.js` confirm the version
+                // `grep <version> hivefw-integration-panel.js` confirm the version
                 // deployed to the HA host. dev/watch builds skip terser and
                 // carry no banner; they are never deployed.
-                preamble: `/*! meshcore-chat-panel v${pkg.version} */`,
+                preamble: `/*! hivefw-integration-panel v${pkg.version} */`,
               },
             }),
           ]),
@@ -70,10 +70,10 @@ export default {
       include: ['src/**/*.ts'],
       // @rollup/plugin-typescript v12 requires the TS `outDir` to resolve
       // inside the rollup output file's directory. The bundle is emitted to
-      // ../custom_components/meshcore_chat/, so point outDir there (overrides
+      // ../custom_components/hivefw_integration/, so point outDir there (overrides
       // tsconfig's ./dist). rollup writes the actual bundle; nothing is
       // emitted loose because declaration is off.
-      outDir: '../custom_components/meshcore_chat',
+      outDir: '../custom_components/hivefw_integration',
     }),
   ],
 };

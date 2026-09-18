@@ -1,4 +1,4 @@
-"""Utility helpers for the MeshCore Chat companion integration.
+"""Utility helpers for the HiveFW companion integration.
 
 Lifted minimally from the upstream meshcore integration's `utils.py` — only
 the two helpers `ws_api.py` references at module load. The companion's helper
@@ -38,7 +38,7 @@ def format_entity_id(
     """Format a consistent entity ID.
 
     The first name part is the *upstream* MeshCore domain ("meshcore"), not
-    the companion's DOMAIN ("meshcore_chat"). The entity being identified
+    the companion's DOMAIN ("hivefw_integration"). The entity being identified
     was registered by the upstream integration, so its entity_id begins
     with `<entity_domain>.meshcore_<device>_<key>...`. Using the companion
     DOMAIN here would produce IDs that don't match anything in the

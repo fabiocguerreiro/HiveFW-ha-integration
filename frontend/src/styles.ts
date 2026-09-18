@@ -90,8 +90,8 @@ export const panelStyles = css`
     height: 13px;
     flex: 0 0 auto;
     background: var(--primary-text-color);
-    -webkit-mask: url('/meshcore_chat_panel/hivefw-wordmark.png') center / contain no-repeat;
-    mask: url('/meshcore_chat_panel/hivefw-wordmark.png') center / contain no-repeat;
+    -webkit-mask: url('/hivefw_integration_panel/hivefw-wordmark.png') center / contain no-repeat;
+    mask: url('/hivefw_integration_panel/hivefw-wordmark.png') center / contain no-repeat;
   }
 
   .panel-product-name {

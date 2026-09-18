@@ -1,4 +1,4 @@
-"""Unit tests for ``custom_components.meshcore_chat.channel_scopes``.
+"""Unit tests for ``custom_components.hivefw_integration.channel_scopes``.
 
 The ChannelScopeStore is the durable home for per-channel region
 scopes (the radio's channel slots carry no scope field). These tests
@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.meshcore_chat.channel_scopes import ChannelScopeStore
+from custom_components.hivefw_integration.channel_scopes import ChannelScopeStore
 
 
 async def test_set_get_clear(hass: HomeAssistant) -> None:

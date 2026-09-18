@@ -1,16 +1,16 @@
-"""Per-conversation persistent message store for MeshCore Chat.
+"""Per-conversation persistent message store for HiveFW.
 
 Lifted from the upstream `meshcore` coordinator and decoupled — this
 class owns its own state and storage, and has no
 reference to a coordinator. The companion integration owns one instance
 per config entry and stores it under
-``hass.data["meshcore_chat"][entry_id]["store"]``.
+``hass.data["hivefw_integration"][entry_id]["store"]``.
 
 Adaptations from the upstream version:
 
 1. No coordinator coupling — `_loaded_conversations` and friends are
    instance attributes here, not borrowed from a coordinator.
-2. Storage key prefix is ``meshcore_chat.*`` instead of ``meshcore.*``
+2. Storage key prefix is ``hivefw_integration.*`` instead of ``meshcore.*``
    (avoids file collisions if a similar feature ever lands in core).
 3. Tunables (max-per-conversation, retention days) are read from
    ``ConfigEntry.options`` with constants from ``const.py`` as defaults.
@@ -448,7 +448,7 @@ class MessageStore:
           direction.
 
         Anchor-not-found path: pruning, manual
-        deletion of ``.storage/meshcore_chat.<entity>.json``, or a future
+        deletion of ``.storage/hivefw_integration.<entity>.json``, or a future
         archive feature could orphan the cursor. We fall back to the
         newest ``(before_limit + after_limit)`` messages with
         ``anchor_found = False`` so the frontend can render a no-divider

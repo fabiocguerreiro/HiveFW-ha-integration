@@ -1,11 +1,11 @@
-"""Repair issue handlers for MeshCore Chat.
+"""Repair issue handlers for HiveFW.
 
 Issues registered:
 
   * upstream_meshcore_unavailable — fired by ``async_setup_entry`` when
     the upstream meshcore integration has no coordinators (covers the
     case where it was uninstalled or had its config entries removed
-    while meshcore_chat is still configured). The issue auto-clears on
+    while hivefw_integration is still configured). The issue auto-clears on
     the next successful ``async_setup_entry`` (when an upstream
     coordinator reappears).
 
@@ -44,7 +44,7 @@ class UpstreamMeshcoreUnavailableRepairFlow(RepairsFlow):
         """Single confirm step — user acknowledges, the issue dismisses.
 
         The actual fix (re-installing/re-configuring the upstream
-        meshcore integration, or removing meshcore_chat) happens
+        meshcore integration, or removing hivefw_integration) happens
         outside this flow. The issue auto-clears next time
         ``async_setup_entry`` succeeds; this acknowledgement just
         suppresses it from the Repairs panel until then.

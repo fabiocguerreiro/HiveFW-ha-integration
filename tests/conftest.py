@@ -7,7 +7,7 @@ Two responsibilities:
    fakes, and the rest of the HA test surface.
 
 2. Put the repo root on ``sys.path`` BEFORE PHACC's plugin module is
-   imported. Without this, ``custom_components.meshcore_chat.*`` cannot
+   imported. Without this, ``custom_components.hivefw_integration.*`` cannot
    be resolved by ``unittest.mock.patch`` (whose target resolver walks
    the import system, not HA's loader). The PHACC distribution ships a
    sibling ``custom_components`` package under
@@ -32,7 +32,7 @@ pytest_plugins = ["pytest_homeassistant_custom_component"]
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
-    """Make ``custom_components/meshcore_chat`` discoverable to HA in every test.
+    """Make ``custom_components/hivefw_integration`` discoverable to HA in every test.
 
     PHACC's ``enable_custom_integrations`` fixture clears HA's cached
     custom-integration map so the next ``async_get_custom_components``

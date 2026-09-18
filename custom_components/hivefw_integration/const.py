@@ -1,10 +1,10 @@
-"""Constants for the MeshCore Chat companion integration."""
+"""Constants for the HiveFW companion integration."""
 from __future__ import annotations
 
 from typing import Final
 
 # This integration's own domain.
-DOMAIN: Final = "meshcore_chat"
+DOMAIN: Final = "hivefw_integration"
 
 # Domain of the upstream meshcore integration we listen to and consume from.
 # Used for: filtering binary_sensor entities by their source integration,
@@ -43,8 +43,8 @@ EVENT_MESHCORE_DISCONNECTED: Final = "meshcore_disconnected"
 # Per-conversation file naming. Distinct from the upstream `meshcore.*` namespace
 # to avoid file collisions if a similar feature ever lands in the core integration.
 # Substitute the per-entry id and a sanitized entity_id (dots → underscores).
-STORAGE_KEY_INDEX: Final = "meshcore_chat.{entry_id}.message_index"
-STORAGE_KEY_CONVERSATION: Final = "meshcore_chat.{entry_id}.msgs.{safe_entity_id}"
+STORAGE_KEY_INDEX: Final = "hivefw_integration.{entry_id}.message_index"
+STORAGE_KEY_CONVERSATION: Final = "hivefw_integration.{entry_id}.msgs.{safe_entity_id}"
 
 STORAGE_VERSION: Final = 1
 
@@ -68,7 +68,7 @@ OPT_MESSAGE_RETENTION_DAYS: Final = "message_retention_days"
 ENTITY_DOMAIN_BINARY_SENSOR: Final = "binary_sensor"
 
 # Default age (days) at which a neighbor entry is considered stale and
-# eligible for cleanup via meshcore_chat/cleanup_stale_neighbors. Mirrors
+# eligible for cleanup via hivefw_integration/cleanup_stale_neighbors. Mirrors
 # the upstream meshcore.const value of the same name; lifted here so the
 # companion's ws_api.py can self-import it without coupling to upstream's
 # const module.

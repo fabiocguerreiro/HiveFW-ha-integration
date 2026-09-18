@@ -1,15 +1,15 @@
-"""Unread message tracking for MeshCore Chat.
+"""Unread message tracking for HiveFW.
 
 The unread-tracking logic originated in earlier development and has since
 been consolidated here. The bus event name is kept on the upstream
 `meshcore_*` namespace so the panel can subscribe to the same event
 whether it's running against the upstream integration or the companion.
 The tracker instance itself lives in the companion's domain bucket:
-``hass.data["meshcore_chat"]["unread_tracker"]``.
+``hass.data["hivefw_integration"]["unread_tracker"]``.
 
 A persistent ``_last_read: dict[entity_id -> message_id]`` map is
 layered on top of the in-memory unread counts. Persistence uses HA's
-``Store`` helper via the ``meshcore_chat.last_read.<entry_id>`` key,
+``Store`` helper via the ``hivefw_integration.last_read.<entry_id>`` key,
 with a 2-second debounced save that coalesces rapid cursor advances.
 
 The in-memory ``_unread`` counter was later removed entirely. Unread
@@ -45,7 +45,7 @@ EVENT_UNREAD_UPDATED = "meshcore_unread_updated"
 # but the key parametrisation lets the schema scale if multi-entry is
 # ever introduced.
 STORAGE_VERSION = 1
-STORAGE_KEY_LAST_READ = "meshcore_chat.last_read.{entry_id}"
+STORAGE_KEY_LAST_READ = "hivefw_integration.last_read.{entry_id}"
 
 # Debounce window for the persisted save. Coalesces rapid cursor
 # advances (e.g. user scrolling through a fast-moving channel) into a

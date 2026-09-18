@@ -15,7 +15,7 @@ import '../components/manage-dialog';
 import '../components/message-bubble';
 import '../components/message-search';
 
-@customElement('meshcore-chat-page')
+@customElement('hivefw-integration-page')
 export class ChatPage extends LitElement {
   @property({ type: Object }) hass?: HomeAssistant;
   @property({ type: Object }) config?: PanelConfig;
@@ -553,7 +553,7 @@ export class ChatPage extends LitElement {
       // conversation.
       //
       // We must clear `this.selectedId = null` from the child here.
-      // The parent (`meshcore-chat-panel.ts:_selectDevice`) clears
+      // The parent (`hivefw-integration-panel.ts:_selectDevice`) clears
       // `_pendingChatTarget = null` simultaneously, but
       // `_pendingChatTarget` is normally already null — conversation-
       // list clicks set `chat-page.selectedId` directly without
@@ -1047,7 +1047,7 @@ export class ChatPage extends LitElement {
       //
       // Anchor-driven open: when we have a persisted last-read cursor
       // for this entity, hand it to the MessageStore so it routes
-      // through `meshcore_chat/get_messages_around` instead of the
+      // through `hivefw_integration/get_messages_around` instead of the
       // newest-50 path. The divider then renders AFTER the anchor in
       // `_renderItemsWithDivider`, and `_doScrollWithRetry`
       // scrolls the divider to viewport top — landing the user with
@@ -1620,6 +1620,6 @@ export class ChatPage extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'meshcore-chat-page': ChatPage;
+    'hivefw-integration-page': ChatPage;
   }
 }

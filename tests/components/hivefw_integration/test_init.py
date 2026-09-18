@@ -1,4 +1,4 @@
-"""Unit tests for ``custom_components.meshcore_chat.__init__``.
+"""Unit tests for ``custom_components.hivefw_integration.__init__``.
 
 Phase 4C of the HA Quality + Best Practices Remediation. Covers the
 event-handler dispatch surface — the four ``hass.bus`` listeners
@@ -29,7 +29,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.meshcore_chat import (
+from custom_components.hivefw_integration import (
     MeshCoreChatRuntimeData,
     _async_options_updated,
     _make_connection_state_handler,
@@ -41,7 +41,7 @@ from custom_components.meshcore_chat import (
     _upstream_meshcore_present,
     async_unload_entry,
 )
-from custom_components.meshcore_chat.const import DOMAIN, MESHCORE_DOMAIN
+from custom_components.hivefw_integration.const import DOMAIN, MESHCORE_DOMAIN
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ def config_entry(
     """Registered MockConfigEntry with runtime_data wired to mock_store."""
     entry = MockConfigEntry(
         domain=DOMAIN,
-        title="MeshCore Chat",
+        title="HiveFW",
         entry_id="01TEST_ENTRY",
         data={},
         options={},
