@@ -1572,10 +1572,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return source.filter((c)=>this.__nodeCoords(c)!==null);
   }
 
+  __mapEntities(contacts) {
+    return contacts
+      .filter((c)=>c?.map_entity_id && this.hass?.states?.[c.map_entity_id])
+      .map((c)=>c.map_entity_id);
+  }
+
   __mapLocations(contacts) {
+    const fallback=contacts.filter((c)=>!c?.map_entity_id || !this.hass?.states?.[c.map_entity_id]);
     const active=new Set();
     const selectedId=this.__nodesMapFocusId||"";
-    const locations=contacts.map((c)=>{
+    const locations=fallback.map((c)=>{
       const id=this.__nodeId(c);
       const coords=this.__nodeCoords(c);
       active.add(id);
@@ -1667,7 +1674,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const signature=contacts.map((c)=>{
       const p=this.__nodeCoords(c);
-      return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}`;
+      return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}`;
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
@@ -1675,6 +1682,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     // No DOM replacement and no map property churn when data is unchanged.
     if(this.__nodesMapSignature!==signature){
+      this.__nodesMapElement.entities=this.__mapEntities(contacts);
       this.__nodesMapElement.editableLocations=this.__mapLocations(contacts);
       this.__nodesMapSignature=signature;
     }
@@ -1693,8 +1701,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       selected.textContent=contact.adv_name||contact.pubkey_prefix||"Nó";
     }
 
-    // Marker styling changes in-place; the ha-map instance itself is kept.
+    // Keep native HA entity markers and coordinate-only fallback markers in sync.
     const contacts=this.__validMapContacts();
+    this.__nodesMapElement.entities=this.__mapEntities(contacts);
     this.__nodesMapElement.editableLocations=this.__mapLocations(contacts);
     this.__nodesMapElement.setView?.(coords,15);
   }

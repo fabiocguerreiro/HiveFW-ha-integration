@@ -4,6 +4,11 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-18
+
+- Fixed Nodes map markers by linking contacts to their Home Assistant location entity via `map_entity_id`.
+- The active HiveFW panel now feeds native Home Assistant entities to `ha-map.entities`; coordinate-only nodes retain the existing static-marker fallback.
+
 ## [0.10.0] - 2026-09-18
 
 - Renamed the custom integration domain and package to `hivefw_integration`.

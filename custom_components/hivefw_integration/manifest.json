@@ -1,13 +1,20 @@
 {
   "domain": "hivefw_integration",
   "name": "HiveFW",
-  "codeowners": ["@fabiocguerreiro"],
+  "codeowners": [
+    "@fabiocguerreiro"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "websocket_api", "meshcore"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api",
+    "meshcore"
+  ],
   "documentation": "https://github.com/fabiocguerreiro/HiveFW-ha-integration",
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/fabiocguerreiro/HiveFW-ha-integration/issues",
   "requirements": [],
-  "version": "0.10.0"
+  "version": "0.10.1"
 }

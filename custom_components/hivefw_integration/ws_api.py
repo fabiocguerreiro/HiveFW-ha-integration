@@ -279,8 +279,8 @@ _LEGACY_CONTACTS_FALLBACK_LOGGED = False
 
 def _build_ha_contact_location_index(
     hass: HomeAssistant,
-) -> dict[str, tuple[float, float]]:
-    """Build a pubkey/prefix → coordinates index from existing HA states once."""
+) -> dict[str, tuple[float, float, str]]:
+    """Build a pubkey/prefix → coordinates + entity_id index from HA states."""
 
     def _pair(attrs: dict) -> tuple[float, float] | None:
         lat_raw = attrs.get("adv_lat", attrs.get("latitude"))
@@ -296,7 +296,7 @@ def _build_ha_contact_location_index(
             return None
         return lat, lon
 
-    index: dict[str, tuple[float, float]] = {}
+    index: dict[str, tuple[float, float, str]] = {}
     for state in hass.states.async_all():
         attrs = dict(state.attributes or {})
         pair = _pair(attrs)
@@ -311,21 +311,21 @@ def _build_ha_contact_location_index(
             key = str(raw_key or "").strip().lower()
             if len(key) < 6:
                 continue
-            index[key] = pair
+            index[key] = (pair[0], pair[1], state.entity_id)
             # meshcore-ha commonly identifies contacts by the 12-char pubkey
             # prefix, so index it explicitly even when the entity exposes the
             # full public key.
             if len(key) >= 12:
-                index[key[:12]] = pair
+                index[key[:12]] = (pair[0], pair[1], state.entity_id)
 
     return index
 
 
 def _contact_location(
     contact: dict,
-    location_index: dict[str, tuple[float, float]],
-) -> tuple[float, float] | None:
-    """Return direct advert coordinates or a matching HA entity location."""
+    location_index: dict[str, tuple[float, float, str]],
+) -> tuple[float, float, str | None] | None:
+    """Return coordinates and, when available, the matching HA map entity."""
 
     def _pair(attrs: dict) -> tuple[float, float] | None:
         lat_raw = attrs.get("adv_lat", attrs.get("latitude"))
@@ -341,16 +341,21 @@ def _contact_location(
             return None
         return lat, lon
 
-    direct = _pair(contact)
-    if direct is not None:
-        return direct
-
     public_key = str(contact.get("public_key") or "").strip().lower()
     prefix = str(contact.get("pubkey_prefix") or public_key[:12]).strip().lower()
 
+    matched: tuple[float, float, str] | None = None
     for key in (public_key, public_key[:12], prefix):
         if key and key in location_index:
-            return location_index[key]
+            matched = location_index[key]
+            break
+
+    direct = _pair(contact)
+    if direct is not None:
+        return direct[0], direct[1], matched[2] if matched else None
+
+    if matched is not None:
+        return matched
 
     return None
 
@@ -370,11 +375,13 @@ def _enrich_contact_locations_from_ha(
         contact = dict(raw)
         pair = _contact_location(contact, location_index)
         if pair is not None:
-            lat, lon = pair
+            lat, lon, map_entity_id = pair
             contact["adv_lat"] = lat
             contact["adv_lon"] = lon
             contact["latitude"] = lat
             contact["longitude"] = lon
+            if map_entity_id:
+                contact["map_entity_id"] = map_entity_id
 
         enriched.append(contact)
 

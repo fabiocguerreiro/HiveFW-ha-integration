@@ -658,9 +658,20 @@ export class NodesPage extends LitElement {
       : '0 1px 5px rgba(0,0,0,.35)';
   }
 
+  private _mapEntities(): string[] {
+    return this._mapContacts()
+      .map((contact) => (contact as Contact & { map_entity_id?: string }).map_entity_id)
+      .filter((entityId): entityId is string => Boolean(entityId && this.hass?.states?.[entityId]));
+  }
+
   private _mapLocations() {
     const activeIds = new Set<string>();
-    const locations = this._mapContacts().map((contact) => {
+    const locations = this._mapContacts()
+      .filter((contact) => {
+        const entityId = (contact as Contact & { map_entity_id?: string }).map_entity_id;
+        return !entityId || !this.hass?.states?.[entityId];
+      })
+      .map((contact) => {
       const id = this._contactId(contact);
       const coords = this._contactCoords(contact)!;
       activeIds.add(id);
@@ -727,6 +738,7 @@ export class NodesPage extends LitElement {
       <div class="map-count">${contacts.length} com localização · ${total} nós</div>
       ${selected ? html`<div class="map-selection">${selected.adv_name || selected.pubkey_prefix}</div>` : nothing}
       <ha-map
+        .entities=${this._mapEntities()}
         .editableLocations=${this._mapLocations()}
         .autoFit=${true}
         .clusterMarkers=${true}
