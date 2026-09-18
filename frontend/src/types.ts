@@ -383,10 +383,12 @@ export interface NeighborInfo {
 export interface HiveNeighborInfo {
   name: string;
   pubkey_prefix: string;
-  snr: number;
   last_seen: string;
   secs_ago: number;
   known_contact: boolean;
+  path_len: number;
+  path_hash_mode?: number;
+  source?: 'advert_path';
 }
 
 export interface HiveNeighborsResponse {
