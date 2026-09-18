@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 import voluptuous as vol
+from meshcore.events import EventType
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -422,6 +423,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_remove_channel)
 
     # Neighbor management commands
+    websocket_api.async_register_command(hass, ws_get_hive_neighbors)
     websocket_api.async_register_command(hass, ws_get_neighbors)
     websocket_api.async_register_command(hass, ws_remove_neighbor)
     websocket_api.async_register_command(hass, ws_cleanup_stale_neighbors)
@@ -1697,6 +1699,152 @@ async def ws_remove_channel(hass, connection, msg):
             msg["id"],
             ex,
             handler=f"ws_remove_channel(idx={channel_idx})",
+        )
+
+
+# ─── meshcore/get_hive_neighbors ────────────────────────────────────────
+# Read the HiveFW Companion+Repeater's LOCAL zero-hop repeater table.
+#
+# Compatibility note:
+# HiveFW extends the standard CMD_GET_CUSTOM_VARS (40) request with an
+# optional 0xF0 namespace marker + page byte. Standard firmware ignores
+# those extra bytes and simply returns its normal custom-vars payload; in
+# that case the required "hm" marker is absent and we report supported=False.
+# The response still uses RESP_CODE_CUSTOM_VARS, so no meshcore-py parser
+# changes are needed.
+#
+# This is a local Companion-protocol query. It does NOT transmit over LoRa.
+
+_HIVEFW_NEIGHBOR_NAMESPACE = 0xF0
+_HIVEFW_NEIGHBOR_MAX_PAGES = 6
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "meshcore_chat/get_hive_neighbors",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_hive_neighbors(hass, connection, msg):
+    """Return direct zero-hop repeaters heard by the local HiveFW device."""
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator or not coordinator.api.mesh_core:
+        connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
+        return
+
+    commands = coordinator.api.mesh_core.commands
+
+    async def _page(page: int) -> dict:
+        event = await commands.send(
+            bytes((40, _HIVEFW_NEIGHBOR_NAMESPACE, page & 0xFF)),
+            [EventType.CUSTOM_VARS, EventType.ERROR],
+        )
+        if event is None or event.is_error():
+            return {}
+        return event.payload if isinstance(event.payload, dict) else {}
+
+    try:
+        first = await _page(0)
+        meta_raw = first.get("hm")
+        if not meta_raw:
+            connection.send_result(
+                msg["id"],
+                {
+                    "supported": False,
+                    "repeater_enabled": False,
+                    "count": 0,
+                    "neighbors": [],
+                },
+            )
+            return
+
+        meta = str(meta_raw).split("|")
+        if len(meta) != 4:
+            raise ValueError("Malformed HiveFW neighbor metadata")
+
+        repeater_enabled = meta[0] == "1"
+        count = max(0, int(meta[1]))
+        pages = max(1, min(int(meta[3]), _HIVEFW_NEIGHBOR_MAX_PAGES))
+
+        payloads = [first]
+        for page in range(1, pages):
+            payloads.append(await _page(page))
+
+        raw_neighbors: list[dict] = []
+        for payload in payloads:
+            for key, value in payload.items():
+                if not key.startswith("n"):
+                    continue
+                parts = str(value).split("|")
+                if len(parts) != 3:
+                    continue
+                prefix = parts[0].lower()
+                try:
+                    snr = int(parts[1]) / 4.0
+                    secs_ago = max(0, int(parts[2]))
+                except (TypeError, ValueError):
+                    continue
+                raw_neighbors.append(
+                    {
+                        "pubkey_prefix": prefix,
+                        "snr": snr,
+                        "secs_ago": secs_ago,
+                    }
+                )
+
+        # Resolve the 6-byte HiveFW prefix against the companion's normal
+        # contact table so the UI can show the same friendly names seen in
+        # MeshCore without storing a second name cache in firmware.
+        contacts = await _get_contacts_via_service(hass, msg.get("entry_id"))
+        contact_names: dict[str, str] = {}
+        if contacts:
+            for contact in contacts:
+                public_key = str(contact.get("public_key") or "").lower()
+                pubkey_prefix = str(contact.get("pubkey_prefix") or "").lower()
+                name = str(contact.get("adv_name") or "").strip()
+                for candidate in (public_key, pubkey_prefix):
+                    if candidate:
+                        contact_names[candidate[:12]] = name
+
+        now = time.time()
+        neighbors = []
+        seen_prefixes: set[str] = set()
+        for item in raw_neighbors:
+            prefix = item["pubkey_prefix"][:12]
+            if not prefix or prefix in seen_prefixes:
+                continue
+            seen_prefixes.add(prefix)
+            resolved = contact_names.get(prefix, "")
+            secs_ago = item["secs_ago"]
+            neighbors.append(
+                {
+                    "name": resolved or prefix.upper(),
+                    "pubkey_prefix": prefix,
+                    "snr": item["snr"],
+                    "secs_ago": secs_ago,
+                    "last_seen": datetime.fromtimestamp(now - secs_ago).isoformat(),
+                    "known_contact": bool(resolved),
+                }
+            )
+
+        neighbors.sort(key=lambda item: item["secs_ago"])
+        connection.send_result(
+            msg["id"],
+            {
+                "supported": True,
+                "repeater_enabled": repeater_enabled,
+                "count": count,
+                "neighbors": neighbors,
+            },
+        )
+    except Exception as ex:
+        _LOGGER.warning("HiveFW neighbor query failed: %s", ex)
+        _ws_send_error_safe(
+            connection,
+            msg["id"],
+            ex,
+            handler="ws_get_hive_neighbors",
         )
 
 
