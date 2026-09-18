@@ -1703,20 +1703,14 @@ async def ws_remove_channel(hass, connection, msg):
 
 
 # ─── meshcore/get_hive_neighbors ────────────────────────────────────────
-# Read the HiveFW Companion+Repeater's LOCAL zero-hop repeater table.
+# Derive direct Repeater neighbours from the Companion's existing advert-path
+# cache. This uses only protocol features already present in HiveFW/MeshCore:
 #
-# Compatibility note:
-# HiveFW extends the standard CMD_GET_CUSTOM_VARS (40) request with an
-# optional 0xF0 namespace marker + page byte. Standard firmware ignores
-# those extra bytes and simply returns its normal custom-vars payload; in
-# that case the required "hm" marker is absent and we report supported=False.
-# The response still uses RESP_CODE_CUSTOM_VARS, so no meshcore-py parser
-# changes are needed.
+#   contacts (type == Repeater) -> CMD_GET_ADVERT_PATH -> path_len == 0
 #
-# This is a local Companion-protocol query. It does NOT transmit over LoRa.
-
-_HIVEFW_NEIGHBOR_NAMESPACE = 0xF0
-_HIVEFW_NEIGHBOR_MAX_PAGES = 6
+# CMD_GET_ADVERT_PATH is a local Companion-protocol query. It does NOT send a
+# packet over LoRa. HiveFW already keeps this advert-path cache for its normal
+# Companion behaviour, so no firmware extension is required.
 
 
 @websocket_api.websocket_command(
@@ -1727,7 +1721,7 @@ _HIVEFW_NEIGHBOR_MAX_PAGES = 6
 )
 @websocket_api.async_response
 async def ws_get_hive_neighbors(hass, connection, msg):
-    """Return direct zero-hop repeaters heard by the local HiveFW device."""
+    """Return Repeaters whose most recent cached advert was heard zero-hop."""
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator or not coordinator.api.mesh_core:
         connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
@@ -1735,111 +1729,130 @@ async def ws_get_hive_neighbors(hass, connection, msg):
 
     commands = coordinator.api.mesh_core.commands
 
-    async def _page(page: int) -> dict:
-        event = await commands.send(
-            bytes((40, _HIVEFW_NEIGHBOR_NAMESPACE, page & 0xFF)),
-            [EventType.CUSTOM_VARS, EventType.ERROR],
-        )
-        if event is None or event.is_error():
-            return {}
-        return event.payload if isinstance(event.payload, dict) else {}
-
     try:
-        first = await _page(0)
-        meta_raw = first.get("hm")
-        if not meta_raw:
-            connection.send_result(
+        contacts = await _get_contacts_via_service(hass, msg.get("entry_id"))
+        if contacts is None:
+            connection.send_error(
                 msg["id"],
-                {
-                    "supported": False,
-                    "repeater_enabled": False,
-                    "count": 0,
-                    "neighbors": [],
-                },
+                "not_found",
+                "No MeshCore coordinator found",
             )
             return
 
-        meta = str(meta_raw).split("|")
-        if len(meta) != 4:
-            raise ValueError("Malformed HiveFW neighbor metadata")
+        # Device query is also local. HiveFW already exposes the standard
+        # protocol v9 "repeat" flag, so we can keep the Repeater on/off UX
+        # without any custom firmware command. Older firmware that does not
+        # expose the flag is treated as "unknown/on" so neighbour discovery
+        # still works.
+        repeater_enabled = True
+        try:
+            device_info = await commands.send_device_query()
+            if (
+                device_info is not None
+                and getattr(device_info, "type", None) != EventType.ERROR
+                and isinstance(getattr(device_info, "payload", None), dict)
+                and "repeat" in device_info.payload
+            ):
+                repeater_enabled = bool(device_info.payload.get("repeat"))
+        except Exception as ex:
+            _LOGGER.debug("Unable to read local repeat flag: %s", ex)
 
-        repeater_enabled = meta[0] == "1"
-        count = max(0, int(meta[1]))
-        pages = max(1, min(int(meta[3]), _HIVEFW_NEIGHBOR_MAX_PAGES))
+        # AdvertPath is a small in-memory cache (16 entries in current HiveFW).
+        # Query the most recently advertised Repeaters first and cap the local
+        # request count so a very large contacts database cannot make the page
+        # sluggish over BLE. Any entry still present in the 16-slot cache will
+        # necessarily be among the recent candidates in ordinary use.
+        repeaters = [
+            contact
+            for contact in contacts
+            if contact.get("type") == 2
+            and (contact.get("public_key") or contact.get("pubkey_prefix"))
+        ]
+        repeaters.sort(
+            key=lambda contact: (
+                contact.get("last_advert")
+                or contact.get("lastmod")
+                or 0
+            ),
+            reverse=True,
+        )
+        repeaters = repeaters[:64]
 
-        payloads = [first]
-        for page in range(1, pages):
-            payloads.append(await _page(page))
-
-        raw_neighbors: list[dict] = []
-        for payload in payloads:
-            for key, value in payload.items():
-                if not key.startswith("n"):
-                    continue
-                parts = str(value).split("|")
-                if len(parts) != 3:
-                    continue
-                prefix = parts[0].lower()
-                try:
-                    snr = int(parts[1]) / 4.0
-                    secs_ago = max(0, int(parts[2]))
-                except (TypeError, ValueError):
-                    continue
-                raw_neighbors.append(
-                    {
-                        "pubkey_prefix": prefix,
-                        "snr": snr,
-                        "secs_ago": secs_ago,
-                    }
-                )
-
-        # Resolve the 6-byte HiveFW prefix against the companion's normal
-        # contact table so the UI can show the same friendly names seen in
-        # MeshCore without storing a second name cache in firmware.
-        contacts = await _get_contacts_via_service(hass, msg.get("entry_id"))
-        contact_names: dict[str, str] = {}
-        if contacts:
-            for contact in contacts:
-                public_key = str(contact.get("public_key") or "").lower()
-                pubkey_prefix = str(contact.get("pubkey_prefix") or "").lower()
-                name = str(contact.get("adv_name") or "").strip()
-                for candidate in (public_key, pubkey_prefix):
-                    if candidate:
-                        contact_names[candidate[:12]] = name
-
-        now = time.time()
+        now = int(time.time())
         neighbors = []
-        seen_prefixes: set[str] = set()
-        for item in raw_neighbors:
-            prefix = item["pubkey_prefix"][:12]
-            if not prefix or prefix in seen_prefixes:
+
+        for contact in repeaters:
+            public_key = (
+                contact.get("public_key")
+                or contact.get("pubkey_prefix")
+                or ""
+            )
+            if not public_key:
                 continue
-            seen_prefixes.add(prefix)
-            resolved = contact_names.get(prefix, "")
-            secs_ago = item["secs_ago"]
+
+            try:
+                result = await commands.get_advert_path(public_key)
+            except Exception as ex:
+                _LOGGER.debug(
+                    "Advert-path lookup failed for %s: %s",
+                    str(public_key)[:12],
+                    ex,
+                )
+                continue
+
+            if (
+                result is None
+                or getattr(result, "type", None) == EventType.ERROR
+                or not isinstance(getattr(result, "payload", None), dict)
+            ):
+                continue
+
+            path_info = result.payload
+
+            # The meshcore-py parser separates the encoded path byte into
+            # path_len (hop count) and path_hash_mode. Zero hops means the
+            # advert reached this Companion directly.
+            if path_info.get("path_len") != 0:
+                continue
+
+            heard_timestamp = int(path_info.get("timestamp") or 0)
+            secs_ago = max(0, now - heard_timestamp) if heard_timestamp else 0
+            prefix = str(
+                contact.get("pubkey_prefix")
+                or public_key
+            ).lower()[:12]
+            name = str(contact.get("adv_name") or "").strip()
+
             neighbors.append(
                 {
-                    "name": resolved or prefix.upper(),
+                    "name": name or prefix.upper(),
                     "pubkey_prefix": prefix,
-                    "snr": item["snr"],
                     "secs_ago": secs_ago,
-                    "last_seen": datetime.fromtimestamp(now - secs_ago).isoformat(),
-                    "known_contact": bool(resolved),
+                    "last_seen": (
+                        datetime.fromtimestamp(heard_timestamp).isoformat()
+                        if heard_timestamp
+                        else ""
+                    ),
+                    "known_contact": bool(contact.get("added_to_node")),
+                    "path_len": 0,
+                    "path_hash_mode": path_info.get("path_hash_mode", 0),
+                    "source": "advert_path",
                 }
             )
 
         neighbors.sort(key=lambda item: item["secs_ago"])
+
         connection.send_result(
             msg["id"],
             {
                 "supported": True,
                 "repeater_enabled": repeater_enabled,
-                "count": count,
+                "count": len(neighbors),
                 "neighbors": neighbors,
             },
         )
     except Exception as ex:
-        _LOGGER.warning("HiveFW neighbor query failed: %s", ex)
+        _LOGGER.warning("Local zero-hop neighbour query failed: %s", ex)
         _ws_send_error_safe(
             connection,
             msg["id"],
