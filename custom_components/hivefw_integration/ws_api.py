@@ -303,6 +303,12 @@ def _build_ha_contact_location_index(
         if pair is None:
             continue
 
+        canonical_map_location = (
+            isinstance(attrs.get("latitude"), (int, float))
+            and isinstance(attrs.get("longitude"), (int, float))
+        )
+        map_entity_id = state.entity_id if canonical_map_location else ""
+
         for raw_key in (
             attrs.get("public_key"),
             attrs.get("pubkey_prefix"),
@@ -311,12 +317,12 @@ def _build_ha_contact_location_index(
             key = str(raw_key or "").strip().lower()
             if len(key) < 6:
                 continue
-            index[key] = (pair[0], pair[1], state.entity_id)
+            index[key] = (pair[0], pair[1], map_entity_id)
             # meshcore-ha commonly identifies contacts by the 12-char pubkey
             # prefix, so index it explicitly even when the entity exposes the
             # full public key.
             if len(key) >= 12:
-                index[key[:12]] = (pair[0], pair[1], state.entity_id)
+                index[key[:12]] = (pair[0], pair[1], map_entity_id)
 
     return index
 

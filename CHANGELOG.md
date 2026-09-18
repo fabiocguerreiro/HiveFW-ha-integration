@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-09-18
+
+- Fixed Nodes map pins on Home Assistant 2026.9 by using the stable `ha-map.layers` Leaflet API.
+- Added real Leaflet markers with node tooltips and click-to-open behavior on HA 2026.9.
+- Kept feature-detected support for the newer `editableLocations` map API.
+- Only exposes `map_entity_id` when the matching HA entity itself has canonical `latitude` and `longitude` attributes.
+
 ## [0.10.1] - 2026-09-18
 
 - Fixed Nodes map markers by linking contacts to their Home Assistant location entity via `map_entity_id`.

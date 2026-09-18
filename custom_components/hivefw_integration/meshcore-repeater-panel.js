@@ -1602,6 +1602,33 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return locations;
   }
 
+  async __waitForLegacyLeaflet(map) {
+    if(!map || !("layers" in map))return false;
+    for(let i=0;i<40;i++){
+      if(map.leafletMap && map.Leaflet)return true;
+      await new Promise((resolve)=>setTimeout(resolve,75));
+      if(!map.isConnected)return false;
+    }
+    return !!(map.leafletMap && map.Leaflet);
+  }
+
+  __legacyLeafletLayers(map,contacts,page) {
+    const L=map?.Leaflet;
+    if(!L)return [];
+    return contacts.map((contact)=>{
+      const coords=this.__nodeCoords(contact);
+      if(!coords)return null;
+      const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
+      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true});
+      marker.bindTooltip?.(name,{direction:"top",offset:[0,-12]});
+      marker.on?.("click",()=>{
+        this.__focusNodeOnMap(contact);
+        page?._openNodeDetail?.(contact);
+      });
+      return marker;
+    }).filter(Boolean);
+  }
+
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
@@ -1680,10 +1707,20 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const count=pane.querySelector(".hive-map-count");
     if(count)count.textContent=`${contacts.length} com localização · ${source.length} nós`;
 
-    // No DOM replacement and no map property churn when data is unchanged.
+    // Home Assistant 2026.9's ha-map has no editableLocations API yet.
+    // It does expose Leaflet layers, so use real Leaflet markers there.
+    // Newer HA builds are feature-detected and use editableLocations/entities.
     if(this.__nodesMapSignature!==signature){
-      this.__nodesMapElement.entities=this.__mapEntities(contacts);
-      this.__nodesMapElement.editableLocations=this.__mapLocations(contacts);
+      const map=this.__nodesMapElement;
+      if("layers" in map && await this.__waitForLegacyLeaflet(map)){
+        map.entities=[];
+        map.layers=this.__legacyLeafletLayers(map,contacts,page);
+      }else{
+        map.entities=this.__mapEntities(contacts);
+        if("editableLocations" in map){
+          map.editableLocations=this.__mapLocations(contacts);
+        }
+      }
       this.__nodesMapSignature=signature;
     }
   }
@@ -1701,11 +1738,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
       selected.textContent=contact.adv_name||contact.pubkey_prefix||"Nó";
     }
 
-    // Keep native HA entity markers and coordinate-only fallback markers in sync.
     const contacts=this.__validMapContacts();
-    this.__nodesMapElement.entities=this.__mapEntities(contacts);
-    this.__nodesMapElement.editableLocations=this.__mapLocations(contacts);
-    this.__nodesMapElement.setView?.(coords,15);
+    const map=this.__nodesMapElement;
+    if(!("layers" in map)){
+      map.entities=this.__mapEntities(contacts);
+      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
+    }
+    map.setView?.(coords,15);
   }
 
     __settingsSelect(label, options, value) {
