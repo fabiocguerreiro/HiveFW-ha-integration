@@ -19,7 +19,6 @@ from datetime import datetime
 from pathlib import Path
 
 import voluptuous as vol
-from meshcore.events import EventType
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -1016,6 +1015,8 @@ def ws_get_device_config(hass, connection, msg):
 @websocket_api.async_response
 async def ws_get_local_repeater_status(hass, connection, msg):
     """Return local repeater capability, RF health and packet statistics."""
+    from meshcore.events import EventType
+
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator or not coordinator.api.mesh_core:
         connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
@@ -1904,6 +1905,8 @@ async def ws_remove_channel(hass, connection, msg):
 @websocket_api.async_response
 async def ws_get_hive_neighbors(hass, connection, msg):
     """Return Repeaters whose most recent cached advert was heard zero-hop."""
+    from meshcore.events import EventType
+
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator or not coordinator.api.mesh_core:
         connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
