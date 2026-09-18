@@ -6,6 +6,7 @@ import type {
   ManagedDevice,
   DeviceConfig,
   NeighborInfo,
+  HiveNeighborsResponse,
   StoredMessage,
   FloodScopes,
 } from './types';
@@ -415,6 +416,32 @@ export async function getNeighbors(
     return result.neighbors || [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Get HiveFW direct zero-hop repeater neighbors.
+ *
+ * The backend reads HiveFW's local neighbor table over the Companion
+ * connection. No LoRa packet is transmitted by this request.
+ */
+export async function getHiveNeighbors(
+  hass: HomeAssistant,
+  entryId?: string,
+): Promise<HiveNeighborsResponse> {
+  try {
+    const msg: Record<string, unknown> = {
+      type: 'meshcore_chat/get_hive_neighbors',
+    };
+    if (entryId) msg.entry_id = entryId;
+    return await hass.callWS<HiveNeighborsResponse>(msg);
+  } catch {
+    return {
+      supported: false,
+      repeater_enabled: false,
+      count: 0,
+      neighbors: [],
+    };
   }
 }
 
