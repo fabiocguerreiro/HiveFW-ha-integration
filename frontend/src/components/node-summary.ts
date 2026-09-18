@@ -1446,7 +1446,7 @@ export class NodeSummary extends LitElement {
     // so the card ends cleanly after the hero row when there's nothing
     // operationally interesting left to show in the table.
     const isCompanion = this.device?.type === 'companion';
-    const skipForCompanion: GroupName[] = ['Radio · configuration', 'Identity'];
+    const skipForCompanion: GroupName[] = ['Radio · live', 'Radio · configuration', 'Identity'];
 
     return (Object.entries(groups) as [GroupName, TemplateResult[]][])
       .filter(([name, rows]) => {

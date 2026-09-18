@@ -201,6 +201,26 @@ the protocol response where HiveFW actually reports `_prefs.path_hash_mode`.
 This avoids the previous behaviour where the UI could incorrectly display **1 byte**
 while the radio was configured for **2 bytes**.
 
+## Regions and Scopes
+
+The integration exposes the parts of MeshCore Regions/Scopes that are safe and
+available through the current APIs:
+
+- **Flood Scopes** are editable in **Dispositivo → Regions & Scopes**. They are
+  stored in the selected `meshcore-ha` config entry and are available to the
+  per-channel scope picker in **Chat & Canais**.
+- **Remote Repeater Regions** can be read on demand and changed with structured
+  Region commands. These operations use RF and are never polled automatically.
+- The **local HiveFW Region tree is not editable through the current Companion
+  Protocol**. HiveFW can manage Regions on-device, but exposing that tree to HA
+  would require a firmware/protocol extension; this integration does not fake it.
+
+## Nodes map
+
+The **Nós** page has **Lista | Mapa** views. The map uses Home Assistant's own
+`ha-map` component and plots nodes whose adverts contain valid latitude and
+longitude. Clicking a marker opens the same node details used by the list view.
+
 ## Network etiquette
 
 MeshCore is a shared radio network. HiveFW and this Home Assistant integration should be

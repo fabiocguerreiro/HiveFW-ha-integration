@@ -1,6 +1,6 @@
 {
   "name": "hivefw-ha-integration-panel",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "private": true,
   "description": "HiveFW Companion-Repeater management panel for Home Assistant",
   "scripts": {

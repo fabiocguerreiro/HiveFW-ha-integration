@@ -411,6 +411,8 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_contacts)
     websocket_api.async_register_command(hass, ws_get_channels)
     websocket_api.async_register_command(hass, ws_get_flood_scopes)
+    websocket_api.async_register_command(hass, ws_set_flood_scopes)
+    websocket_api.async_register_command(hass, ws_get_remote_regions)
 
     # Device config and command-execution commands
     websocket_api.async_register_command(hass, ws_get_managed_devices)
@@ -820,6 +822,87 @@ def ws_get_flood_scopes(hass, connection, msg):
         coordinator.config_entry.data.get(CONF_FLOOD_SCOPES_UPSTREAM, "")
     )
     connection.send_result(msg["id"], {"scopes": scopes, "global": has_global})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "meshcore_chat/set_flood_scopes",
+        vol.Optional("entry_id"): str,
+        vol.Required("scopes"): [str],
+        vol.Optional("global", default=False): bool,
+    }
+)
+@websocket_api.require_admin
+@callback
+def ws_set_flood_scopes(hass, connection, msg):
+    """Update meshcore-ha's flood-scope allowlist.
+
+    The upstream integration reads this config-entry field dynamically for
+    inbound scope matching. Scoped sends use the selected channel scope and
+    temporarily call set_flood_scope() around the send.
+    """
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator:
+        connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
+        return
+
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in msg.get("scopes", []):
+        name = str(raw).strip()
+        if name.startswith("#"):
+            name = name[1:]
+        if not name or name in {"*", "0", "None", "#"}:
+            continue
+        if name not in seen:
+            cleaned.append(name)
+            seen.add(name)
+
+    tokens = (["*"] if msg.get("global") else []) + cleaned
+    new_data = dict(coordinator.config_entry.data)
+    new_data[CONF_FLOOD_SCOPES_UPSTREAM] = ", ".join(tokens)
+    hass.config_entries.async_update_entry(coordinator.config_entry, data=new_data)
+    connection.send_result(
+        msg["id"],
+        {"success": True, "scopes": cleaned, "global": bool(msg.get("global"))},
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "meshcore_chat/get_remote_regions",
+        vol.Optional("entry_id"): str,
+        vol.Required("target_prefix"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_get_remote_regions(hass, connection, msg):
+    """Read a remote Repeater's Region tree on demand.
+
+    This is an RF request. It is deliberately never polled automatically.
+    """
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator:
+        connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
+        return
+
+    prefix = msg["target_prefix"]
+    contact = coordinator.api.mesh_core.get_contact_by_key_prefix(prefix)
+    if not contact:
+        connection.send_error(msg["id"], "not_found", f"Contact not found: {prefix}")
+        return
+
+    try:
+        result = await coordinator.api.mesh_core.commands.req_regions_sync(contact)
+        if result is None:
+            connection.send_error(msg["id"], "timeout", "Region request timed out")
+            return
+        connection.send_result(msg["id"], {"regions": str(result)})
+    except Exception as ex:
+        _ws_send_error_safe(
+            connection, msg["id"], ex, handler="ws_get_remote_regions"
+        )
 
 
 # ─── meshcore/get_managed_devices ───────────────────────────────────────

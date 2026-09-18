@@ -338,6 +338,37 @@ export async function getFloodScopes(
   }
 }
 
+/** Persist the flood-scope allowlist in the selected upstream meshcore entry. */
+export async function setFloodScopes(
+  hass: HomeAssistant,
+  scopes: string[],
+  global: boolean,
+  entryId?: string,
+): Promise<{ success: boolean; scopes: string[]; global: boolean }> {
+  const msg: Record<string, unknown> = {
+    type: 'meshcore_chat/set_flood_scopes',
+    scopes,
+    global,
+  };
+  if (entryId) msg.entry_id = entryId;
+  return hass.callWS(msg);
+}
+
+/** Read Regions from a managed remote Repeater. This transmits over RF. */
+export async function getRemoteRegions(
+  hass: HomeAssistant,
+  targetPrefix: string,
+  entryId?: string,
+): Promise<string> {
+  const msg: Record<string, unknown> = {
+    type: 'meshcore_chat/get_remote_regions',
+    target_prefix: targetPrefix,
+  };
+  if (entryId) msg.entry_id = entryId;
+  const result = await hass.callWS<{ regions: string }>(msg);
+  return result.regions || '';
+}
+
 /**
  * Remove a channel
  */

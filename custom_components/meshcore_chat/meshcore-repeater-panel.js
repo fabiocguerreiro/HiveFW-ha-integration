@@ -31,6 +31,18 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__managedDevices = { repeaters: [], clients: [] };
     this.__managedDevicesLoading = false;
     this.__managedDevicesLoadedEntry = null;
+    this.__scopesLoadedEntry = null;
+    this.__scopeState = { scopes: [], global: false };
+    this.__scopeDraft = "";
+    this.__scopeGlobal = false;
+    this.__regionTarget = "";
+    this.__regionText = "";
+    this.__regionAction = "allowf";
+    this.__regionName = "";
+    this.__regionsBusy = false;
+    this.__nodesView = "list";
+    this.__nodesMapOverlay = null;
+    this.__mapLoadStarted = false;
 
     this.__hiveNeighbors = null;
     this.__hiveNeighborsLoading = false;
@@ -89,7 +101,12 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__removeNeighborsOverlay();
     }
 
-    if (this._activeTab === "settings") {
+    if (this._activeTab === "nodes") {
+      this.__enhanceNodesPage();
+      return;
+    }
+
+        if (this._activeTab === "settings") {
       if (entryId !== this.__repeaterLoadedEntry) {
         this.__repeaterStatus = null;
         this.__repeaterError = null;
@@ -103,6 +120,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       }
       if (this.__managedDevicesLoadedEntry !== entryId && !this.__managedDevicesLoading) {
         void this.__loadManagedDevices();
+      }
+      if (this.__scopesLoadedEntry !== entryId) {
+        void this.__loadScopes();
       }
       return;
     }
@@ -737,6 +757,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!grid) return;
 
     this.__renderSettingsRepeaterCard(sroot, grid);
+    this.__renderRegionsScopesCard(sroot, grid);
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
@@ -993,6 +1014,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const label=(row.querySelector(".si-label")?.textContent||"").trim().toLowerCase();
       row.style.display = label.includes("temperature") ? "none" : "";
     }
+    for(const group of nroot.querySelectorAll(".group-label")){
+      const name=(group.textContent||"").trim();
+      if(name==="Radio · live"||name==="Radio · configuration"||name==="Identity"){
+        group.style.display="none";
+        let next=group.nextElementSibling;
+        while(next && !next.classList.contains("group-label")){
+          next.style.display="none";
+          next=next.nextElementSibling;
+        }
+      }
+    }
   }
 
   async __loadManagedDevices() {
@@ -1164,7 +1196,269 @@ class MeshCoreRepeaterPanel extends BasePanel {
     card.appendChild(list);
   }
 
-  __settingsSelect(label, options, value) {
+  async __loadScopes() {
+    try {
+      const msg = { type: "meshcore_chat/get_flood_scopes" };
+      const entryId = this.__entryId();
+      if (entryId) msg.entry_id = entryId;
+      const result = await this.hass.callWS(msg);
+      this.__scopeState = { scopes: result?.scopes || [], global: !!result?.global };
+      this.__scopeDraft = this.__scopeState.scopes.join(", ");
+      this.__scopeGlobal = this.__scopeState.global;
+      this.__scopesLoadedEntry = entryId || null;
+      if (!this.__regionTarget && this.__managedDevices.repeaters?.length) {
+        this.__regionTarget = this.__managedDevices.repeaters[0].pubkey_prefix;
+      }
+      if (this._activeTab === "settings") this.__enhanceSettingsPage();
+    } catch {
+      this.__scopesLoadedEntry = this.__entryId() || null;
+    }
+  }
+
+  __renderRegionsScopesCard(sroot, grid) {
+    let card = sroot.querySelector("#hive-regions-scopes-card");
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "hive-regions-scopes-card";
+      card.className = "device-section";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = "Regions & Scopes";
+    card.appendChild(title);
+
+    const note = document.createElement("div");
+    note.className = "hive-settings-note";
+    note.textContent = "Scopes são locais ao HA/Companion. Regions remotas usam RF apenas quando pedires.";
+    card.appendChild(note);
+
+    const scopes = this.__settingsNumber("Flood scopes (comma separated)", this.__scopeDraft, "any");
+    scopes.input.type = "text";
+    scopes.input.value = this.__scopeDraft;
+    scopes.input.addEventListener("input", () => { this.__scopeDraft = scopes.input.value; });
+    card.appendChild(scopes.field);
+
+    const global = document.createElement("label");
+    global.style.cssText = "display:flex;align-items:center;gap:7px;font-size:12px;margin:9px 0;";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = this.__scopeGlobal;
+    check.addEventListener("change", () => { this.__scopeGlobal = check.checked; });
+    global.append(check, document.createTextNode("Permitir scope global (*)"));
+    card.appendChild(global);
+
+    const save = document.createElement("button");
+    save.className = "action-btn";
+    save.style.width = "100%";
+    save.textContent = "Guardar Scopes";
+    save.addEventListener("click", async () => {
+      const msg = {
+        type: "meshcore_chat/set_flood_scopes",
+        scopes: this.__scopeDraft.split(",").map((s) => s.trim()).filter(Boolean),
+        global: this.__scopeGlobal,
+      };
+      const entryId = this.__entryId(); if (entryId) msg.entry_id = entryId;
+      try {
+        const result = await this.hass.callWS(msg);
+        this.__scopeDraft = (result?.scopes || []).join(", ");
+        this.__scopeGlobal = !!result?.global;
+        sroot.host?._showStatusMessage?.("Scopes guardados", "success");
+      } catch (error) {
+        sroot.host?._showStatusMessage?.(`Scopes: ${String(error)}`, "error");
+      }
+    });
+    card.appendChild(save);
+
+    const repeaters = this.__managedDevices.repeaters || [];
+    if (!repeaters.length) {
+      const local = document.createElement("div");
+      local.className = "hive-settings-note";
+      local.style.marginTop = "12px";
+      local.textContent = "O HiveFW local não expõe edição da árvore de Regions pelo Companion Protocol atual.";
+      card.appendChild(local);
+      return;
+    }
+
+    const hr = document.createElement("div");
+    hr.style.cssText = "height:1px;background:var(--divider-color);margin:14px 0;";
+    card.appendChild(hr);
+
+    const select = document.createElement("select");
+    select.className = "form-select";
+    for (const r of repeaters) {
+      const o = document.createElement("option");
+      o.value = r.pubkey_prefix;
+      o.textContent = r.name;
+      o.selected = r.pubkey_prefix === this.__regionTarget;
+      select.appendChild(o);
+    }
+    select.addEventListener("change", () => { this.__regionTarget = select.value; this.__regionText = ""; });
+    card.appendChild(select);
+
+    const read = document.createElement("button");
+    read.className = "action-btn";
+    read.style.cssText = "width:100%;margin:8px 0;";
+    read.textContent = this.__regionsBusy ? "A consultar…" : "Ler Regions (RF)";
+    read.disabled = this.__regionsBusy;
+    read.addEventListener("click", () => void this.__readRemoteRegions(sroot));
+    card.appendChild(read);
+
+    if (this.__regionText) {
+      const pre = document.createElement("pre");
+      pre.style.cssText = "white-space:pre-wrap;max-height:170px;overflow:auto;padding:9px;border-radius:7px;background:var(--secondary-background-color);font-size:11px;";
+      pre.textContent = this.__regionText;
+      card.appendChild(pre);
+    }
+
+    const op = document.createElement("select");
+    op.className = "form-select";
+    for (const [v, label] of [["allowf","Allow flood"],["denyf","Deny flood"],["home","Home region"],["default","Default scope"],["put","Create region"],["remove","Remove region"]]) {
+      const o = document.createElement("option"); o.value=v; o.textContent=label; o.selected=v===this.__regionAction; op.appendChild(o);
+    }
+    op.addEventListener("change",()=>{this.__regionAction=op.value;});
+    const name = document.createElement("input");
+    name.className = "form-input";
+    name.placeholder = "Region";
+    name.value = this.__regionName;
+    name.style.marginTop = "7px";
+    name.addEventListener("input",()=>{this.__regionName=name.value;});
+    card.append(op,name);
+
+    const actions=document.createElement("div");
+    actions.style.cssText="display:flex;gap:8px;margin-top:8px;";
+    const apply=document.createElement("button"); apply.className="action-btn"; apply.style.flex="1"; apply.textContent="Aplicar Region";
+    apply.addEventListener("click",()=>void this.__applyRemoteRegion(sroot));
+    const persist=document.createElement("button"); persist.className="action-btn"; persist.style.flex="1"; persist.textContent="Guardar Regions";
+    persist.addEventListener("click",()=>void this.__sendRemoteRegionCommand("region save",sroot));
+    actions.append(apply,persist); card.appendChild(actions);
+  }
+
+  async __readRemoteRegions(sroot) {
+    if (!this.__regionTarget || this.__regionsBusy) return;
+    this.__regionsBusy = true; this.__renderRegionsScopesCard(sroot, sroot.querySelector(".settings-grid"));
+    try {
+      const msg={type:"meshcore_chat/get_remote_regions",target_prefix:this.__regionTarget};
+      const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__regionText=result?.regions||"";
+    } catch(error) {
+      sroot.host?._showStatusMessage?.(`Regions: ${String(error)}`,"error");
+    } finally {
+      this.__regionsBusy=false; this.__renderRegionsScopesCard(sroot,sroot.querySelector(".settings-grid"));
+    }
+  }
+
+  async __sendRemoteRegionCommand(command,sroot) {
+    if(!this.__regionTarget||this.__regionsBusy)return;
+    this.__regionsBusy=true;
+    try{
+      const msg={type:"meshcore_chat/execute_remote",target_prefix:this.__regionTarget,command};
+      const entryId=this.__entryId(); if(entryId) msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      sroot.host?._showStatusMessage?.(result?.response||"Region command sent",result?.success?"success":"error");
+      if(result?.success){
+        this.__regionsBusy=false;
+        await this.__readRemoteRegions(sroot);
+      }
+    }finally{this.__regionsBusy=false;}
+  }
+
+  async __applyRemoteRegion(sroot){
+    let name=(this.__regionName||"").trim();
+    if(this.__regionAction==="default"&&!name)name="<null>";
+    if(!name)return;
+    await this.__sendRemoteRegionCommand(`region ${this.__regionAction} ${name}`,sroot);
+  }
+
+  async __ensureMapLoaded() {
+    if (customElements.get("ha-map")) return true;
+    if (this.__mapLoadStarted) return false;
+    this.__mapLoadStarted = true;
+    try {
+      if (window.loadCardHelpers) {
+        const helpers = await window.loadCardHelpers();
+        helpers.createCardElement?.({type:"map",entities:[]});
+      }
+      await Promise.race([customElements.whenDefined("ha-map"),new Promise((r)=>setTimeout(r,1500))]);
+    } catch {}
+    return !!customElements.get("ha-map");
+  }
+
+  __enhanceNodesPage() {
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    const nroot=page?.shadowRoot;
+    if(!nroot)return;
+    const header=nroot.querySelector(".nodes-header");
+    const content=nroot.querySelector(".content-area");
+    if(!header||!content)return;
+
+    let style=nroot.querySelector("#hive-node-map-style");
+    if(!style){
+      style=document.createElement("style"); style.id="hive-node-map-style";
+      style.textContent=`
+        .hive-view-switch{display:flex;justify-content:center;gap:6px;padding:2px 0 4px}
+        .hive-view-btn{min-width:92px;padding:7px 16px;border:1px solid var(--divider-color);border-radius:20px;background:transparent;color:var(--secondary-text-color);font-size:13px;font-weight:600;cursor:pointer}
+        .hive-view-btn.active{color:#0277bd;border-color:rgba(3,169,244,.5);background:rgba(3,169,244,.15)}
+        .hive-map-overlay{position:absolute;inset:0;z-index:10;background:var(--primary-background-color);overflow:hidden}
+        .hive-map-overlay ha-map{display:block;width:100%;height:100%;min-height:420px}
+        .hive-map-note{display:grid;place-items:center;height:100%;padding:24px;color:var(--secondary-text-color);text-align:center}
+      `; nroot.appendChild(style);
+    }
+
+    let sw=nroot.querySelector(".hive-view-switch");
+    if(!sw){
+      sw=document.createElement("div"); sw.className="hive-view-switch";
+      const list=document.createElement("button"); list.className="hive-view-btn"; list.textContent="Lista";
+      const map=document.createElement("button"); map.className="hive-view-btn"; map.textContent="Mapa";
+      list.addEventListener("click",()=>{this.__nodesView="list";this.__enhanceNodesPage();});
+      map.addEventListener("click",()=>{this.__nodesView="map";void this.__renderNodesMap(page,nroot,content);this.__enhanceNodesPage();});
+      sw.append(list,map); header.prepend(sw);
+    }
+    [...sw.querySelectorAll("button")].forEach((b,i)=>b.classList.toggle("active",(i===0&&this.__nodesView==="list")||(i===1&&this.__nodesView==="map")));
+    for(const el of header.children){
+      if(el===sw)continue;
+      el.style.display=this.__nodesView==="map"?"none":"";
+    }
+    content.style.position="relative";
+    if(this.__nodesView==="map") void this.__renderNodesMap(page,nroot,content);
+    else { this.__nodesMapOverlay?.remove(); this.__nodesMapOverlay=null; }
+  }
+
+  async __renderNodesMap(page,nroot,content) {
+    const ready=await this.__ensureMapLoaded();
+    if(this.__nodesView!=="map")return;
+    if(!this.__nodesMapOverlay?.isConnected){
+      const overlay=document.createElement("div");overlay.className="hive-map-overlay";content.appendChild(overlay);this.__nodesMapOverlay=overlay;
+    }
+    const overlay=this.__nodesMapOverlay; overlay.replaceChildren();
+    const contacts=(this._contacts||[]).filter((c)=>{
+      const lat=Number(c.adv_lat),lon=Number(c.adv_lon);
+      return Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)&&lat>=-90&&lat<=90&&lon>=-180&&lon<=180;
+    });
+    if(!ready||!contacts.length){
+      const note=document.createElement("div");note.className="hive-map-note";
+      note.textContent=!ready?"A carregar o mapa do Home Assistant…":"Nenhum nó tem coordenadas válidas.";
+      overlay.appendChild(note); return;
+    }
+    const map=document.createElement("ha-map");
+    map.autoFit=true; map.clusterMarkers=true; map.scaleRuler=true;
+    map.editableLocations=contacts.map((c)=>{
+      const marker=document.createElement("div");
+      marker.textContent=String(c.adv_name||c.pubkey_prefix||"?").slice(0,2).toUpperCase();
+      marker.style.cssText="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--primary-color,#03a9f4);color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35)";
+      return {id:c.public_key||c.pubkey_prefix,location:[Number(c.adv_lat),Number(c.adv_lon)],element:marker,elementSize:[34,34],title:c.adv_name||c.pubkey_prefix,locationEditable:false,activatable:true};
+    });
+    map.addEventListener("editable-location-clicked",(e)=>{
+      const id=e.detail?.id; const contact=contacts.find((c)=>(c.public_key||c.pubkey_prefix)===id);
+      if(contact) page._openNodeDetail?.(contact);
+    });
+    overlay.appendChild(map);
+  }
+
+    __settingsSelect(label, options, value) {
     const field = document.createElement("div");
     field.className = "hive-settings-field";
     const l = document.createElement("label");

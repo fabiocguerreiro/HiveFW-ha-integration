@@ -42,6 +42,8 @@ export class NodesPage extends LitElement {
   @property({ type: Object }) config?: PanelConfig;
   private _mediaQuery?: MediaQueryList;
   @state() private _viewportNarrow = false;
+  @state() private _viewMode: 'list' | 'map' = 'list';
+  @state() private _mapReady = customElements.get('ha-map') !== undefined;
 
   // ─── Two-level filter state ─────────────────────────────────────────
   @state() private _primaryFilter: PrimaryCategory = 'all';
@@ -93,7 +95,50 @@ export class NodesPage extends LitElement {
       flex-shrink: 0;
     }
 
-    /* ─── Level 1 filter buttons ────────────────────────────────────── */
+    .view-switch {
+      display:flex;
+      justify-content:center;
+      gap:6px;
+      padding:2px 0 4px;
+    }
+    .view-btn {
+      min-width:92px;
+      padding:7px 16px;
+      border:1px solid var(--divider-color,#e0e0e0);
+      border-radius:20px;
+      background:transparent;
+      color:var(--secondary-text-color,#727272);
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .view-btn.active {
+      color:#0277bd;
+      border-color:rgba(3,169,244,.5);
+      background:rgba(3,169,244,.15);
+    }
+    .map-wrap {
+      width:100%;
+      height:100%;
+      min-height:420px;
+      position:relative;
+      border-radius:10px;
+      overflow:hidden;
+      background:var(--card-background-color,#fff);
+    }
+    .map-wrap ha-map { display:block; width:100%; height:100%; min-height:420px; }
+    .map-note {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height:100%;
+      min-height:320px;
+      color:var(--secondary-text-color);
+      text-align:center;
+      padding:24px;
+    }
+
+        /* ─── Level 1 filter buttons ────────────────────────────────────── */
 
     .l1-filters {
       display: flex;
@@ -395,6 +440,7 @@ export class NodesPage extends LitElement {
     this._mediaQuery.addEventListener('change', this._onMediaChange);
     this._loadCounts();
     this._loadPage(true);
+    void this._ensureMapComponent();
   }
 
   disconnectedCallback() {
@@ -438,6 +484,12 @@ export class NodesPage extends LitElement {
     return html`
       <div class="nodes-layout">
         <div class="nodes-header">
+          <div class="view-switch">
+            <button class="view-btn ${this._viewMode === 'list' ? 'active' : ''}" @click=${() => this._setViewMode('list')}>Lista</button>
+            <button class="view-btn ${this._viewMode === 'map' ? 'active' : ''}" @click=${() => this._setViewMode('map')}>Mapa</button>
+          </div>
+
+          ${this._viewMode === 'list' ? html`
           <!-- Level 1 filters -->
           <div class="l1-filters">
             ${this._renderL1Button('all', 'All')}
@@ -445,14 +497,12 @@ export class NodesPage extends LitElement {
             ${this._renderL1Button('discovered', 'Discovered')}
           </div>
 
-          <!-- Level 2 filters (hidden when L1 = All) -->
           ${this._primaryFilter !== 'all' ? html`
             <div class="l2-bar">
               ${this._renderL2Buttons()}
             </div>
           ` : nothing}
 
-          <!-- Search + actions row -->
           <div class="header-actions">
             <div class="search-bar" style="flex: 1;">
               <span class="search-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></span>
@@ -485,11 +535,11 @@ export class NodesPage extends LitElement {
               ⟳ Sync
             </button>
           </div>
+          ` : nothing}
         </div>
 
-        <!-- Content area -->
         <div class="content-area">
-          ${this._renderContactsContent()}
+          ${this._viewMode === 'map' ? this._renderMap() : this._renderContactsContent()}
         </div>
       </div>
 
@@ -509,7 +559,98 @@ export class NodesPage extends LitElement {
     `;
   }
 
-  // ─── Level 1 button rendering ─────────────────────────────────────
+  private _setViewMode(mode: 'list' | 'map') {
+    this._viewMode = mode;
+    if (mode === 'map') void this._ensureMapComponent();
+  }
+
+  private async _ensureMapComponent() {
+    if (customElements.get('ha-map')) {
+      this._mapReady = true;
+      return;
+    }
+    try {
+      const loader = (window as Window & {
+        loadCardHelpers?: () => Promise<{ createCardElement?: (config: Record<string, unknown>) => unknown }>;
+      }).loadCardHelpers;
+      if (loader) {
+        const helpers = await loader();
+        helpers.createCardElement?.({ type: 'map', entities: [] });
+      }
+      await Promise.race([
+        customElements.whenDefined('ha-map'),
+        new Promise((resolve) => window.setTimeout(resolve, 1500)),
+      ]);
+      this._mapReady = customElements.get('ha-map') !== undefined;
+      this.requestUpdate();
+    } catch {
+      this._mapReady = false;
+    }
+  }
+
+  private _mapContacts(): Contact[] {
+    const source = this.contacts.length ? this.contacts : this._displayedContacts;
+    return source.filter((c) => {
+      const lat = Number(c.adv_lat);
+      const lon = Number(c.adv_lon);
+      return Number.isFinite(lat) && Number.isFinite(lon)
+        && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+        && !(lat === 0 && lon === 0);
+    });
+  }
+
+  private _mapLocations() {
+    return this._mapContacts().map((contact) => {
+      const marker = document.createElement('div');
+      marker.textContent = (contact.adv_name || contact.pubkey_prefix || '?').slice(0, 2).toUpperCase();
+      marker.style.cssText = [
+        'width:30px','height:30px','border-radius:50%',
+        'display:grid','place-items:center','font-size:10px','font-weight:700',
+        'background:var(--primary-color,#03a9f4)','color:white',
+        'border:2px solid white','box-shadow:0 1px 5px rgba(0,0,0,.35)',
+      ].join(';');
+      return {
+        id: contact.public_key || contact.pubkey_prefix,
+        location: [Number(contact.adv_lat), Number(contact.adv_lon)],
+        element: marker,
+        elementSize: [34, 34],
+        title: contact.adv_name || contact.pubkey_prefix,
+        locationEditable: false,
+        activatable: true,
+      };
+    });
+  }
+
+  private _onMapNodeClicked(e: CustomEvent<{ id: string }>) {
+    const id = e.detail?.id;
+    const contact = this._mapContacts().find((c) =>
+      (c.public_key || c.pubkey_prefix) === id
+    );
+    if (contact) this._openNodeDetail(contact);
+  }
+
+  private _renderMap() {
+    const contacts = this._mapContacts();
+    if (!contacts.length) {
+      return html`<div class="map-note">Nenhum nó da lista tem coordenadas válidas para mostrar no mapa.</div>`;
+    }
+    if (!this._mapReady) {
+      return html`<div class="map-note">A carregar o mapa do Home Assistant…</div>`;
+    }
+    return html`
+      <div class="map-wrap">
+        <ha-map
+          .editableLocations=${this._mapLocations()}
+          .autoFit=${true}
+          .clusterMarkers=${true}
+          .scaleRuler=${true}
+          @editable-location-clicked=${this._onMapNodeClicked}>
+        </ha-map>
+      </div>
+    `;
+  }
+
+    // ─── Level 1 button rendering ─────────────────────────────────────
 
   private _renderL1Button(category: PrimaryCategory, label: string) {
     const count = this._l1Counts[category];

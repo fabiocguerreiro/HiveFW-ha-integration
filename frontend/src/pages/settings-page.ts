@@ -5,8 +5,12 @@ import {
   getDeviceConfig,
   getLocalRepeaterStatus,
   getManagedDevices,
+  getFloodScopes,
+  setFloodScopes,
+  getRemoteRegions,
   setDeviceConfig,
   executeLocal,
+  executeRemote,
   subscribeIdentityChange,
   setLocationSource,
 } from '../api';
@@ -99,6 +103,14 @@ export class SettingsPage extends LitElement {
     repeaters: [],
     clients: [],
   };
+  @state() private _scopeDraft = '';
+  @state() private _scopeGlobal = false;
+  @state() private _scopeSaving = false;
+  @state() private _regionTarget = '';
+  @state() private _regionText = '';
+  @state() private _regionBusy = false;
+  @state() private _regionAction: 'allowf' | 'denyf' | 'home' | 'default' | 'put' | 'remove' = 'allowf';
+  @state() private _regionName = '';
   @state() private _loading = true;
   @state() private _error: string | null = null;
   @state() private _editValues: Record<string, unknown> = {};
@@ -818,6 +830,12 @@ export class SettingsPage extends LitElement {
         this._repeaterStatus = null;
       }
       this._managedDevices = await getManagedDevices(this.hass, this.config?.entry_id);
+      const scopes = await getFloodScopes(this.hass, this.config?.entry_id);
+      this._scopeDraft = scopes.scopes.join(', ');
+      this._scopeGlobal = scopes.global;
+      if (!this._regionTarget && this._managedDevices.repeaters.length) {
+        this._regionTarget = this._managedDevices.repeaters[0].pubkey_prefix;
+      }
       // Initialize location source from backend instead of defaulting to 'manual'
       if (this._deviceConfig?.location_source) {
         this._locationSource = this._deviceConfig.location_source as 'gps' | 'manual' | 'ha_location';
@@ -881,6 +899,11 @@ export class SettingsPage extends LitElement {
             <div class="device-section">
               <div class="card-title">Repeater</div>
               ${this._renderRepeaterSettings()}
+            </div>
+
+            <div class="device-section">
+              <div class="card-title">Regions &amp; Scopes</div>
+              ${this._renderRegionsScopes()}
             </div>
 
             <!-- Location -->
@@ -1404,6 +1427,152 @@ export class SettingsPage extends LitElement {
   // _renderLocationSource removed — merged into _renderLocation
 
   // Config backup, diagnostics, and backup & recovery removed — low value
+
+  private _renderRegionsScopes() {
+    const repeaters = this._managedDevices.repeaters || [];
+    return html`
+      <div style="font-size:11px;color:var(--secondary-text-color);line-height:1.45;margin-bottom:10px;">
+        Scopes são locais ao Home Assistant/Companion e não geram tráfego LoRa.
+        Regions abaixo são de Repeaters remotos geridos pelo meshcore-ha e só são
+        consultadas/alteradas quando carregas nos botões.
+      </div>
+
+      <div class="form-group-inline" style="margin-bottom:8px;">
+        <label class="form-label">Flood scopes</label>
+        <input
+          class="form-input"
+          type="text"
+          placeholder="ex.: pt-setubal, pt-lisboa"
+          .value=${this._scopeDraft}
+          @input=${(e: Event) => { this._scopeDraft = (e.target as HTMLInputElement).value; }}
+        />
+      </div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;margin:8px 0 10px;">
+        <input
+          type="checkbox"
+          .checked=${this._scopeGlobal}
+          @change=${(e: Event) => { this._scopeGlobal = (e.target as HTMLInputElement).checked; }}
+        />
+        Permitir scope global (*)
+      </label>
+      <button class="apply-button" style="width:100%;" ?disabled=${this._scopeSaving}
+        @click=${this._saveFloodScopes}>
+        ${this._scopeSaving ? 'A guardar…' : 'Guardar Scopes'}
+      </button>
+
+      <div style="height:1px;background:var(--divider-color);margin:14px 0;"></div>
+
+      ${repeaters.length ? html`
+        <div class="form-group-inline">
+          <label class="form-label">Repeater remoto</label>
+          <select class="form-select" .value=${this._regionTarget}
+            @change=${(e: Event) => { this._regionTarget = (e.target as HTMLSelectElement).value; this._regionText = ''; }}>
+            ${repeaters.map((r) => html`<option value=${r.pubkey_prefix}>${r.name}</option>`)}
+          </select>
+        </div>
+
+        <button class="action-btn" style="width:100%;margin:8px 0;"
+          ?disabled=${this._regionBusy || !this._regionTarget}
+          @click=${this._readRemoteRegions}>
+          ${this._regionBusy ? 'A consultar…' : 'Ler Regions (RF)'}
+        </button>
+
+        ${this._regionText ? html`
+          <pre style="white-space:pre-wrap;max-height:170px;overflow:auto;padding:9px;border-radius:7px;background:var(--secondary-background-color);font-size:11px;">${this._regionText}</pre>
+        ` : nothing}
+
+        <div class="section-row" style="margin-top:8px;">
+          <div class="form-group-inline">
+            <label class="form-label">Operação</label>
+            <select class="form-select" .value=${this._regionAction}
+              @change=${(e: Event) => { this._regionAction = (e.target as HTMLSelectElement).value as typeof this._regionAction; }}>
+              <option value="allowf">Allow flood</option>
+              <option value="denyf">Deny flood</option>
+              <option value="home">Home region</option>
+              <option value="default">Default scope</option>
+              <option value="put">Create region</option>
+              <option value="remove">Remove region</option>
+            </select>
+          </div>
+          <div class="form-group-inline">
+            <label class="form-label">Region</label>
+            <input class="form-input" type="text" placeholder="ex.: #Portugal"
+              .value=${this._regionName}
+              @input=${(e: Event) => { this._regionName = (e.target as HTMLInputElement).value; }}
+            />
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="action-btn" style="flex:1;"
+            ?disabled=${this._regionBusy || !this._regionTarget || (!this._regionName.trim() && this._regionAction !== 'default')}
+            @click=${this._applyRemoteRegion}>Aplicar Region</button>
+          <button class="action-btn" style="flex:1;"
+            ?disabled=${this._regionBusy || !this._regionTarget}
+            @click=${() => this._sendRemoteRegionCommand('region save')}>Guardar Regions</button>
+        </div>
+        <div style="font-size:10px;color:var(--secondary-text-color);margin-top:7px;">
+          Operações remotas usam login/CLI do meshcore-ha e geram tráfego LoRa.
+        </div>
+      ` : html`
+        <div style="font-size:11px;color:var(--secondary-text-color);">
+          Não há Repeaters remotos geridos. O HiveFW local não expõe edição da árvore
+          de Regions pelo Companion Protocol atual.
+        </div>
+      `}
+    `;
+  }
+
+  private async _saveFloodScopes() {
+    if (!this.hass) return;
+    this._scopeSaving = true;
+    try {
+      const scopes = this._scopeDraft.split(',').map((s) => s.trim()).filter(Boolean);
+      const result = await setFloodScopes(this.hass, scopes, this._scopeGlobal, this.config?.entry_id);
+      this._scopeDraft = result.scopes.join(', ');
+      this._scopeGlobal = result.global;
+      this._showStatusMessage('Scopes guardados', 'success');
+    } catch (error) {
+      this._showStatusMessage(`Erro ao guardar scopes: ${String(error)}`, 'error');
+    } finally {
+      this._scopeSaving = false;
+    }
+  }
+
+  private async _readRemoteRegions() {
+    if (!this.hass || !this._regionTarget) return;
+    this._regionBusy = true;
+    try {
+      this._regionText = await getRemoteRegions(this.hass, this._regionTarget, this.config?.entry_id);
+    } catch (error) {
+      this._showStatusMessage(`Regions: ${String(error)}`, 'error');
+    } finally {
+      this._regionBusy = false;
+    }
+  }
+
+  private async _sendRemoteRegionCommand(command: string) {
+    if (!this.hass || !this._regionTarget) return;
+    this._regionBusy = true;
+    try {
+      const result = await executeRemote(this.hass, this._regionTarget, command, this.config?.entry_id);
+      if (!result.success) {
+        this._showStatusMessage(result.response || 'Region command failed', 'error');
+        return;
+      }
+      this._showStatusMessage(result.response || 'Region command sent', 'success');
+      this._regionBusy = false;
+      await this._readRemoteRegions();
+    } finally {
+      this._regionBusy = false;
+    }
+  }
+
+  private async _applyRemoteRegion() {
+    let name = this._regionName.trim();
+    if (this._regionAction === 'default' && !name) name = '<null>';
+    if (!name) return;
+    await this._sendRemoteRegionCommand(`region ${this._regionAction} ${name}`);
+  }
 
   private _renderManagedDevices() {
     const repeaters = this._managedDevices.repeaters || [];
