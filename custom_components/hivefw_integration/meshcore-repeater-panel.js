@@ -46,6 +46,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapLoading = false;
     this.__nodesMapLoadedEntry = null;
     this.__nodesMapMarkerElements = new Map();
+    this.__nodesLeafletMarkers = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
     this.__nodesMapInitialViewEntry = null;
@@ -1532,7 +1533,12 @@ class MeshCoreRepeaterPanel extends BasePanel {
         const path=event.composedPath?.()||[];
         const card=path.find((el)=>el?.tagName==="MESHCORE-CONTACT-CARD");
         const contact=card?.contact;
-        if(contact) this.__focusNodeOnMap(contact);
+        if(contact){
+          event.preventDefault?.();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+          this.__focusNodeOnMap(contact);
+        }
       },true);
     }
 
@@ -1638,13 +1644,71 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return !!(map.leafletMap && map.Leaflet);
   }
 
+  __nodeMapPopup(contact) {
+    const root=document.createElement("div");
+    root.style.minWidth="180px";
+    root.style.maxWidth="260px";
+    root.style.fontFamily="var(--paper-font-body1_-_font-family, sans-serif)";
+
+    const title=document.createElement("div");
+    title.textContent=String(contact.adv_name||contact.pubkey_prefix||"Nó");
+    title.style.fontWeight="700";
+    title.style.fontSize="14px";
+    title.style.marginBottom="6px";
+    root.appendChild(title);
+
+    const typeLabels={1:"Client",2:"Repeater",3:"Room Server",4:"Sensor"};
+    const rows=[];
+    if(contact.__hivefw_local){
+      rows.push(["Tipo","Repeater local"]);
+    }else{
+      rows.push(["Tipo",typeLabels[Number(contact.type)]||"Nó"]);
+      rows.push(["Estado",contact.added_to_node?"Adicionado":"Descoberto"]);
+    }
+
+    const prefix=String(contact.pubkey_prefix||"").trim();
+    if(prefix && prefix!=="LOCAL")rows.push(["Prefixo",prefix]);
+
+    if(Number.isFinite(Number(contact.rssi)))rows.push(["RSSI",`${Number(contact.rssi)} dBm`]);
+    if(Number.isFinite(Number(contact.snr)))rows.push(["SNR",`${Number(contact.snr)} dB`]);
+
+    const lastmod=Number(contact.lastmod||0);
+    if(lastmod>0){
+      const date=new Date(lastmod*1000);
+      if(!Number.isNaN(date.getTime()))rows.push(["Último contacto",date.toLocaleString()]);
+    }
+
+    for(const [label,value] of rows){
+      const row=document.createElement("div");
+      row.style.display="grid";
+      row.style.gridTemplateColumns="auto 1fr";
+      row.style.gap="8px";
+      row.style.fontSize="12px";
+      row.style.lineHeight="1.45";
+
+      const key=document.createElement("span");
+      key.textContent=label;
+      key.style.color="#666";
+
+      const val=document.createElement("span");
+      val.textContent=String(value);
+      val.style.fontWeight="500";
+
+      row.append(key,val);
+      root.appendChild(row);
+    }
+    return root;
+  }
+
   __legacyLeafletLayers(map,contacts,page) {
     const L=map?.Leaflet;
     if(!L)return [];
+    this.__nodesLeafletMarkers.clear();
     return contacts.map((contact)=>{
       const coords=this.__nodeCoords(contact);
       if(!coords)return null;
       const isLocal=!!contact.__hivefw_local;
+      const id=this.__nodeId(contact);
       const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
       const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0});
       marker.bindTooltip?.(isLocal?`${name} · local`:name,{
@@ -1652,10 +1716,15 @@ class MeshCoreRepeaterPanel extends BasePanel {
         offset:[0,-12],
         permanent:isLocal,
       });
-      marker.on?.("click",()=>{
-        this.__focusNodeOnMap(contact);
-        if(!isLocal)page?._openNodeDetail?.(contact);
+      marker.bindPopup?.(this.__nodeMapPopup(contact),{
+        autoPan:true,
+        closeButton:true,
+        maxWidth:280,
       });
+      marker.on?.("click",()=>{
+        this.__focusNodeOnMap(contact,false);
+      });
+      if(id)this.__nodesLeafletMarkers.set(id,marker);
       return marker;
     }).filter(Boolean);
   }
@@ -1728,7 +1797,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
         const contact=this.__validMapContacts().find((c)=>this.__nodeId(c)===id);
         if(contact){
           this.__focusNodeOnMap(contact);
-          page._openNodeDetail?.(contact);
         }
       });
       pane.appendChild(map);
@@ -1777,23 +1845,28 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
   }
 
-  __focusNodeOnMap(contact) {
+  __focusNodeOnMap(contact,openPopup=true) {
     const coords=this.__nodeCoords(contact);
     const pane=this.__nodesMapPane;
     if(!coords||!pane||!this.__nodesMapElement)return;
 
-    this.__nodesMapFocusId=this.__nodeId(contact);
+    const id=this.__nodeId(contact);
+    this.__nodesMapFocusId=id;
 
     const selected=pane.querySelector(".hive-map-selection");
-    if(selected){
-      selected.hidden=false;
-      selected.textContent=contact.adv_name||contact.pubkey_prefix||"Nó";
-    }
+    if(selected)selected.hidden=true;
 
     const contacts=this.__validMapContacts();
     const map=this.__nodesMapElement;
     if(map.leafletMap){
       map.leafletMap.setView(coords,12,{animate:true});
+      if(openPopup){
+        const marker=this.__nodesLeafletMarkers.get(id);
+        if(marker){
+          marker.setZIndexOffset?.(2000);
+          window.setTimeout(()=>marker.openPopup?.(),220);
+        }
+      }
     }else if(!("layers" in map)){
       map.entities=this.__mapEntities(contacts);
       if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);

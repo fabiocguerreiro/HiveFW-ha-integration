@@ -905,7 +905,7 @@ export class NodesPage extends LitElement {
     return html`
       <div class="nodes-grid">
         ${this._displayedContacts.map((c) => html`
-          <div @click=${() => this._selectNode(c, true)}>
+          <div @click=${() => this._selectNode(c, false)}>
             <meshcore-contact-card
               .contact=${c as Contact}
               .selected=${this._contactId(c) === this._mapFocusId}>

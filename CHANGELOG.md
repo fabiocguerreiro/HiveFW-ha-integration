@@ -4,6 +4,12 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-09-18
+
+- Clicking a node in the list now opens an anchored popup on the selected map pin instead of the external node-detail dialog.
+- Added map popup details for node name, type, contact status, pubkey prefix and available radio/last-seen information.
+- Map markers are tracked by node id so list selection can center and identify the exact pin even in dense clusters.
+
 ## [0.10.3] - 2026-09-18
 
 - Added the local HiveFW repeater as the map anchor using its dynamically reported name and advertised location.
