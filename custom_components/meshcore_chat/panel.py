@@ -38,10 +38,10 @@ _static_path_registered = False
 
 # HTTP URL the bundle is served at; module_url below points at this path.
 PANEL_URL = "/meshcore_chat_panel/meshcore-chat-panel.js"
-# Filesystem path to the bundle. Lives flat at the integration root since
-# the rollup output is a single file (no chunks, no source maps, no other
-# assets); a wrapper directory would add nothing.
+PANEL_WRAPPER_URL = "/meshcore_chat_panel/meshcore-repeater-panel.js"
+# Filesystem paths to the production bundle and the small HiveFW wrapper.
 PANEL_FRONTEND_PATH = str(Path(__file__).parent / "meshcore-chat-panel.js")
+PANEL_WRAPPER_PATH = str(Path(__file__).parent / "meshcore-repeater-panel.js")
 
 PANEL_ICON = "mdi:radio-handheld"
 PANEL_TITLE = "MeshCore Repeater"
@@ -63,7 +63,14 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     global _static_path_registered
     if not _static_path_registered:
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(PANEL_URL, PANEL_FRONTEND_PATH, cache_headers=False)]
+            [
+                StaticPathConfig(PANEL_URL, PANEL_FRONTEND_PATH, cache_headers=False),
+                StaticPathConfig(
+                    PANEL_WRAPPER_URL,
+                    PANEL_WRAPPER_PATH,
+                    cache_headers=False,
+                ),
+            ]
         )
         _static_path_registered = True
         _LOGGER.debug("Registered MeshCore Chat panel static path %s", PANEL_URL)
@@ -75,8 +82,8 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         frontend_url_path=PANEL_URL_PATH,
         config={
             "_panel_custom": {
-                "name": "meshcore-chat-panel",
-                "module_url": PANEL_URL,
+                "name": "meshcore-repeater-panel",
+                "module_url": PANEL_WRAPPER_URL,
             }
         },
         require_admin=False,
