@@ -42,8 +42,8 @@ export class NodesPage extends LitElement {
   @property({ type: Object }) config?: PanelConfig;
   private _mediaQuery?: MediaQueryList;
   @state() private _viewportNarrow = false;
-  @state() private _viewMode: 'list' | 'map' = 'list';
   @state() private _mapReady = customElements.get('ha-map') !== undefined;
+  @state() private _mapFocusId = '';
   private _mapMarkerElements = new Map<string, HTMLElement>();
 
   // ─── Two-level filter state ─────────────────────────────────────────
@@ -81,9 +81,21 @@ export class NodesPage extends LitElement {
     }
 
     .nodes-layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 1fr) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .nodes-list-pane {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      border-right: 1px solid var(--divider-color, #e0e0e0);
     }
 
     .nodes-header {
@@ -96,38 +108,21 @@ export class NodesPage extends LitElement {
       flex-shrink: 0;
     }
 
-    .view-switch {
-      display:flex;
-      justify-content:center;
-      gap:6px;
-      padding:2px 0 4px;
+    .nodes-map-pane {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--card-background-color, #fff);
     }
-    .view-btn {
-      min-width:92px;
-      padding:7px 16px;
-      border:1px solid var(--divider-color,#e0e0e0);
-      border-radius:20px;
-      background:transparent;
-      color:var(--secondary-text-color,#727272);
-      font-size:13px;
-      font-weight:600;
-      cursor:pointer;
+
+    .nodes-map-pane ha-map {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
     }
-    .view-btn.active {
-      color:#0277bd;
-      border-color:rgba(3,169,244,.5);
-      background:rgba(3,169,244,.15);
-    }
-    .map-wrap {
-      width:100%;
-      height:100%;
-      min-height:420px;
-      position:relative;
-      border-radius:10px;
-      overflow:hidden;
-      background:var(--card-background-color,#fff);
-    }
-    .map-wrap ha-map { display:block; width:100%; height:100%; min-height:420px; }
+
     .map-note {
       display:flex;
       align-items:center;
@@ -137,12 +132,14 @@ export class NodesPage extends LitElement {
       color:var(--secondary-text-color);
       text-align:center;
       padding:24px;
+      box-sizing:border-box;
     }
+
     .map-count {
       position:absolute;
       top:10px;
       right:10px;
-      z-index:3;
+      z-index:30;
       padding:6px 9px;
       border-radius:14px;
       background:color-mix(in srgb, var(--card-background-color) 90%, transparent);
@@ -151,6 +148,25 @@ export class NodesPage extends LitElement {
       font-size:11px;
       font-weight:600;
       box-shadow:0 1px 4px rgba(0,0,0,.18);
+      pointer-events:none;
+    }
+
+    .map-selection {
+      position:absolute;
+      left:10px;
+      bottom:10px;
+      z-index:30;
+      max-width:calc(100% - 20px);
+      padding:6px 9px;
+      border-radius:7px;
+      background:color-mix(in srgb, var(--card-background-color) 92%, transparent);
+      color:var(--primary-text-color);
+      border:1px solid var(--divider-color);
+      font-size:11px;
+      box-shadow:0 1px 4px rgba(0,0,0,.18);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
       pointer-events:none;
     }
 
@@ -445,6 +461,15 @@ export class NodesPage extends LitElement {
     :host([narrow]) .l1-btn { font-size: 11px; padding: 5px 10px; }
     :host([narrow]) .l2-btn { font-size: 11px; padding: 5px 10px; }
     :host([narrow]) .nodes-grid { grid-template-columns: 1fr; }
+    :host([narrow]) .nodes-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(360px, 55%) minmax(300px, 45%);
+      overflow-y: auto;
+    }
+    :host([narrow]) .nodes-list-pane {
+      border-right: none;
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
   `;
 
   connectedCallback() {
@@ -499,67 +524,61 @@ export class NodesPage extends LitElement {
   render() {
     return html`
       <div class="nodes-layout">
-        <div class="nodes-header">
-          <div class="view-switch">
-            <button class="view-btn ${this._viewMode === 'list' ? 'active' : ''}" @click=${() => this._setViewMode('list')}>Lista</button>
-            <button class="view-btn ${this._viewMode === 'map' ? 'active' : ''}" @click=${() => this._setViewMode('map')}>Mapa</button>
-          </div>
-
-          ${this._viewMode === 'list' ? html`
-          <!-- Level 1 filters -->
-          <div class="l1-filters">
-            ${this._renderL1Button('all', 'All')}
-            ${this._renderL1Button('added', '★ Added')}
-            ${this._renderL1Button('discovered', 'Discovered')}
-          </div>
-
-          ${this._primaryFilter !== 'all' ? html`
-            <div class="l2-bar">
-              ${this._renderL2Buttons()}
+        <section class="nodes-list-pane">
+          <div class="nodes-header">
+            <div class="l1-filters">
+              ${this._renderL1Button('all', 'All')}
+              ${this._renderL1Button('added', '★ Added')}
+              ${this._renderL1Button('discovered', 'Discovered')}
             </div>
-          ` : nothing}
 
-          <div class="header-actions">
-            <div class="search-bar" style="flex: 1;">
-              <span class="search-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></span>
-              <input
-                type="text"
-                placeholder=${this._getSearchPlaceholder()}
-                .value=${this._searchQuery}
-                @input=${this._onSearchInput}>
-              ${this._searchQuery
-                ? html`<button class="clear-search" @click=${() => { this._searchQuery = ''; this._loadPage(true); }}>✕</button>`
-                : nothing}
+            ${this._primaryFilter !== 'all' ? html`
+              <div class="l2-bar">
+                ${this._renderL2Buttons()}
+              </div>
+            ` : nothing}
+
+            <div class="header-actions">
+              <div class="search-bar" style="flex: 1;">
+                <span class="search-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></span>
+                <input
+                  type="text"
+                  placeholder=${this._getSearchPlaceholder()}
+                  .value=${this._searchQuery}
+                  @input=${this._onSearchInput}>
+                ${this._searchQuery
+                  ? html`<button class="clear-search" @click=${() => { this._searchQuery = ''; this._loadPage(true); }}>✕</button>`
+                  : nothing}
+              </div>
+              <select class="sort-select"
+                .value=${this._sortBy}
+                @change=${(e: Event) => {
+                  this._sortBy = (e.target as HTMLSelectElement).value as 'last_heard' | 'name' | 'prefix';
+                  this._loadPage(true);
+                }}>
+                <option value="last_heard">Last Heard</option>
+                <option value="name">Name</option>
+                <option value="prefix">Pub Prefix</option>
+              </select>
+              <button class="clear-btn"
+                @click=${() => this._clearStaleContacts()}
+                title="Remove discovered contacts older than the configured threshold">
+                Clear Stale
+              </button>
+              <button class="sync-btn" @click=${() => this._syncAll()}>⟳ Sync</button>
             </div>
-            <select class="sort-select"
-              .value=${this._sortBy}
-              @change=${(e: Event) => {
-                this._sortBy = (e.target as HTMLSelectElement).value as 'last_heard' | 'name' | 'prefix';
-                this._loadPage(true);
-              }}>
-              <option value="last_heard">Last Heard</option>
-              <option value="name">Name</option>
-              <option value="prefix">Pub Prefix</option>
-            </select>
-            <button class="clear-btn"
-              @click=${() => this._clearStaleContacts()}
-              title="Remove discovered contacts older than the configured threshold">
-              Clear Stale
-            </button>
-            <button class="sync-btn"
-              @click=${() => this._syncAll()}>
-              ⟳ Sync
-            </button>
           </div>
-          ` : nothing}
-        </div>
 
-        <div class="content-area">
-          ${this._viewMode === 'map' ? this._renderMap() : this._renderContactsContent()}
-        </div>
+          <div class="content-area">
+            ${this._renderContactsContent()}
+          </div>
+        </section>
+
+        <section class="nodes-map-pane">
+          ${this._renderMapPane()}
+        </section>
       </div>
 
-      <!-- Node detail dialog -->
       <meshcore-node-detail-dialog
         .hass=${this.hass}
         .node=${this._selectedNode}
@@ -571,13 +590,7 @@ export class NodesPage extends LitElement {
         @node-add-contact=${() => this._dispatchNodeAction('add-contact')}
         @node-remove-contact=${() => this._dispatchNodeAction('remove-contact')}>
       </meshcore-node-detail-dialog>
-
     `;
-  }
-
-  private _setViewMode(mode: 'list' | 'map') {
-    this._viewMode = mode;
-    if (mode === 'map') void this._ensureMapComponent();
   }
 
   private async _ensureMapComponent() {
@@ -605,43 +618,64 @@ export class NodesPage extends LitElement {
   }
 
   private _allMapSourceContacts(): Contact[] {
-    // The parent panel owns the full contact list. The paginated list is only
-    // a rendering optimisation for Lista and must never limit the map.
     return this.contacts.length ? this.contacts : this._displayedContacts;
   }
 
+  private _contactCoords(contact: Contact): [number, number] | null {
+    const raw = contact as Contact & {
+      latitude?: number; longitude?: number; lat?: number; lon?: number; lng?: number;
+      location?: { latitude?: number; longitude?: number; lat?: number; lon?: number; lng?: number };
+    };
+    const lat = Number(raw.adv_lat ?? raw.latitude ?? raw.lat ?? raw.location?.latitude ?? raw.location?.lat);
+    const lon = Number(raw.adv_lon ?? raw.longitude ?? raw.lon ?? raw.lng ?? raw.location?.longitude ?? raw.location?.lon ?? raw.location?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    if (lat === 0 && lon === 0) return null;
+    return [lat, lon];
+  }
+
   private _mapContacts(): Contact[] {
-    return this._allMapSourceContacts().filter((c) => {
-      const lat = Number(c.adv_lat);
-      const lon = Number(c.adv_lon);
-      return Number.isFinite(lat) && Number.isFinite(lon)
-        && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
-        && !(lat === 0 && lon === 0);
-    });
+    return this._allMapSourceContacts().filter((c) => this._contactCoords(c) !== null);
+  }
+
+  private _contactId(contact: Contact): string {
+    return contact.public_key || contact.pubkey_prefix;
+  }
+
+  private _styleMapMarker(marker: HTMLElement, selected: boolean) {
+    marker.style.width = '30px';
+    marker.style.height = '30px';
+    marker.style.borderRadius = '50%';
+    marker.style.display = 'grid';
+    marker.style.placeItems = 'center';
+    marker.style.fontSize = '10px';
+    marker.style.fontWeight = '700';
+    marker.style.background = selected ? 'var(--warning-color, #ff9800)' : 'var(--primary-color, #03a9f4)';
+    marker.style.color = 'white';
+    marker.style.border = selected ? '3px solid white' : '2px solid white';
+    marker.style.boxShadow = selected
+      ? '0 0 0 3px rgba(255,152,0,.35), 0 2px 7px rgba(0,0,0,.35)'
+      : '0 1px 5px rgba(0,0,0,.35)';
   }
 
   private _mapLocations() {
     const activeIds = new Set<string>();
     const locations = this._mapContacts().map((contact) => {
-      const id = contact.public_key || contact.pubkey_prefix;
+      const id = this._contactId(contact);
+      const coords = this._contactCoords(contact)!;
       activeIds.add(id);
       let marker = this._mapMarkerElements.get(id);
       if (!marker) {
         marker = document.createElement('div');
-        marker.style.cssText = [
-          'width:30px','height:30px','border-radius:50%',
-          'display:grid','place-items:center','font-size:10px','font-weight:700',
-          'background:var(--primary-color,#03a9f4)','color:white',
-          'border:2px solid white','box-shadow:0 1px 5px rgba(0,0,0,.35)',
-        ].join(';');
         this._mapMarkerElements.set(id, marker);
       }
+      this._styleMapMarker(marker, id === this._mapFocusId);
       marker.textContent = (contact.adv_name || contact.pubkey_prefix || '?').slice(0, 2).toUpperCase();
       return {
         id,
-        location: [Number(contact.adv_lat), Number(contact.adv_lon)],
+        location: coords,
         element: marker,
-        elementSize: [34, 34],
+        elementSize: [36, 36] as [number, number],
         title: contact.adv_name || contact.pubkey_prefix,
         locationEditable: false,
         activatable: true,
@@ -654,33 +688,51 @@ export class NodesPage extends LitElement {
   }
 
   private _onMapNodeClicked(e: CustomEvent<{ id: string }>) {
-    const id = e.detail?.id;
-    const contact = this._mapContacts().find((c) =>
-      (c.public_key || c.pubkey_prefix) === id
-    );
-    if (contact) this._openNodeDetail(contact);
+    const contact = this._mapContacts().find((c) => this._contactId(c) === e.detail?.id);
+    if (contact) this._selectNode(contact, false);
   }
 
-  private _renderMap() {
+  private _selectNode(node: Contact, openDetails = true) {
+    this._mapFocusId = this._contactId(node);
+    const coords = this._contactCoords(node);
+    this.requestUpdate();
+    void this.updateComplete.then(() => {
+      if (coords) {
+        const map = this.renderRoot.querySelector('ha-map') as (HTMLElement & {
+          setView?: (center: [number, number], zoom?: number) => void;
+        }) | null;
+        map?.setView?.(coords, 15);
+      }
+    });
+    if (openDetails) {
+      this._selectedNode = node;
+      this._nodeDetailDialogOpen = true;
+    }
+  }
+
+  private _renderMapPane() {
     const contacts = this._mapContacts();
     const total = this._allMapSourceContacts().length;
-    if (!contacts.length) {
-      return html`<div class="map-note">0 nós com localização · ${total} nós no total.<br>Os nós sem GPS anunciado continuam disponíveis em Lista.</div>`;
-    }
+    const selected = this._mapFocusId
+      ? this._allMapSourceContacts().find((c) => this._contactId(c) === this._mapFocusId)
+      : undefined;
+
     if (!this._mapReady) {
       return html`<div class="map-note">A carregar o mapa do Home Assistant…</div>`;
     }
+    if (!contacts.length) {
+      return html`<div class="map-note">0 nós com localização · ${total} nós no total.<br>Os nós sem GPS anunciado permanecem na lista à esquerda.</div>`;
+    }
     return html`
-      <div class="map-wrap">
-        <div class="map-count">${contacts.length} com localização · ${total} nós</div>
-        <ha-map
-          .editableLocations=${this._mapLocations()}
-          .autoFit=${true}
-          .clusterMarkers=${true}
-          .scaleRuler=${true}
-          @editable-location-clicked=${this._onMapNodeClicked}>
-        </ha-map>
-      </div>
+      <div class="map-count">${contacts.length} com localização · ${total} nós</div>
+      ${selected ? html`<div class="map-selection">${selected.adv_name || selected.pubkey_prefix}</div>` : nothing}
+      <ha-map
+        .editableLocations=${this._mapLocations()}
+        .autoFit=${true}
+        .clusterMarkers=${true}
+        .scaleRuler=${true}
+        @editable-location-clicked=${this._onMapNodeClicked}>
+      </ha-map>
     `;
   }
 
@@ -841,8 +893,11 @@ export class NodesPage extends LitElement {
     return html`
       <div class="nodes-grid">
         ${this._displayedContacts.map((c) => html`
-          <div @click=${() => this._openNodeDetail(c)}>
-            <meshcore-contact-card .contact=${c as Contact}></meshcore-contact-card>
+          <div @click=${() => this._selectNode(c, true)}>
+            <meshcore-contact-card
+              .contact=${c as Contact}
+              .selected=${this._contactId(c) === this._mapFocusId}>
+            </meshcore-contact-card>
           </div>
         `)}
       </div>
@@ -890,8 +945,7 @@ export class NodesPage extends LitElement {
   // ─── Node detail actions ──────────────────────────────────────────
 
   private _openNodeDetail(node: Contact) {
-    this._selectedNode = node;
-    this._nodeDetailDialogOpen = true;
+    this._selectNode(node, true);
   }
 
   private _dispatchNodeAction(action: string) {

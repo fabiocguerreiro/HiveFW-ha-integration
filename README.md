@@ -217,9 +217,12 @@ available through the current APIs:
 
 ## Nodes map
 
-The **Nós** page has **Lista | Mapa** views. The map uses Home Assistant's own
-`ha-map` component and plots nodes whose adverts contain valid latitude and
-longitude. Clicking a marker opens the same node details used by the list view.
+The **Nós** page is a permanent split view: the filtered/searchable node list
+stays on the left and Home Assistant's own `ha-map` stays mounted on the
+right. Nodes whose adverts contain valid coordinates are plotted automatically.
+Clicking a node in the list centres that node on the map; clicking a marker
+opens the same node details used by the list. Nodes without advertised GPS
+remain visible in the list and are simply omitted from the map.
 
 ## Network etiquette
 
