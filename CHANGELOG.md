@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.9] - 2026-09-18
+
+- Replaced marker-bound node details with a standalone Leaflet popup so it survives marker/layer refreshes.
+- Enlarged the node popup and kept **Copiar texto** inside it.
+- Removed the redundant selected-node name strip outside the popup.
+- **CENTRAR** now restores the exact center and zoom captured from the map's initial local-repeater view instead of recalculating the repeater location.
+
 ## [0.10.8] - 2026-09-18
 
 - Improved the **Dispositivo** metric layout with mixed card widths.

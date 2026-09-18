@@ -50,6 +50,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
     this.__nodesPopupId = "";
+    this.__nodesPersistentPopup = null;
+    this.__nodesInitialViewport = null;
     this.__nodesMapInitialViewEntry = null;
     this.__mapLoadStarted = false;
 
@@ -111,6 +113,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
       this.__nodesMapSignature = "";
       this.__nodesMapFocusId = "";
       this.__nodesPopupId = "";
+      this.__nodesPersistentPopup = null;
+      this.__nodesInitialViewport = null;
       this.__nodesMapInitialViewEntry = null;
     }
 
@@ -1692,14 +1696,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
           text-decoration:underline;
           text-underline-offset:2px;
         }
-        .hive-map-selection{
-          position:absolute;left:10px;bottom:10px;z-index:30;
-          max-width:calc(100% - 20px);padding:6px 9px;border-radius:7px;
-          background:color-mix(in srgb,var(--card-background-color) 92%,transparent);
-          color:var(--primary-text-color);border:1px solid var(--divider-color);
-          font-size:11px;box-shadow:0 1px 4px rgba(0,0,0,.18);
-          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none
-        }
         @media(max-width:870px){
           .page-container.hive-nodes-split{
             grid-template-columns:1fr!important;
@@ -1730,6 +1726,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
     this.__nodesMapPane=pane;
     pane.querySelector(".hive-map-selection")?.remove();
+    nroot.querySelectorAll(".map-selection").forEach((el)=>{
+      el.remove();
+    });
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -1755,9 +1754,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     container?.classList.remove("hive-nodes-split");
     if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.remove();
     this.__nodesMapPane=null;
+    this.__closePersistentNodePopup();
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
+    this.__nodesInitialViewport=null;
   }
 
   async __loadNodesMapContacts() {
@@ -1851,8 +1852,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
   __nodeMapPopup(contact) {
     const root=document.createElement("div");
-    root.style.minWidth="180px";
-    root.style.maxWidth="260px";
+    root.style.minWidth="260px";
+    root.style.maxWidth="360px";
     root.style.fontFamily="var(--paper-font-body1_-_font-family, sans-serif)";
 
     const title=document.createElement("div");
@@ -1958,71 +1959,86 @@ class MeshCoreRepeaterPanel extends BasePanel {
         offset:[0,-12],
         permanent:isLocal,
       });
-      marker.bindPopup?.(this.__nodeMapPopup(contact),{
-        autoPan:true,
-        autoClose:false,
-        closeOnClick:false,
-        closeButton:true,
-        maxWidth:280,
-      });
-      marker.on?.("popupopen",()=>{
-        this.__nodesPopupId=id;
-      });
-      marker.on?.("popupclose",()=>{
-        if(this.__nodesLeafletMarkers.get(id)===marker && this.__nodesPopupId===id){
-          this.__nodesPopupId="";
-        }
-      });
       marker.on?.("click",()=>{
-        this.__nodesPopupId=id;
-        this.__focusNodeOnMap(contact,false);
+        this.__focusNodeOnMap(contact,true);
       });
       if(id)this.__nodesLeafletMarkers.set(id,marker);
       return marker;
     }).filter(Boolean);
   }
 
-  async __centerNodesMapOnLocalRepeater() {
-    const map=this.__nodesMapElement;
-    if(!map)return false;
-
-    if(await this.__waitForLegacyLeaflet(map)){
-      let coords=null;
-      const localMarker=this.__nodesLeafletMarkers.get("__hivefw_local__");
-      const latLng=localMarker?.getLatLng?.();
-      if(latLng && Number.isFinite(latLng.lat) && Number.isFinite(latLng.lng)){
-        coords=[latLng.lat,latLng.lng];
-      }
-
-      if(!coords){
-        let localRepeater=this.__localRepeaterMapContact();
-        if(!localRepeater && !this.__repeaterLoading){
-          await this.__loadRepeaterStatus();
-          localRepeater=this.__localRepeaterMapContact();
-        }
-        coords=this.__nodeCoords(localRepeater);
-      }
-
-      if(!coords)return false;
-      this.__nodesPopupId="";
-      map.leafletMap.closePopup?.();
-      const bounds=map.Leaflet.circle(coords,{radius:100000}).getBounds();
-      map.leafletMap.fitBounds(bounds,{animate:true});
-      return true;
+  __closePersistentNodePopup() {
+    const popup=this.__nodesPersistentPopup;
+    const map=this.__nodesMapElement?.leafletMap;
+    if(popup && map){
+      try{ map.removeLayer(popup); }catch{}
     }
+    this.__nodesPersistentPopup=null;
+    this.__nodesPopupId="";
+  }
 
-    let localRepeater=this.__localRepeaterMapContact();
-    if(!localRepeater && !this.__repeaterLoading){
-      await this.__loadRepeaterStatus();
-      localRepeater=this.__localRepeaterMapContact();
-    }
+  __openPersistentNodePopup(contact) {
+    const mapEl=this.__nodesMapElement;
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
+    const coords=this.__nodeCoords(contact);
+    if(!map||!L||!coords)return false;
+
+    this.__closePersistentNodePopup();
+
+    const id=this.__nodeId(contact);
+    const popup=L.popup({
+      autoPan:true,
+      autoClose:false,
+      closeOnClick:false,
+      closeButton:true,
+      minWidth:280,
+      maxWidth:390,
+      className:"hivefw-node-popup",
+      offset:[0,-10],
+    })
+      .setLatLng(coords)
+      .setContent(this.__nodeMapPopup(contact));
+
+    popup.on?.("remove",()=>{
+      if(this.__nodesPersistentPopup===popup){
+        this.__nodesPersistentPopup=null;
+        this.__nodesPopupId="";
+      }
+    });
+
+    popup.addTo(map);
+    this.__nodesPersistentPopup=popup;
+    this.__nodesPopupId=id;
+    return true;
+  }
+
+  __resetNodesMapView() {
+    const map=this.__nodesMapElement?.leafletMap;
+    const saved=this.__nodesInitialViewport;
+    if(!map||!saved)return false;
+    this.__closePersistentNodePopup();
+    map.setView([saved.lat,saved.lng],saved.zoom,{animate:true});
+    return true;
+  }
+
+  async __applyInitialNodesMapView(localRepeater) {
+    const mapEl=this.__nodesMapElement;
+    if(!mapEl||!localRepeater)return false;
+    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
+
     const coords=this.__nodeCoords(localRepeater);
-    if(coords && map.setView){
-      this.__nodesPopupId="";
-      map.setView(coords,10);
-      return true;
+    if(!coords)return false;
+
+    const bounds=mapEl.Leaflet.circle(coords,{radius:100000}).getBounds();
+    mapEl.leafletMap.fitBounds(bounds,{animate:false});
+
+    const center=mapEl.leafletMap.getCenter?.();
+    const zoom=mapEl.leafletMap.getZoom?.();
+    if(center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)){
+      this.__nodesInitialViewport={lat:center.lat,lng:center.lng,zoom};
     }
-    return false;
+    return true;
   }
 
   async __ensureSplitMap(page,pane) {
@@ -2112,7 +2128,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       center.addEventListener("click",(event)=>{
         event.preventDefault();
         event.stopPropagation();
-        void this.__centerNodesMapOnLocalRepeater();
+        this.__resetNodesMapView();
       });
       count.append(label,center);
     }
@@ -2125,13 +2141,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
       if("layers" in map && await this.__waitForLegacyLeaflet(map)){
         map.entities=[];
         map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
-        const popupId=this.__nodesPopupId;
-        if(popupId){
-          window.setTimeout(()=>{
-            const marker=this.__nodesLeafletMarkers.get(popupId);
-            marker?.openPopup?.();
-          },60);
-        }
       }else{
         map.entities=this.__mapEntities(mapContacts);
         if("editableLocations" in map){
@@ -2142,7 +2151,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     if(localRepeater && this.__nodesMapInitialViewEntry!==entryId){
-      if(await this.__centerNodesMapOnLocalRepeater()){
+      if(await this.__applyInitialNodesMapView(localRepeater)){
         this.__nodesMapInitialViewEntry=entryId;
       }
     }
@@ -2164,15 +2173,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(map.leafletMap){
       map.leafletMap.setView(coords,12,{animate:true});
       if(openPopup){
-        map.leafletMap.closePopup?.();
-        this.__nodesPopupId=id;
         const marker=this.__nodesLeafletMarkers.get(id);
-        if(marker){
-          marker.setZIndexOffset?.(2000);
-          window.setTimeout(()=>{
-            if(this.__nodesPopupId===id)marker.openPopup?.();
-          },220);
-        }
+        marker?.setZIndexOffset?.(2000);
+        window.setTimeout(()=>{
+          this.__openPersistentNodePopup(contact);
+        },180);
       }
     }else if(!("layers" in map)){
       map.entities=this.__mapEntities(contacts);
