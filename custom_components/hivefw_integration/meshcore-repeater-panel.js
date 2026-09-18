@@ -1419,6 +1419,135 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return contact?.public_key || contact?.pubkey_prefix || "";
   }
 
+  __meshcoreExportPath(contact) {
+    const raw=contact?.advert_path_list ?? contact?.out_path ?? contact?.path ?? "";
+    if(Array.isArray(raw)){
+      return raw.map((part)=>{
+        if(typeof part==="number" && Number.isFinite(part))return part.toString(16).padStart(2,"0");
+        return String(part??"").trim().replace(/^0x/i,"").toLowerCase();
+      }).filter(Boolean).join(",");
+    }
+    return String(raw??"").split(",").map((part)=>
+      part.trim().replace(/^0x/i,"").toLowerCase()
+    ).filter(Boolean).join(",");
+  }
+
+  __meshcoreExportCoord(value) {
+    const number=Number(value);
+    if(!Number.isFinite(number) || number===0)return "0.0";
+    return String(value).trim() || String(number);
+  }
+
+  async __exportMeshCoreContacts(button) {
+    if(!this.hass)return;
+    const original=button?.textContent||"Exportar Contactos";
+    if(button){
+      button.disabled=true;
+      button.textContent="A exportar…";
+    }
+    try{
+      const msg={type:"hivefw_integration/get_contacts"};
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      const source=Array.isArray(result?.contacts)?result.contacts:[];
+      const byKey=new Map();
+
+      for(const contact of source){
+        const publicKey=String(contact?.public_key||"").trim().toLowerCase();
+        if(!/^[0-9a-f]{64}$/.test(publicKey))continue;
+        const row={
+          type:Number(contact?.type??0) || 0,
+          name:String(contact?.adv_name ?? contact?.name ?? "").trim(),
+          public_key:publicKey,
+          flags:Number(contact?.flags??0) || 0,
+          latitude:this.__meshcoreExportCoord(contact?.adv_lat ?? contact?.latitude),
+          longitude:this.__meshcoreExportCoord(contact?.adv_lon ?? contact?.longitude),
+          last_advert:Number(contact?.last_advert ?? contact?.lastmod ?? 0) || 0,
+          last_modified:Number(contact?.last_modified ?? contact?.lastmod ?? contact?.last_advert ?? 0) || 0,
+          advert_path_list:this.__meshcoreExportPath(contact),
+        };
+        const previous=byKey.get(publicKey);
+        if(!previous || row.last_modified>=previous.last_modified)byKey.set(publicKey,row);
+      }
+
+      const contacts=[...byKey.values()].sort((a,b)=>b.last_modified-a.last_modified);
+      const json=JSON.stringify({discovered_contacts:contacts},null,2)+"\n";
+      const blob=new Blob([json],{type:"application/json;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="meshcore_discovered_contacts.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+
+      if(button){
+        button.textContent=`Exportados: ${contacts.length}`;
+        window.setTimeout(()=>{
+          if(button.isConnected)button.textContent=original;
+        },1800);
+      }
+    }catch(error){
+      console.error("HiveFW contact export failed:",error);
+      if(button){
+        button.textContent="Erro ao exportar";
+        window.setTimeout(()=>{
+          if(button.isConnected)button.textContent=original;
+        },1800);
+      }
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+
+  __ensureNodeExportControls(nroot,page) {
+    const actions=nroot?.querySelector(".header-actions");
+    if(!actions)return;
+    const originalSync=actions.querySelector(":scope > .sync-btn:not(.hive-export-btn):not(.hive-sync-proxy)");
+    if(!originalSync)return;
+
+    let style=nroot.querySelector("#hive-node-export-style");
+    if(!style){
+      style=document.createElement("style");
+      style.id="hive-node-export-style";
+      style.textContent=`
+        .hive-sync-stack{
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+          flex:0 0 auto;
+        }
+        .hive-sync-stack .sync-btn{
+          width:100%;
+          white-space:nowrap;
+        }
+      `;
+      nroot.appendChild(style);
+    }
+
+    if(actions.querySelector(".hive-sync-stack"))return;
+    originalSync.style.display="none";
+
+    const stack=document.createElement("div");
+    stack.className="hive-sync-stack";
+
+    const exportButton=document.createElement("button");
+    exportButton.className="sync-btn hive-export-btn";
+    exportButton.textContent="Exportar Contactos";
+    exportButton.title="Exportar contactos no formato discovered_contacts da app MeshCore";
+    exportButton.addEventListener("click",()=>void this.__exportMeshCoreContacts(exportButton));
+
+    const syncButton=document.createElement("button");
+    syncButton.className="sync-btn hive-sync-proxy";
+    syncButton.textContent="⟳ Sync";
+    syncButton.addEventListener("click",()=>originalSync.click());
+
+    stack.append(exportButton,syncButton);
+    actions.appendChild(stack);
+  }
+
   __enhanceNodesPage() {
     const root=this.shadowRoot;
     const page=root?.querySelector("meshcore-nodes-page");
@@ -1432,6 +1561,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     // outside its render range, so a Nodes rerender cannot destroy it.
     nroot.querySelector(".hive-view-switch")?.remove();
     nroot.querySelector(".hive-map-overlay")?.remove();
+    this.__ensureNodeExportControls(nroot,page);
 
     let style=root.querySelector("#hive-node-split-style");
     if(!style){
@@ -1810,9 +1940,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
-    if(count)count.textContent=localRepeater
-      ? `${contacts.length} nós com localização · centro: ${localRepeater.adv_name}`
-      : `${contacts.length} com localização · ${source.length} nós`;
+    if(count)count.textContent=`(${contacts.length}) nós com localização`;
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
     // It does expose Leaflet layers, so use real Leaflet markers there.

@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { Contact, Channel, HomeAssistant, PanelConfig } from '../types';
 import {
-  getContactsPaginated, getNodeCounts, clearDiscoveredContacts,
+  getContacts, getContactsPaginated, getNodeCounts, clearDiscoveredContacts,
 } from '../api';
 import type {
   PrimaryCategory, TypeCounts, NodeCounts,
@@ -348,6 +348,18 @@ export class NodesPage extends LitElement {
       gap: 8px;
     }
 
+    .sync-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .sync-stack .sync-btn {
+      width: 100%;
+      white-space: nowrap;
+    }
+
     .sync-btn {
       padding: 6px 12px;
       border: 1px solid var(--divider-color, #e0e0e0);
@@ -565,7 +577,10 @@ export class NodesPage extends LitElement {
                 title="Remove discovered contacts older than the configured threshold">
                 Clear Stale
               </button>
-              <button class="sync-btn" @click=${() => this._syncAll()}>⟳ Sync</button>
+              <div class="sync-stack">
+                <button class="sync-btn" @click=${() => this._exportContacts()}>Exportar Contactos</button>
+                <button class="sync-btn" @click=${() => this._syncAll()}>⟳ Sync</button>
+              </div>
             </div>
           </div>
 
@@ -735,7 +750,7 @@ export class NodesPage extends LitElement {
       return html`<div class="map-note">0 nós com localização · ${total} nós no total.<br>Os nós sem GPS anunciado permanecem na lista à esquerda.</div>`;
     }
     return html`
-      <div class="map-count">${contacts.length} com localização · ${total} nós</div>
+      <div class="map-count">(${contacts.length}) nós com localização</div>
       ${selected ? html`<div class="map-selection">${selected.adv_name || selected.pubkey_prefix}</div>` : nothing}
       <ha-map
         .entities=${this._mapEntities()}
@@ -875,6 +890,67 @@ export class NodesPage extends LitElement {
       this._loadCounts();
       this.dispatchEvent(new CustomEvent('contacts-changed', { bubbles: true, composed: true }));
     }
+  }
+
+  private _exportPath(contact: Contact): string {
+    const raw = contact.advert_path_list ?? contact.out_path ?? contact.path ?? '';
+    if (Array.isArray(raw)) {
+      return raw.map((part) => {
+        if (typeof part === 'number' && Number.isFinite(part)) return part.toString(16).padStart(2, '0');
+        return String(part ?? '').trim().replace(/^0x/i, '').toLowerCase();
+      }).filter(Boolean).join(',');
+    }
+    return String(raw ?? '').split(',').map((part) =>
+      part.trim().replace(/^0x/i, '').toLowerCase()
+    ).filter(Boolean).join(',');
+  }
+
+  private _exportCoord(value: unknown): string {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number === 0) return '0.0';
+    return String(value ?? '').trim() || String(number);
+  }
+
+  private async _exportContacts() {
+    if (!this.hass) return;
+    const source = await getContacts(this.hass, this.config?.entry_id);
+    const byKey = new Map<string, Record<string, unknown>>();
+
+    for (const contact of source) {
+      const publicKey = String(contact.public_key || '').trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(publicKey)) continue;
+      const row = {
+        type: Number(contact.type ?? 0) || 0,
+        name: String(contact.adv_name ?? contact.name ?? '').trim(),
+        public_key: publicKey,
+        flags: Number(contact.flags ?? 0) || 0,
+        latitude: this._exportCoord(contact.adv_lat ?? contact.latitude),
+        longitude: this._exportCoord(contact.adv_lon ?? contact.longitude),
+        last_advert: Number(contact.last_advert ?? contact.lastmod ?? 0) || 0,
+        last_modified: Number(contact.last_modified ?? contact.lastmod ?? contact.last_advert ?? 0) || 0,
+        advert_path_list: this._exportPath(contact),
+      };
+      const previous = byKey.get(publicKey);
+      if (!previous || Number(row.last_modified) >= Number(previous.last_modified ?? 0)) {
+        byKey.set(publicKey, row);
+      }
+    }
+
+    const contacts = [...byKey.values()].sort(
+      (a, b) => Number(b.last_modified ?? 0) - Number(a.last_modified ?? 0)
+    );
+    const blob = new Blob(
+      [JSON.stringify({ discovered_contacts: contacts }, null, 2) + '\n'],
+      { type: 'application/json;charset=utf-8' }
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'meshcore_discovered_contacts.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   private _syncAll() {

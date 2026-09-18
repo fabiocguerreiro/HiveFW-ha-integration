@@ -4,6 +4,12 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-09-18
+
+- Added **Exportar Contactos** above Sync on the Nodes page.
+- Exports the complete deduplicated contact list as `meshcore_discovered_contacts.json`, matching MeshCore's `discovered_contacts` import structure.
+- Simplified the map counter to `(XX) nós com localização`.
+
 ## [0.10.4] - 2026-09-18
 
 - Clicking a node in the list now opens an anchored popup on the selected map pin instead of the external node-detail dialog.
