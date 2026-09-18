@@ -1935,67 +1935,150 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
   __nodeMapPopup(contact) {
     const root=document.createElement("div");
-    root.style.minWidth="260px";
-    root.style.maxWidth="360px";
+    root.style.minWidth="300px";
+    root.style.maxWidth="410px";
     root.style.fontFamily="var(--paper-font-body1_-_font-family, sans-serif)";
 
     const title=document.createElement("div");
     title.textContent=String(contact.adv_name||contact.pubkey_prefix||"Nó");
     title.style.fontWeight="700";
-    title.style.fontSize="14px";
-    title.style.marginBottom="6px";
+    title.style.fontSize="15px";
+    title.style.marginBottom="8px";
     root.appendChild(title);
 
-    const typeLabels={1:"Client",2:"Repeater",3:"Room Server",4:"Sensor"};
+    const typeLabels={0:"Client/Unknown",1:"Client",2:"Repeater",3:"Room Server",4:"Sensor"};
     const rows=[];
     if(contact.__hivefw_local){
       rows.push(["Tipo","Repeater local"]);
     }else{
-      rows.push(["Tipo",typeLabels[Number(contact.type)]||"Nó"]);
+      rows.push(["Tipo",typeLabels[Number(contact.type)]||`Tipo ${Number(contact.type)||0}`]);
       rows.push(["Estado",contact.added_to_node?"Adicionado":"Descoberto"]);
     }
 
-    const prefix=String(contact.pubkey_prefix||"").trim();
+    const publicKey=String(contact.public_key||"").trim();
+    const prefix=String(contact.pubkey_prefix||publicKey.slice(0,12)||"").trim();
     if(prefix && prefix!=="LOCAL")rows.push(["Prefixo",prefix]);
 
-    if(Number.isFinite(Number(contact.rssi)))rows.push(["RSSI",`${Number(contact.rssi)} dBm`]);
-    if(Number.isFinite(Number(contact.snr)))rows.push(["SNR",`${Number(contact.snr)} dB`]);
+    const rssi=Number(contact.last_rssi ?? contact.rssi);
+    const snr=Number(contact.last_snr ?? contact.snr);
+    if(Number.isFinite(rssi))rows.push(["RSSI",`${rssi} dBm`]);
+    if(Number.isFinite(snr))rows.push(["SNR",`${snr} dB`]);
 
-    const lastmod=Number(contact.lastmod||0);
-    if(lastmod>0){
-      const date=new Date(lastmod*1000);
-      if(!Number.isNaN(date.getTime()))rows.push(["Último contacto",date.toLocaleString()]);
+    const lastAdvert=Number(contact.last_advert||0);
+    if(lastAdvert>0){
+      const date=new Date(lastAdvert*1000);
+      if(!Number.isNaN(date.getTime()))rows.push(["Último advert",date.toLocaleString()]);
     }
 
-    for(const [label,value] of rows){
+    const lastmod=Number(contact.lastmod ?? contact.last_modified ?? 0);
+    if(lastmod>0){
+      const date=new Date(lastmod*1000);
+      if(!Number.isNaN(date.getTime()))rows.push(["Atualizado localmente",date.toLocaleString()]);
+    }
+
+    const lat=Number(contact.adv_lat ?? contact.latitude);
+    const lon=Number(contact.adv_lon ?? contact.longitude);
+    if(Number.isFinite(lat)&&Number.isFinite(lon)&&!(lat===0&&lon===0)){
+      rows.push(["Localização",`${lat.toFixed(6)}, ${lon.toFixed(6)}`]);
+    }
+
+    const flags=Number(contact.flags);
+    if(Number.isFinite(flags)){
+      rows.push(["Flags",`0x${Math.trunc(flags).toString(16).padStart(2,"0").toUpperCase()} (${Math.trunc(flags)})`]);
+    }
+
+    const storedPath=this.__meshcoreExportPath(contact);
+    let pathHops=Number(contact.out_path_len);
+    if(!Number.isInteger(pathHops)||pathHops<0){
+      pathHops=storedPath?storedPath.split(",").filter(Boolean).length:0;
+    }
+
+    let hashMode=Number(contact.out_path_hash_mode ?? contact.path_hash_mode);
+    if(!Number.isInteger(hashMode)||hashMode<0||hashMode>2){
+      const first=storedPath.split(",").find(Boolean)||"";
+      hashMode=first.length===2?0:first.length===4?1:first.length===6?2:-1;
+    }
+
+    if(storedPath){
+      rows.push(["Path guardado",storedPath]);
+      rows.push(["Hops",String(pathHops)]);
+      if(hashMode>=0){
+        rows.push(["Path Hash",`${hashMode+1} byte${hashMode===0?"":"s"}`]);
+      }
+    }
+
+    const makeRow=(label,value,mono=false)=>{
       const row=document.createElement("div");
       row.style.display="grid";
-      row.style.gridTemplateColumns="auto 1fr";
-      row.style.gap="8px";
+      row.style.gridTemplateColumns="112px minmax(0,1fr)";
+      row.style.gap="9px";
       row.style.fontSize="12px";
       row.style.lineHeight="1.45";
+      row.style.padding="2px 0";
 
       const key=document.createElement("span");
       key.textContent=label;
-      key.style.color="#666";
+      key.style.color="var(--secondary-text-color,#666)";
 
       const val=document.createElement("span");
       val.textContent=String(value);
       val.style.fontWeight="500";
+      val.style.minWidth="0";
+      val.style.overflowWrap="anywhere";
+      if(mono)val.style.fontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
 
       row.append(key,val);
-      root.appendChild(row);
+      return row;
+    };
+
+    for(const [label,value] of rows){
+      root.appendChild(makeRow(label,value,label==="Path guardado"||label==="Prefixo"));
+    }
+
+    if(publicKey && publicKey!=="__hivefw_local__"){
+      const details=document.createElement("details");
+      details.style.marginTop="5px";
+      const summary=document.createElement("summary");
+      summary.textContent="Chave pública";
+      summary.style.cssText="cursor:pointer;font-size:11px;color:var(--secondary-text-color,#666);";
+      const key=document.createElement("div");
+      key.textContent=publicKey;
+      key.style.cssText="margin-top:5px;padding:6px 7px;border-radius:6px;background:var(--secondary-background-color,#f3f3f3);font:10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;";
+      details.append(summary,key);
+      root.appendChild(details);
     }
 
     const copyText=[
       String(contact.adv_name||contact.pubkey_prefix||"Nó"),
-      ...rows.map(([label,value])=>`${label}: ${value}`)
+      ...rows.map(([label,value])=>`${label}: ${value}`),
+      ...(publicKey&&publicKey!=="__hivefw_local__"?[`Chave pública: ${publicKey}`]:[])
     ].join("\n");
+
+    const actions=document.createElement("div");
+    actions.style.cssText="display:flex;gap:7px;margin-top:11px;";
+
+    if(!contact.__hivefw_local__ && prefix && Number(contact.type)!==1){
+      const trace=document.createElement("button");
+      trace.type="button";
+      trace.textContent="Trace";
+      trace.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--primary-color,#03a9f4);border-radius:6px;background:var(--primary-color,#03a9f4);color:#fff;font-size:12px;font-weight:650;cursor:pointer;";
+      trace.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+        page?.dispatchEvent(new CustomEvent("node-action",{
+          detail:{action:"trace",node:contact},
+          bubbles:true,
+          composed:true,
+        }));
+      });
+      actions.appendChild(trace);
+    }
 
     const copy=document.createElement("button");
     copy.type="button";
     copy.textContent="Copiar texto";
-    copy.style.cssText="margin-top:9px;width:100%;padding:6px 9px;border:1px solid #bbb;border-radius:6px;background:#fff;color:#333;font-size:12px;font-weight:600;cursor:pointer;";
+    copy.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:6px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#333);font-size:12px;font-weight:600;cursor:pointer;";
     copy.addEventListener("click",async(event)=>{
       event.preventDefault();
       event.stopPropagation();
@@ -2022,7 +2105,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
         if(copy.isConnected)copy.textContent=original;
       },1200);
     });
-    root.appendChild(copy);
+    actions.appendChild(copy);
+    root.appendChild(actions);
+
     return root;
   }
 
@@ -2075,8 +2160,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
       autoClose:false,
       closeOnClick:false,
       closeButton:true,
-      minWidth:280,
-      maxWidth:390,
+      minWidth:320,
+      maxWidth:440,
       className:"hivefw-node-popup",
       offset:[0,-10],
     })

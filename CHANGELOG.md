@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.11] - 2026-09-19
+
+- Restored the useful network/contact detail from the old Nodes dialog inside the persistent map popup.
+- Popup now shows stored route, hop count, inferred 1/2/3-byte Path Hash mode, GPS coordinates, last advert, local last-modified time, flags, full public key, and RSSI/SNR when available.
+- Added **Trace** directly to the map popup for forwarding-class nodes, reusing the existing full Trace workflow (auto discovery, repeater selection, or explicit path).
+- Expanded the map popup width and kept **Copiar texto** with all displayed contact/network fields.
+
 ## [0.10.10] - 2026-09-19
 
 - Renamed **Exportar Contactos** to **Exportar** and added **Importar** beside it in the Nodes filter row.
