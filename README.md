@@ -221,8 +221,11 @@ The **Nós** page is a permanent split view: the filtered/searchable node list
 stays on the left and Home Assistant's own `ha-map` stays mounted on the
 right. Nodes whose adverts contain valid coordinates are plotted automatically.
 Clicking a node in the list centres that node on the map; clicking a marker
-opens the same node details used by the list. Nodes without advertised GPS
-remain visible in the list and are simply omitted from the map.
+opens the same node details used by the list. The backend also backfills
+contact coordinates from existing Home Assistant MeshCore contact/GPS
+entities when the raw coordinator contact record does not retain
+`adv_lat/adv_lon`. Nodes with no coordinates on either data surface remain
+visible in the list and are simply omitted from the map.
 
 ## Network etiquette
 

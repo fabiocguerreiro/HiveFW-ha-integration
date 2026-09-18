@@ -277,6 +277,110 @@ def _ws_send_error_safe(
 _LEGACY_CONTACTS_FALLBACK_LOGGED = False
 
 
+def _build_ha_contact_location_index(
+    hass: HomeAssistant,
+) -> dict[str, tuple[float, float]]:
+    """Build a pubkey/prefix → coordinates index from existing HA states once."""
+
+    def _pair(attrs: dict) -> tuple[float, float] | None:
+        lat_raw = attrs.get("adv_lat", attrs.get("latitude"))
+        lon_raw = attrs.get("adv_lon", attrs.get("longitude"))
+        try:
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+        except (TypeError, ValueError):
+            return None
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        if lat == 0 and lon == 0:
+            return None
+        return lat, lon
+
+    index: dict[str, tuple[float, float]] = {}
+    for state in hass.states.async_all():
+        attrs = dict(state.attributes or {})
+        pair = _pair(attrs)
+        if pair is None:
+            continue
+
+        for raw_key in (
+            attrs.get("public_key"),
+            attrs.get("pubkey_prefix"),
+            attrs.get("contact_public_key"),
+        ):
+            key = str(raw_key or "").strip().lower()
+            if len(key) < 6:
+                continue
+            index[key] = pair
+            # meshcore-ha commonly identifies contacts by the 12-char pubkey
+            # prefix, so index it explicitly even when the entity exposes the
+            # full public key.
+            if len(key) >= 12:
+                index[key[:12]] = pair
+
+    return index
+
+
+def _contact_location(
+    contact: dict,
+    location_index: dict[str, tuple[float, float]],
+) -> tuple[float, float] | None:
+    """Return direct advert coordinates or a matching HA entity location."""
+
+    def _pair(attrs: dict) -> tuple[float, float] | None:
+        lat_raw = attrs.get("adv_lat", attrs.get("latitude"))
+        lon_raw = attrs.get("adv_lon", attrs.get("longitude"))
+        try:
+            lat = float(lat_raw)
+            lon = float(lon_raw)
+        except (TypeError, ValueError):
+            return None
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        if lat == 0 and lon == 0:
+            return None
+        return lat, lon
+
+    direct = _pair(contact)
+    if direct is not None:
+        return direct
+
+    public_key = str(contact.get("public_key") or "").strip().lower()
+    prefix = str(contact.get("pubkey_prefix") or public_key[:12]).strip().lower()
+
+    for key in (public_key, public_key[:12], prefix):
+        if key and key in location_index:
+            return location_index[key]
+
+    return None
+
+
+def _enrich_contact_locations_from_ha(
+    hass: HomeAssistant, contacts: list
+) -> list:
+    """Backfill adv_lat/adv_lon from HA contact/GPS entities when available."""
+    location_index = _build_ha_contact_location_index(hass)
+    enriched: list = []
+
+    for raw in contacts:
+        if not isinstance(raw, dict):
+            enriched.append(raw)
+            continue
+
+        contact = dict(raw)
+        pair = _contact_location(contact, location_index)
+        if pair is not None:
+            lat, lon = pair
+            contact["adv_lat"] = lat
+            contact["adv_lon"] = lon
+            contact["latitude"] = lat
+            contact["longitude"] = lon
+
+        enriched.append(contact)
+
+    return enriched
+
+
 async def _get_contacts_via_service(
     hass: HomeAssistant, entry_id: str | None = None
 ) -> list | None:
@@ -307,7 +411,9 @@ async def _get_contacts_via_service(
         coordinator = _get_coordinator(hass, entry_id)
         if not coordinator:
             return None
-        return list(coordinator.get_all_contacts() or [])
+        return _enrich_contact_locations_from_ha(
+            hass, list(coordinator.get_all_contacts() or [])
+        )
 
     service_data: dict = {}
     if entry_id:
@@ -334,7 +440,9 @@ async def _get_contacts_via_service(
     # error string today, so collapse to the existing "not_found" UX.
     if "error" in result and not result.get("contacts"):
         return None
-    return list(result.get("contacts") or [])
+    return _enrich_contact_locations_from_ha(
+        hass, list(result.get("contacts") or [])
+    )
 
 
 def _get_store(
