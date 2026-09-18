@@ -4,6 +4,12 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.12] - 2026-09-19
+
+- Added an inline contact selector to the map popup header: **👤 Adicionar** for discovered nodes and **👤 Remover** for already-added contacts.
+- The selector sits on the same line as the node/repeater title, below the Leaflet close control.
+- Add/Remove reuses the integration's existing contact actions and refreshes the map popup in place after the mutation, so its status and selector update without closing/reopening the node.
+
 ## [0.10.11] - 2026-09-19
 
 - Restored the useful network/contact detail from the old Nodes dialog inside the persistent map popup.

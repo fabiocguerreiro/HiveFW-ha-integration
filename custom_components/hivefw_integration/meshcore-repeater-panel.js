@@ -1697,6 +1697,29 @@ class MeshCoreRepeaterPanel extends BasePanel {
     filters.append(exportButton,importButton,input);
   }
 
+  async __refreshNodeMapAfterMutation(pubkey,page) {
+    const openId=this.__nodesPopupId;
+    this.__nodesMapContacts=null;
+    this.__nodesMapLoadedEntry=null;
+    this.__nodesMapSignature="";
+
+    await this.__loadNodesMapContacts();
+    if(this.__nodesMapPane?.isConnected){
+      await this.__ensureSplitMap(page,this.__nodesMapPane);
+    }
+
+    if(openId){
+      const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
+      const fresh=source.find((contact)=>{
+        if(pubkey && contact?.public_key===pubkey)return true;
+        return this.__nodeId(contact)===openId;
+      });
+      if(fresh && this.__nodeCoords(fresh)){
+        this.__openPersistentNodePopup(fresh);
+      }
+    }
+  }
+
   __enhanceNodesPage() {
     const root=this.shadowRoot;
     const page=root?.querySelector("meshcore-nodes-page");
@@ -1711,6 +1734,15 @@ class MeshCoreRepeaterPanel extends BasePanel {
     nroot.querySelector(".hive-view-switch")?.remove();
     nroot.querySelector(".hive-map-overlay")?.remove();
     this.__ensureNodeExportControls(nroot,page);
+
+    if(!page.__hiveMapMutationRefreshBound && typeof page.refreshAfterMutation==="function"){
+      page.__hiveMapMutationRefreshBound=true;
+      const originalRefreshAfterMutation=page.refreshAfterMutation.bind(page);
+      page.refreshAfterMutation=async(pubkey)=>{
+        await originalRefreshAfterMutation(pubkey);
+        await this.__refreshNodeMapAfterMutation(pubkey,page);
+      };
+    }
 
     let style=root.querySelector("#hive-node-split-style");
     if(!style){
@@ -1939,12 +1971,42 @@ class MeshCoreRepeaterPanel extends BasePanel {
     root.style.maxWidth="410px";
     root.style.fontFamily="var(--paper-font-body1_-_font-family, sans-serif)";
 
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:10px;padding-top:14px;margin-bottom:8px;";
+
     const title=document.createElement("div");
     title.textContent=String(contact.adv_name||contact.pubkey_prefix||"Nó");
-    title.style.fontWeight="700";
-    title.style.fontSize="15px";
-    title.style.marginBottom="8px";
-    root.appendChild(title);
+    title.style.cssText="flex:1;min-width:0;font-weight:700;font-size:15px;line-height:1.25;overflow-wrap:anywhere;";
+    header.appendChild(title);
+
+    const publicKeyForAction=String(contact.public_key||"").trim();
+    if(!contact.__hivefw_local__ && /^[0-9a-fA-F]{64}$/.test(publicKeyForAction)){
+      const added=!!contact.added_to_node;
+      const contactAction=document.createElement("button");
+      contactAction.type="button";
+      contactAction.textContent=added?"👤 Remover":"👤 Adicionar";
+      contactAction.title=added?"Remover dos contactos adicionados":"Adicionar aos contactos";
+      contactAction.style.cssText=added
+        ?"flex:0 0 auto;padding:6px 9px;border:1px solid var(--error-color,#db4437);border-radius:7px;background:var(--card-background-color,#fff);color:var(--error-color,#db4437);font-size:11px;font-weight:650;white-space:nowrap;cursor:pointer;"
+        :"flex:0 0 auto;padding:6px 9px;border:1px solid var(--primary-color,#03a9f4);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-color,#03a9f4);font-size:11px;font-weight:650;white-space:nowrap;cursor:pointer;";
+      contactAction.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        if(contactAction.disabled)return;
+        contactAction.disabled=true;
+        contactAction.style.opacity=".65";
+        contactAction.textContent=added?"A remover…":"A adicionar…";
+        const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+        page?.dispatchEvent(new CustomEvent("node-action",{
+          detail:{action:added?"remove-contact":"add-contact",node:contact},
+          bubbles:true,
+          composed:true,
+        }));
+      });
+      header.appendChild(contactAction);
+    }
+
+    root.appendChild(header);
 
     const typeLabels={0:"Client/Unknown",1:"Client",2:"Repeater",3:"Room Server",4:"Sensor"};
     const rows=[];
