@@ -989,17 +989,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       ));
     }
 
-        const faults=entities.filter((e)=>e.booleanProblem);
-    if(faults.length){
-      const values=faults.map((e)=>this.hass?.states?.[e.entity_id]?.state);
-      const detected=values.filter((v)=>v==="on").length;
-      const unknown=values.some((v)=>!v||v==="unknown"||v==="unavailable");
-      hero.appendChild(makeTile("Radio health",detected?`${detected} fault${detected===1?"":"s"}`:unknown?"Unknown":"OK","· CAD / Pool / RX",detected,0,3,detected?"bad":unknown?"info":"good","radio-health",()=>summary._fireMoreInfo?.(faults[0].entity_id)));
-    }
-
-    for(const row of nroot.querySelectorAll(".sensor-item")){
+        for(const row of nroot.querySelectorAll(".sensor-item")){
       const label=(row.querySelector(".si-label")?.textContent||"").trim().toLowerCase();
-      if(["noise floor","tx queue length","uptime","temperature","request tokens","discovered contacts"].some((x)=>label.includes(x)) || label.startsWith("radio fault:")) row.style.display="none";
+      row.style.display = label.includes("temperature") ? "none" : "";
     }
   }
 

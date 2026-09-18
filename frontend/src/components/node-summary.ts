@@ -565,7 +565,6 @@ export class NodeSummary extends LitElement {
 
       ${this._renderDiscoveredContactsTile(consumed)}
       ${this._renderStorageTile()}
-      ${this._renderRadioHealthTile(consumed)}
       ${this._renderRepeatFrequenciesTile()}
       ${this._renderLocationTile()}
     `;
@@ -770,31 +769,6 @@ export class NodeSummary extends LitElement {
           <span class="secondary">· ${used} / ${total} KB</span>
         </div>
         <meshcore-stat-bar .value=${pct} .min=${0} .max=${100} .band=${band}></meshcore-stat-bar>
-      </div>
-    `;
-  }
-
-  private _renderRadioHealthTile(consumed: Set<string>) {
-    const faults = this.entities.filter((e) => e.booleanProblem);
-    if (faults.length === 0) return nothing;
-    faults.forEach((e) => consumed.add(e.entity_id));
-    const states = faults.map((e) => this.hass?.states[e.entity_id]?.state);
-    const detected = states.filter((state) => state === 'on').length;
-    const unknown = states.some((state) => state === undefined || state === 'unknown' || state === 'unavailable');
-    const band: Band = detected > 0 ? 'bad' : unknown ? 'info' : 'good';
-    const label = detected > 0 ? `${detected} fault${detected === 1 ? '' : 's'}` : unknown ? 'Unknown' : 'OK';
-    return html`
-      <div class="hero-tile" data-repeater-extra="radio-health"
-           @click=${() => faults[0] && this._fireMoreInfo(faults[0].entity_id)}>
-        <div class="hero-tile-head">
-          <span>Radio health</span>
-          <span class="status-dot ${band}"></span>
-        </div>
-        <div class="hero-tile-value">
-          <span class="primary">${label}</span>
-          <span class="secondary">· CAD / Pool / RX</span>
-        </div>
-        <meshcore-stat-bar .value=${detected} .min=${0} .max=${3} .band=${band}></meshcore-stat-bar>
       </div>
     `;
   }
@@ -1498,11 +1472,11 @@ export class NodeSummary extends LitElement {
     if (info.sortOrder === 2) return true;
     // SNR / RSSI — shown in Last message strength hero tile.
     if (info.metricKey === 'snr' || info.metricKey === 'rssi') return true;
-    if (info.metricKey === 'temperature' || info.metricKey === 'noise_floor'
-        || info.metricKey === 'tx_queue_len') return true;
-    if (info.entity_id.includes('request_rate_limiter')
-        || info.entity_id.includes('discovered_contacts')) return true;
-    if (info.booleanProblem) return true;
+    // Temperature is intentionally promoted to the compact cockpit. Other
+    // live/status entities remain in the detailed tables below, even when a
+    // summary tile also exists, because the user wants the raw diagnostic
+    // rows and individual OK / Problem states preserved.
+    if (info.metricKey === 'temperature') return true;
     // Uptime — promoted to the device header status badge ("Online · 12d 19h").
     if (info.metricKey === 'uptime_hours') return true;
     // Airtime variants — Radio Activity hero tile shows the windowed
