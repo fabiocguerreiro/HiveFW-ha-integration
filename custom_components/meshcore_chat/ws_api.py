@@ -416,6 +416,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     # Device config and command-execution commands
     websocket_api.async_register_command(hass, ws_get_managed_devices)
     websocket_api.async_register_command(hass, ws_get_device_config)
+    websocket_api.async_register_command(hass, ws_get_local_repeater_status)
     websocket_api.async_register_command(hass, ws_set_device_config)
     websocket_api.async_register_command(hass, ws_execute_local)
     websocket_api.async_register_command(hass, ws_execute_remote)
@@ -968,7 +969,16 @@ def ws_get_device_config(hass, connection, msg):
     config["longitude"] = self_info.get("adv_lon")
     config["altitude"] = None  # Not available in SDK - set_coords() hardcodes altitude to 0
 
-    # Advanced settings
+    # Repeater / advanced settings already exposed by the standard Companion
+    # protocol. adv_type 2 is Repeater; HiveFW changes SELF_INFO accordingly
+    # whenever its integrated Repeater mode is enabled.
+    config["repeat"] = self_info.get("adv_type") == 2
+    config["multi_acks"] = self_info.get("multi_acks")
+    config["advert_loc_policy"] = self_info.get("adv_loc_policy")
+    config["telemetry_mode_base"] = self_info.get("telemetry_mode_base")
+    config["telemetry_mode_loc"] = self_info.get("telemetry_mode_loc")
+    config["telemetry_mode_env"] = self_info.get("telemetry_mode_env")
+    config["manual_add_contacts"] = self_info.get("manual_add_contacts")
     config["path_hash_mode"] = self_info.get("path_hash_mode")
 
     # Location source
@@ -990,6 +1000,120 @@ def ws_get_device_config(hass, connection, msg):
         config["connection_address"] = ""
 
     connection.send_result(msg["id"], config)
+
+
+# ─── meshcore/get_local_repeater_status ─────────────────────────────────
+# Local Companion/HiveFW repeater dashboard. Every command below stays on the
+# HA <-> Companion transport (BLE/TCP/USB); it does not generate LoRa traffic.
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "meshcore_chat/get_local_repeater_status",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_local_repeater_status(hass, connection, msg):
+    """Return local repeater capability, RF health and packet statistics."""
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator or not coordinator.api.mesh_core:
+        connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
+        return
+
+    commands = coordinator.api.mesh_core.commands
+
+    async def _payload(call, *args, **kwargs):
+        try:
+            result = await call(*args, **kwargs)
+        except Exception as ex:
+            _LOGGER.debug("Local repeater status query failed: %s", ex)
+            return None
+        if (
+            result is None
+            or getattr(result, "type", None) == EventType.ERROR
+            or not isinstance(getattr(result, "payload", None), dict)
+        ):
+            return None
+        return result.payload
+
+    try:
+        # Refresh SELF_INFO so radio/name/repeater state shown here matches the
+        # radio rather than a potentially stale coordinator cache.
+        self_event = await commands.send_appstart()
+        if (
+            self_event is not None
+            and getattr(self_event, "type", None) != EventType.ERROR
+            and isinstance(getattr(self_event, "payload", None), dict)
+        ):
+            self_info = self_event.payload
+            try:
+                coordinator.api._cache_self_info_event(self_event)
+            except Exception:
+                pass
+        else:
+            self_info = getattr(coordinator.api, "self_info", {}) or {}
+
+        device = await _payload(commands.send_device_query) or {}
+        battery = await _payload(commands.get_bat) or {}
+        tuning = await _payload(commands.get_tuning) or {}
+        core = await _payload(commands.get_stats_core) or {}
+        radio = await _payload(commands.get_stats_radio) or {}
+        packets = await _payload(commands.get_stats_packets) or {}
+
+        repeater_capable = "repeat" in device or self_info.get("adv_type") == 2
+        repeat_enabled = bool(
+            device.get("repeat", self_info.get("adv_type") == 2)
+        )
+
+        # Tuning values are thousandths on the wire.
+        tuning_view = {}
+        if "rx_delay" in tuning:
+            tuning_view["rx_delay"] = tuning["rx_delay"] / 1000.0
+        if "airtime_factor" in tuning:
+            tuning_view["airtime_factor"] = tuning["airtime_factor"] / 1000.0
+
+        connection.send_result(
+            msg["id"],
+            {
+                "supported": repeater_capable,
+                "repeat": repeat_enabled,
+                "name": coordinator.name or self_info.get("name") or "",
+                "firmware": device.get("ver") or coordinator.device_info.get("sw_version", ""),
+                "model": device.get("model") or coordinator.device_info.get("model", ""),
+                "radio": {
+                    "frequency": self_info.get("radio_freq"),
+                    "bandwidth": self_info.get("radio_bw"),
+                    "spreading_factor": self_info.get("radio_sf"),
+                    "coding_rate": self_info.get("radio_cr"),
+                    "tx_power": self_info.get("tx_power"),
+                    "max_tx_power": self_info.get("max_tx_power"),
+                    "path_hash_mode": device.get(
+                        "path_hash_mode",
+                        self_info.get("path_hash_mode"),
+                    ),
+                    "multi_acks": self_info.get("multi_acks"),
+                },
+                "location": {
+                    "latitude": self_info.get("adv_lat"),
+                    "longitude": self_info.get("adv_lon"),
+                },
+                "battery": battery,
+                "tuning": tuning_view,
+                "stats": {
+                    "core": core,
+                    "radio": radio,
+                    "packets": packets,
+                },
+            },
+        )
+    except Exception as ex:
+        _ws_send_error_safe(
+            connection,
+            msg["id"],
+            ex,
+            handler="ws_get_local_repeater_status",
+        )
 
 
 # ─── meshcore/set_device_config ─────────────────────────────────────────
@@ -1312,29 +1436,41 @@ async def ws_set_device_config(hass, connection, msg):
                 return
             changed.append("coords")
 
-        # Handle radio settings - all four must be provided together
+        # Handle radio settings and HiveFW's integrated Repeater toggle.
+        # The standard Companion CMD_SET_RADIO_PARAMS optionally carries the
+        # repeat byte, so this does not require a firmware-specific command.
         radio_keys = {"frequency", "bandwidth", "spreading_factor", "coding_rate"}
-        if radio_keys & set(settings.keys()):
-            # Read current values for any params not being changed
+        radio_or_repeat = radio_keys | {"repeat"}
+        if radio_or_repeat & set(settings.keys()):
             self_info = getattr(coordinator.api, 'self_info', {}) or {}
             freq = settings.get("frequency", self_info.get("radio_freq"))
             bw = settings.get("bandwidth", self_info.get("radio_bw"))
             sf = settings.get("spreading_factor", self_info.get("radio_sf"))
             cr = settings.get("coding_rate", self_info.get("radio_cr"))
+            repeat = settings.get("repeat")
 
             if all(v is not None for v in [freq, bw, sf, cr]):
                 result = await coordinator.api.mesh_core.commands.set_radio(
-                    freq, bw, sf, cr
+                    freq, bw, sf, cr, repeat=repeat
                 )
                 reason = _device_config_failure_reason(result)
                 if reason is not None:
                     _send_device_config_failure(
-                        connection, msg["id"], "radio", reason, changed
+                        connection, msg["id"], "radio/repeater", reason, changed
                     )
                     return
-                changed.extend([k for k in radio_keys if k in settings])
+                changed.extend(
+                    [k for k in radio_or_repeat if k in settings]
+                )
             else:
-                _LOGGER.warning("Cannot set radio: missing current values for unset params")
+                _send_device_config_failure(
+                    connection,
+                    msg["id"],
+                    "radio/repeater",
+                    "missing current radio parameters",
+                    changed,
+                )
+                return
 
         # Handle path_hash_mode
         if "path_hash_mode" in settings:
@@ -1348,6 +1484,52 @@ async def ws_set_device_config(hass, connection, msg):
                 )
                 return
             changed.append("path_hash_mode")
+
+        # Multi ACKs is part of the standard Companion "other params" frame.
+        if "multi_acks" in settings:
+            result = await coordinator.api.mesh_core.commands.set_multi_acks(
+                int(settings["multi_acks"])
+            )
+            reason = _device_config_failure_reason(result)
+            if reason is not None:
+                _send_device_config_failure(
+                    connection, msg["id"], "multi_acks", reason, changed
+                )
+                return
+            changed.append("multi_acks")
+
+        # Companion tuning values are floats in the UI but thousandths on wire.
+        if "rx_delay" in settings or "airtime_factor" in settings:
+            current = await coordinator.api.mesh_core.commands.get_tuning()
+            reason = _device_config_failure_reason(current)
+            if reason is not None:
+                _send_device_config_failure(
+                    connection, msg["id"], "tuning", reason, changed
+                )
+                return
+            payload = getattr(current, "payload", {}) or {}
+            rx_delay = settings.get(
+                "rx_delay",
+                float(payload.get("rx_delay", 0)) / 1000.0,
+            )
+            airtime_factor = settings.get(
+                "airtime_factor",
+                float(payload.get("airtime_factor", 0)) / 1000.0,
+            )
+            result = await coordinator.api.mesh_core.commands.set_tuning(
+                int(round(float(rx_delay) * 1000)),
+                int(round(float(airtime_factor) * 1000)),
+            )
+            reason = _device_config_failure_reason(result)
+            if reason is not None:
+                _send_device_config_failure(
+                    connection, msg["id"], "tuning", reason, changed
+                )
+                return
+            if "rx_delay" in settings:
+                changed.append("rx_delay")
+            if "airtime_factor" in settings:
+                changed.append("airtime_factor")
 
         # Refresh self_info cache so subsequent reads return updated values
         if changed:
