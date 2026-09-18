@@ -99,30 +99,36 @@ export class NodeSummary extends LitElement {
     /* ─── Hero row ─── */
     .hero-row {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       grid-auto-rows: 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 8px;
+      margin-bottom: 14px;
       align-items: stretch;
     }
     .hero-tile {
       background: var(--secondary-background-color, #f0f0f0);
-      border-radius: 10px;
-      padding: 12px 14px;
+      border-radius: 9px;
+      padding: 9px 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 5px;
       cursor: pointer;
       border: 1px solid transparent;
       transition: border-color 0.15s;
-      min-height: 108px;
+      min-height: 82px;
       height: 100%;
       box-sizing: border-box;
     }
-    @container (max-width: 900px) {
+    @container (max-width: 1050px) {
+      .hero-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @container (max-width: 780px) {
+      .hero-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @container (max-width: 560px) {
       .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    @container (max-width: 480px) {
+    @container (max-width: 340px) {
       .hero-row { grid-template-columns: 1fr; }
     }
     .hero-tile:hover { border-color: var(--primary-color, #03a9f4); }
@@ -131,7 +137,7 @@ export class NodeSummary extends LitElement {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.4px;
       color: var(--secondary-text-color);
@@ -143,13 +149,13 @@ export class NodeSummary extends LitElement {
       flex-wrap: wrap;
     }
     .hero-tile-value .primary {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: 600;
       color: var(--primary-text-color);
       line-height: 1;
     }
     .hero-tile-value .secondary {
-      font-size: 13px;
+      font-size: 11px;
       color: var(--secondary-text-color);
     }
     .hero-tile-value .compact {
@@ -543,21 +549,113 @@ export class NodeSummary extends LitElement {
       ${this._renderTemperatureTile(consumed)}
       ${this._renderSignalTile()}
       ${this._renderRepeaterStateTile()}
+      ${this._renderHardwareInfoTile()}
 
       ${this._renderUptimeTile(consumed)}
       ${this._renderDeviceClockTile()}
       ${this._renderNoiseFloorTile(consumed)}
       ${this._renderQueueTile(consumed)}
+      ${this._renderProtocolInfoTile()}
 
       ${this._renderCompanionRadioActivityTile()}
       ${this._renderMessagesSentTile(consumed)}
       ${this._renderMessagesReceivedTile(consumed)}
       ${this._renderRequestTokensTile(consumed)}
+      ${this._renderCapacityInfoTile()}
 
       ${this._renderDiscoveredContactsTile(consumed)}
       ${this._renderStorageTile()}
       ${this._renderRadioHealthTile(consumed)}
+      ${this._renderRepeatFrequenciesTile()}
       ${this._renderLocationTile()}
+    `;
+  }
+
+  private _renderHardwareInfoTile() {
+    const info = this.repeaterStatus?.device_info;
+    const model = info?.model || this.repeaterStatus?.model;
+    if (!model) return nothing;
+    const build = info?.firmware_build;
+    return html`
+      <div class="hero-tile" data-repeater-extra="hardware">
+        <div class="hero-tile-head">
+          <span>Hardware</span>
+          <span class="status-dot info"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary compact">${model}</span>
+          ${build ? html`<span class="secondary">· ${build}</span>` : nothing}
+        </div>
+        <meshcore-stat-bar .value=${100} .min=${0} .max=${100} .band=${'info'}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderProtocolInfoTile() {
+    const info = this.repeaterStatus?.device_info;
+    if (!info) return nothing;
+    const protocol = info.protocol_version != null ? `v${info.protocol_version}` : '—';
+    const labels = ['1 byte', '2 bytes', '3 bytes'];
+    const path = info.path_hash_mode == null
+      ? '—'
+      : labels[Number(info.path_hash_mode)] ?? String(info.path_hash_mode);
+    return html`
+      <div class="hero-tile" data-repeater-extra="protocol">
+        <div class="hero-tile-head">
+          <span>Protocol / Path</span>
+          <span class="status-dot info"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${protocol}</span>
+          <span class="secondary">· ${path}</span>
+        </div>
+        <meshcore-stat-bar .value=${100} .min=${0} .max=${100} .band=${'info'}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderCapacityInfoTile() {
+    const info = this.repeaterStatus?.device_info;
+    if (info?.max_contacts == null && info?.max_channels == null) return nothing;
+    return html`
+      <div class="hero-tile" data-repeater-extra="capacity">
+        <div class="hero-tile-head">
+          <span>Capacity</span>
+          <span class="status-dot info"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary">${info.max_contacts ?? '—'} / ${info.max_channels ?? '—'}</span>
+          <span class="secondary">contacts / channels</span>
+        </div>
+        <meshcore-stat-bar .value=${100} .min=${0} .max=${100} .band=${'info'}></meshcore-stat-bar>
+      </div>
+    `;
+  }
+
+  private _renderRepeatFrequenciesTile() {
+    const ranges = this.repeaterStatus?.allowed_repeat_frequencies || [];
+    if (!ranges.length) return nothing;
+    const values = ranges.map((r) => {
+      const lo = Number(r.min) / 1000;
+      const hi = Number(r.max) / 1000;
+      return lo === hi
+        ? `${lo.toFixed(3)}`
+        : `${lo.toFixed(3)}–${hi.toFixed(3)}`;
+    });
+    return html`
+      <div class="hero-tile" data-repeater-extra="repeat-frequencies">
+        <div class="hero-tile-head">
+          <span>Repeater frequencies</span>
+          <span class="status-dot info"></span>
+        </div>
+        <div class="hero-tile-value">
+          <span class="primary compact">${values[0]} MHz</span>
+          ${values.length > 1
+            ? html`<span class="secondary">· ${values.slice(1).join(' · ')} MHz</span>`
+            : nothing}
+        </div>
+        <meshcore-stat-bar .value=${100} .min=${0} .max=${100} .band=${'info'}></meshcore-stat-bar>
+      </div>
     `;
   }
 

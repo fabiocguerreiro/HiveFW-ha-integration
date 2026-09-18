@@ -1,221 +1,281 @@
-<p align="center"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/banner.png" alt="HiveFW HA Integration" width="800"></p>
+<p align="center">
+  <img src="custom_components/meshcore_chat/brand/hivefw-wordmark.png" alt="HiveFW" width="420">
+</p>
 
 # HiveFW HA Integration
 
-Home Assistant interface for **HiveFW Companion-Repeater**, combining local device management, Repeater controls and diagnostics with MeshCore chat, channels, nodes and zero-hop neighbor visibility.
+**HiveFW HA Integration** is a Home Assistant interface designed specifically for
+[HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
 
-Works on top of the [core meshcore integration](https://github.com/meshcore-dev/meshcore-ha) and is tailored to HiveFW's **Client-Repeater** architecture. The internal Home Assistant domain remains `meshcore_chat` for upgrade compatibility.
+HiveFW is unusual by MeshCore standards: it is a **Companion first**, with an integrated
+**Repeater mode** that can be enabled while the device continues to provide the Companion
+connection used by Home Assistant. Because of that Client-Repeater architecture, the
+normal MeshCore Repeater management interfaces do not expose everything that is useful
+for a HiveFW node.
 
-> **Status:** v0.5 in active development.
+This integration turns Home Assistant into the management and monitoring point for that
+device while keeping the MeshCore functions that still matter: **chat, channels, nodes,
+contacts, traces and direct neighbours**.
 
-## Features (v0.5)
+> The internal Home Assistant domain remains `meshcore_chat` for upgrade compatibility
+> with existing installations. The visible product name is **HiveFW HA Integration** and
+> the sidebar panel is **HiveFW Repeater**.
 
-- Sidebar chat panel with channels, DMs, and contact list
-- Persistent message history (survives Home Assistant restarts)
-- Trace / path-discovery dialog with route visualization
-- Per-conversation search
-- Unread counts, delivery status
-- Live device telemetry, neighbor tables, and remote command issue from the same UI
-- Network-wide node discovery view (typically hundreds of nodes)
+## Main interface
 
-## Screenshots
+The sidebar panel is organised around four practical areas:
 
-### The four main tabs
+### Dispositivo
 
-<table>
-<tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg" alt="Chat tab"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/devices-tab.jpg" alt="Devices tab"></a></td>
-</tr>
-<tr>
-<td><b>Chat</b> — channels and DMs in the left rail with All / Unread / DMs / Channels filters; messages rendered with sender, age, and delivery status (Repeated / Sent / Waiting).</td>
-<td><b>Devices</b> — per-device sensor tiles (SNR, RSSI, airtime, battery, message counts) with a neighbor table and quick-action buttons (Flood Advert, Sync Clock, Req Telemetry, Req Status).</td>
-</tr>
-<tr>
-<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/nodes-tab.jpg" alt="Nodes tab"></a></td>
-<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/settings-tab.jpg" alt="Settings tab"></a></td>
-</tr>
-<tr>
-<td><b>Nodes</b> — full network discovery view (All / Added / Discovered, then Clients / Repeaters), with search, last-heard sort, and stale-record cleanup.</td>
-<td><b>Settings</b> — companion device profile, radio configuration (TX power, frequency, bandwidth, spreading factor, coding rate, path hash mode), rename, and location. When <b>Self Diagnostics</b> is enabled in the upstream meshcore integration, the companion card also shows the same rich tiles managed devices have (battery, signal, radio activity, message counts) plus a diagnostics sensor table.</td>
-</tr>
-</table>
+The default view and HiveFW control centre.
 
-### Chat features
+It includes a compact cockpit with live information from both `meshcore-ha` entities and
+the Companion protocol, including, when available:
 
-<table>
-<tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/chat-popup.jpg" alt="Message popup with route metadata"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/manage-contacts-channels.jpg" alt="Manage contacts and channels"></a></td>
-</tr>
-<tr>
-<td><b>Message popup</b> — click or tap any message for Copy / Reply, plus the route metadata: hop sequence, SNR, RSSI, and exact receive timestamp.</td>
-<td><b>Manage contacts &amp; channels</b> — promote any discovered node to an Added contact, or remove it; channel list lives on the second tab.</td>
-</tr>
-</table>
+- battery percentage and voltage
+- temperature
+- RSSI and SNR
+- integrated Repeater state
+- uptime
+- HiveFW internal clock and clock drift
+- noise floor
+- TX queue
+- TX/RX airtime
+- sent/received message counters
+- request-rate tokens
+- discovered contacts
+- storage usage
+- radio fault health
+- location
+- hardware model and firmware build
+- Companion protocol version
+- Path Hash mode
+- contact/channel capacity
+- allowed Repeater frequencies
 
-### Nodes features
+The same page contains the configuration that is meaningful for HiveFW:
 
-<table>
-<tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/node-popup.jpg" alt="Node detail popup"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/trace-dialog.jpg" alt="Path trace dialog"></a></td>
-</tr>
-<tr>
-<td><b>Node details</b> — click any node tile in the Nodes tab to open quick actions (Trace, Remove Contact), public-key prefix, type, last advert, and location.</td>
-<td><b>Path trace</b> — launched from the Trace quick action in the Node details dialog; pick repeaters in order to test a multi-hop path, or run a direct-neighbor probe; resolved path is shown alongside.</td>
-</tr>
-</table>
+- Repeater mode on/off
+- frequency, bandwidth, spreading factor and coding rate
+- TX power
+- Path Hash mode
+- Multi ACKs
+- RX delay and airtime factor
+- advertised location
+- managed MeshCore devices exposed by the upstream integration
 
-### Device management
+Operational actions are intentionally limited to real actions rather than information
+queries:
 
-<table>
-<tr>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-settings.jpg" alt="Device settings menu"></a></td>
-<td width="50%"><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-command.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/device-command.jpg" alt="Issue command picker"></a></td>
-</tr>
-<tr>
-<td><b>Device settings menu</b> — per-device gear menu: View Hidden Sensors, Issue Command, Reboot, Start OTA Update.</td>
-<td><b>Issue Command</b> — full command catalog grouped by category (Device Management, Device Info, etc.) — drives the underlying meshcore service from the panel.</td>
-</tr>
-<tr>
-<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/companion-settings.jpg" alt="Companion settings menu"></a></td>
-<td><a href="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg"><img src="https://raw.githubusercontent.com/fabiocguerreiro/meshcore-ha-chat/main/assets/screenshots/tile-more-info.jpg" alt="Sensor tile more-info"></a></td>
-</tr>
-<tr>
-<td><b>Companion settings menu</b> — same gear menu pattern for the local companion device, with Key Management as an additional option.</td>
-<td><b>Sensor history</b> — clicking any sensor tile opens Home Assistant's standard more-info dialog with full historical chart.</td>
-</tr>
-</table>
+- **Local Advert**
+- **Flood Advert**
+- **Sync Clock**
+- **Trace**
+- **Reboot**
 
-## Installation
+Device information, telemetry, battery/storage and supported Repeater frequencies are
+loaded automatically and do not need separate query buttons.
 
-### HACS (custom repository)
+### Chat & Canais
 
-[![Open meshcore-ha-chat in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fabiocguerreiro&repository=meshcore-ha-chat&category=integration)
+Keeps the original practical reason for using a Companion with Home Assistant:
 
-Click the badge above to open this repository in your HACS dashboard, or follow the manual steps:
+- channel conversations
+- direct messages
+- persistent message history
+- unread state
+- delivery information
+- message search
+- route metadata
+- channel/contact management
 
-1. In HACS → Integrations → ⋮ → Custom repositories
-2. Add `https://github.com/fabiocguerreiro/meshcore-ha-chat` as an "Integration"
-3. Install **HiveFW HA Integration**
-4. Restart Home Assistant
-5. Settings → Devices & Services → Add Integration → **HiveFW HA Integration**
+### Nós
 
-### Manual
+Network contact/discovery view for the nodes known by the Companion.
 
-Copy `custom_components/meshcore_chat/` into your HA `config/custom_components/` directory. Restart HA. Add the integration from the UI.
+It remains useful for:
 
-## Usage
+- Added vs discovered contacts
+- Clients vs Repeaters
+- last-heard information
+- search and filtering
+- node details
+- path traces
+- contact management
 
-For a walkthrough of common tasks (adding contacts, managing channels, issuing commands, tracing paths, changing radio settings) plus operational warnings (radio-reboot requirements, the entity_id rename gotcha), see [INSTRUCTIONS.md](./INSTRUCTIONS.md).
+### Vizinhos
 
-> **Permissions.** Reading messages and browsing the panel works for any authenticated HA user. **Destructive actions** — radio reconfiguration, identity regeneration, channel-key changes, issuing commands, adding / removing / blocking contacts, and running path traces — require **administrator** rights on your HA instance. See [INSTRUCTIONS.md → Permissions](./INSTRUCTIONS.md#permissions) for the full list.
+HiveFW-oriented direct-neighbour view.
+
+The integration queries the existing Companion **Advert Path** cache and treats a
+Repeater as a direct neighbour when its last advert has `path_len == 0`.
+
+This provides a useful zero-hop view **without requiring a custom HiveFW protocol
+extension and without transmitting a LoRa packet just to refresh the page**.
+
+The current firmware/API does not expose per-neighbour SNR through this query, so the UI
+does not invent one.
+
+## Why this integration exists
+
+The upstream [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) integration is
+still the component that connects Home Assistant to MeshCore and provides the core
+entities/services.
+
+HiveFW HA Integration builds on top of it and adds a UI/workflow specifically for a
+HiveFW Companion-Repeater:
+
+```text
+Home Assistant
+      │
+      ├── meshcore-ha
+      │      │
+      │      └── Wi-Fi Companion connection
+      │
+      └── HiveFW HA Integration
+             │
+             ├── HiveFW device cockpit
+             ├── Repeater configuration
+             ├── Chat & channels
+             ├── Nodes / contacts
+             └── Zero-hop neighbours
+
+                    │
+                    ▼
+            HiveFW Companion-Repeater
+```
+
+The intended primary connection for this project is **Wi-Fi**. BLE-specific information
+such as the BLE PIN is deliberately not presented in the HiveFW management UI.
 
 ## Requirements
 
 - Home Assistant 2024.12 or newer
-- The core [meshcore integration](https://github.com/meshcore-dev/meshcore-ha) **v2.7.0 or newer** installed and configured. The per-channel region scope selector and the "All regions" option rely on the message `scope` argument and the inbound `region_scope` / `flood_scope` fields that landed in the core integration's v2.7.0 (released 2026-05-31). The chat companion also calls the structured query services (`meshcore.get_contacts`, `meshcore.trace`) introduced in 2.6.0; on a core older than the floor the trace dialog returns a *"service not registered"* error and the contact list falls back to a legacy code path with a one-time warning in the logs.
+- [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) installed and configured
+- a MeshCore Companion reachable by Home Assistant
+- for the full intended feature set: **HiveFW Companion-Repeater**
 
-## Security
+The integration can still display ordinary MeshCore data exposed by `meshcore-ha`, but
+the device-management workflow and terminology are designed around HiveFW.
 
-Security issues can be reported privately — see [SECURITY.md](SECURITY.md). For how the integration handles untrusted, mesh-sourced data and where its trust boundaries are, see [docs/security-posture.md](docs/security-posture.md).
+## Installation with HACS
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/fabiocguerreiro/meshcore-ha-chat/badge)](https://scorecard.dev/viewer/?uri=github.com/fabiocguerreiro/meshcore-ha-chat)
-[![CodeQL](https://github.com/fabiocguerreiro/meshcore-ha-chat/actions/workflows/codeql.yml/badge.svg)](https://github.com/fabiocguerreiro/meshcore-ha-chat/actions/workflows/codeql.yml)
+Add this repository as a custom HACS integration:
 
-## Relationship to other projects
+```text
+https://github.com/fabiocguerreiro/HiveFW-ha-integration
+```
 
-- [meshcore-dev/meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) — the core integration that drives the MeshCore radio. **Required.**  
-  [![Open meshcore-ha in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=meshcore-dev&repository=meshcore-ha&category=integration)
+Then:
 
-## Use cases
+1. HACS → Integrations → Custom repositories.
+2. Add the URL above as **Integration**.
+3. Install **HiveFW HA Integration**.
+4. Restart Home Assistant when the update includes Python/backend changes.
+5. Settings → Devices & Services → Add Integration → **HiveFW HA Integration**.
+6. Open **HiveFW Repeater** from the Home Assistant sidebar.
 
-- **Off-grid mesh chat panel.** Run a tablet in your kitchen showing the HiveFW Repeater sidebar; talk to local mesh peers without leaving Home Assistant.
-- **Search recent traffic.** "Who pinged the @[Repeater Cliff] node yesterday?" — date-range message search across all conversations.
-- **Path diagnostics.** Trace the route a message took (hops, SNR, RSSI per repeater) right from the message bubble.
-- **Managed-device dashboard.** Monitor battery, last-heard, neighbour SNR, and uptime on every repeater you've added — one card per device.
+For frontend-only releases, a browser hard refresh is normally sufficient after HACS has
+updated the files.
 
-## Known limitations
+## Existing installations
 
-- **Requires meshcore ≥ 2.7.0.** The per-channel region scope selector and "All regions" option need core-integration support that landed in v2.7.0; Trace and Get Contacts use upstream services from 2.6.0, and older cores fall back to direct coordinator reads where supported.
-- **Message archive is not a long-term log.** Default retention is 90 days, capped at 500 messages per conversation. Configurable via Settings → HiveFW HA Integration → Configure (range 1–365 days, 50–5000 messages).
-- **Discover-mode traces don't always return.** Flood path discovery on multi-hop routes sometimes silently drops. If a **Discover** trace fails, switch to **Select repeaters** or **Enter path** in the trace dialog to specify the route explicitly.
+The repository and visible integration were renamed, but the internal domain remains:
 
-## Removal
+```text
+meshcore_chat
+```
 
-To uninstall:
+This is intentional. Changing the domain would make Home Assistant treat it as a new
+integration and could break existing config entries, stored chat history and settings.
 
-1. Settings → Devices & Services → HiveFW HA Integration → ⋮ → Delete.
-2. Optional: remove the message archive from disk:
-   ```bash
-   rm /config/.storage/meshcore_chat.*
-   ```
-   The archive is per-entry; deleting the config entry does not remove these files automatically (HA's standard behaviour). Skip this step if you intend to re-add the integration later — the archive will be re-attached.
-3. If you also want to uninstall the underlying meshcore integration: Settings → Devices & Services → MeshCore → Delete, then remove `custom_components/meshcore` (HACS or manual).
+The panel URL also remains compatible with existing installations.
+
+## Path Hash accuracy
+
+HiveFW does not include `path_hash_mode` in `SELF_INFO`.
+
+The integration therefore reads Path Hash from `DEVICE_QUERY / DEVICE_INFO`, which is
+the protocol response where HiveFW actually reports `_prefs.path_hash_mode`.
+
+This avoids the previous behaviour where the UI could incorrectly display **1 byte**
+while the radio was configured for **2 bytes**.
+
+## Network etiquette
+
+MeshCore is a shared radio network. HiveFW and this Home Assistant integration should be
+used with that in mind.
+
+Automations and bots should preferably be **on-demand**. Avoid unnecessary periodic
+traffic, aggressive polling that results in RF transmissions, or message flooding.
+
+Most diagnostic reads used by the HiveFW cockpit are local Companion-protocol queries
+between Home Assistant and the radio and do not themselves consume LoRa airtime.
+
+## Repository layout
+
+```text
+custom_components/meshcore_chat/
+    Home Assistant backend, WebSocket API, panel wrapper and HiveFW branding
+
+frontend/
+    Lit/TypeScript source for the sidebar interface
+
+tests/
+    backend tests
+
+frontend/tests/
+    frontend tests
+```
+
+The production frontend bundle is served from:
+
+```text
+custom_components/meshcore_chat/meshcore-chat-panel.js
+```
+
+The HiveFW compatibility wrapper is:
+
+```text
+custom_components/meshcore_chat/meshcore-repeater-panel.js
+```
 
 ## Development
 
-Contributions and bug reports welcome — file issues at [github.com/fabiocguerreiro/meshcore-ha-chat/issues](https://github.com/fabiocguerreiro/meshcore-ha-chat/issues).
-
-### Repo layout
-
-- `custom_components/meshcore_chat/` — the Home Assistant integration (Python).
-- `frontend/` — the Lit-based sidebar panel (TypeScript). Rolled up into a single bundle that lands at `custom_components/meshcore_chat/meshcore-chat-panel.js`.
-- `tests/` — Python test suite (pytest + `pytest-homeassistant-custom-component`).
-- `frontend/tests/` — frontend unit tests (vitest).
-
-### Python tests
-
-The integration targets the Python version shipped in the current HA OS / Docker image (3.14 as of HA 2025.x). Set up a local venv:
-
-```bash
-cd meshcore-ha-chat
-uv venv --python 3.14 .venv
-.venv/bin/pip install pytest-homeassistant-custom-component
-```
-
-`pytest-homeassistant-custom-component` (PHACC) transitively pulls in Home Assistant core, pytest, pytest-asyncio, and the full HA test fixture surface — no other install steps are needed. The integration is **not** installed as a package; `tests/conftest.py` puts the repo root on `sys.path` so `custom_components.meshcore_chat.*` is importable directly.
-
-Run the suite:
-
-```bash
-.venv/bin/pytest tests/                    # full suite (~1s)
-.venv/bin/pytest tests/components/meshcore_chat/test_ws_api.py -k identity
-```
-
-> **Do not** `pip install -e .[test]` (or any pip install) inside a running Home Assistant Docker container. The editable-install metadata persists across `pip uninstall` and crashes HA on the next restart with `FileNotFoundError` from `async_get_custom_components`. Always use a separate venv.
-
-### Frontend
+Frontend:
 
 ```bash
 cd frontend
 npm install
-npm run build       # production bundle (minified)
-npm run dev         # rollup watch mode
-npm test            # vitest, run once
-npm run test:watch  # vitest in watch mode
-npm run lint        # eslint
+npm run build
+npm test
+npm run lint
 ```
 
-The build writes straight to `../custom_components/meshcore_chat/meshcore-chat-panel.js`. Committing the rebuilt bundle does not deploy it — for that, see below.
-
-### Deploying a dev build to a live HA host
-
-After `npm run build`, copy the rebuilt panel bundle to your HA host:
+Backend tests:
 
 ```bash
-scp custom_components/meshcore_chat/meshcore-chat-panel.js \
-    root@<ha-host>:/config/custom_components/meshcore_chat/
+pytest tests/
 ```
 
-Then **hard-refresh** the panel in the browser (Cmd/Ctrl-Shift-R). No Home Assistant restart is needed for frontend-only changes — the panel is reloaded from disk on browser refresh.
+Frontend-only changes normally require only a browser hard refresh after deployment.
+Changes to Python modules loaded by Home Assistant can require an integration reload or,
+for setup-time code, a Home Assistant restart.
 
-For Python-side changes (anything under `custom_components/meshcore_chat/*.py`), SCP the changed files and reload the integration: **Settings → Devices & Services → MeshCore Chat → ⋮ → Reload**, or restart HA if the change touches `__init__.py`, the config-flow, or anything wired at setup time.
+## Related projects
 
-## Tips & Troubleshooting
+- [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater)
+- [MeshCore](https://github.com/meshcore-dev/MeshCore)
+- [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha)
+- [meshcore_py](https://github.com/meshcore-dev/meshcore_py)
 
-The integration should be fairly easy to understand and navigate, for instructions on dialog pop-ups and operational gotchas worth knowing, see [INSTRUCTIONS.md](./INSTRUCTIONS.md).
+## Disclaimer
+
+This project is provided as an experimental/custom integration. Use it at your own risk.
+
+Radio configuration remains the responsibility of the user. Ensure that frequency,
+power and operating mode comply with local regulations and with the configuration of the
+MeshCore network you are participating in.
 
 ## License
 

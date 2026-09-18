@@ -37,6 +37,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__hiveNeighborsError = null;
     this.__hiveNeighborsSort = "recent";
     this.__hiveNeighborsLoadedEntry = null;
+    this.__neighborsOverlay = null;
   }
 
   updated(changedProperties) {
@@ -84,6 +85,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const entryId = this.__entryId() || null;
 
+    if (this._activeTab !== "neighbors") {
+      this.__removeNeighborsOverlay();
+    }
+
     if (this._activeTab === "settings") {
       if (entryId !== this.__repeaterLoadedEntry) {
         this.__repeaterStatus = null;
@@ -111,7 +116,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
       const container = root.querySelector(".page-container");
       if (!container) return;
-      this.__renderHiveNeighbors(container);
+      const overlay = this.__ensureNeighborsOverlay(container);
+      this.__renderHiveNeighbors(overlay);
 
       if (!this.__hiveNeighbors && !this.__hiveNeighborsLoading) {
         void this.__loadHiveNeighbors();
@@ -549,6 +555,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
         line-height: 1.5;
       }
 
+      .page-container {
+        position: relative;
+      }
+      .hive-neighbors-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        overflow: auto;
+        background: var(--primary-background-color);
+      }
+
       .hive-neighbors-toolbar {
         display:flex;
         justify-content:space-between;
@@ -720,7 +737,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (!grid) return;
 
     this.__renderSettingsRepeaterCard(sroot, grid);
-    this.__renderHiveInfoCard(sroot, grid);
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
@@ -844,10 +860,15 @@ class MeshCoreRepeaterPanel extends BasePanel {
       style = document.createElement("style");
       style.id = "hivefw-cockpit-style";
       style.textContent = `
-        .hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-rows:1fr;align-items:stretch}
-        .hero-tile{min-height:108px;height:100%;box-sizing:border-box}
-        @container(max-width:900px){.hero-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
-        @container(max-width:480px){.hero-row{grid-template-columns:1fr!important}}
+        .hero-row{grid-template-columns:repeat(5,minmax(0,1fr))!important;grid-auto-rows:1fr;gap:8px!important;align-items:stretch}
+        .hero-tile{min-height:82px!important;height:100%;box-sizing:border-box;padding:9px 10px!important;gap:5px!important}
+        .hero-tile-head{font-size:10px!important}
+        .hero-tile-value .primary{font-size:18px!important}
+        .hero-tile-value .secondary{font-size:11px!important}
+        @container(max-width:1050px){.hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+        @container(max-width:780px){.hero-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+        @container(max-width:560px){.hero-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+        @container(max-width:340px){.hero-row{grid-template-columns:1fr!important}}
       `;
       nroot.appendChild(style);
     }
@@ -932,7 +953,43 @@ class MeshCoreRepeaterPanel extends BasePanel {
       hero.appendChild(makeTile("Storage",`${pct.toFixed(0)}%`,`· ${used} / ${total} KB`,pct,0,100,pct>=90?"bad":pct>=70?"warn":"good","storage"));
     }
 
-    const faults=entities.filter((e)=>e.booleanProblem);
+    const info=status.device_info||{};
+    const model=info.model||status.model;
+    if(model){
+      hero.appendChild(makeTile("Hardware",String(model),info.firmware_build?`· ${info.firmware_build}`:"",100,0,100,"info","hardware"));
+    }
+
+    if(info.protocol_version!=null || info.path_hash_mode!=null){
+      const pathLabels=["1 byte","2 bytes","3 bytes"];
+      const protocol=info.protocol_version!=null?`v${info.protocol_version}`:"—";
+      const path=info.path_hash_mode==null?"—":(pathLabels[Number(info.path_hash_mode)]||String(info.path_hash_mode));
+      hero.appendChild(makeTile("Protocol / Path",protocol,`· ${path}`,100,0,100,"info","protocol"));
+    }
+
+    if(info.max_contacts!=null || info.max_channels!=null){
+      hero.appendChild(makeTile(
+        "Capacity",
+        `${info.max_contacts??"—"} / ${info.max_channels??"—"}`,
+        "contacts / channels",
+        100,0,100,"info","capacity"
+      ));
+    }
+
+    const repeatRanges=Array.isArray(status.allowed_repeat_frequencies)?status.allowed_repeat_frequencies:[];
+    if(repeatRanges.length){
+      const values=repeatRanges.map((r)=>{
+        const lo=Number(r.min)/1000, hi=Number(r.max)/1000;
+        return lo===hi?lo.toFixed(3):`${lo.toFixed(3)}–${hi.toFixed(3)}`;
+      });
+      hero.appendChild(makeTile(
+        "Repeater frequencies",
+        `${values[0]} MHz`,
+        values.length>1?`· ${values.slice(1).join(" · ")} MHz`:"",
+        100,0,100,"info","repeat-frequencies"
+      ));
+    }
+
+        const faults=entities.filter((e)=>e.booleanProblem);
     if(faults.length){
       const values=faults.map((e)=>this.hass?.states?.[e.entity_id]?.state);
       const detected=values.filter((v)=>v==="on").length;
@@ -1113,94 +1170,6 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     card.appendChild(list);
-  }
-
-  __renderHiveInfoCard(sroot, grid) {
-    let card = sroot.querySelector("#hivefw-info-card");
-    if (card?.dataset.native === "1") return;
-
-    if (!card) {
-      card = document.createElement("div");
-      card.id = "hivefw-info-card";
-      card.className = "device-section";
-      card.style.gridColumn = "1 / -1";
-      grid.appendChild(card);
-    }
-    card.replaceChildren();
-
-    const title = document.createElement("div");
-    title.className = "card-title";
-    title.textContent = "Informação HiveFW";
-    card.appendChild(title);
-
-    const status = this.__repeaterStatus;
-    if (!status) {
-      const empty = document.createElement("div");
-      empty.className = "hive-settings-note";
-      empty.textContent = "Sem informação HiveFW disponível.";
-      card.appendChild(empty);
-      return;
-    }
-
-    const info = status.device_info || {};
-    const pathLabels = ["1 byte", "2 bytes", "3 bytes"];
-    const ranges = (status.allowed_repeat_frequencies || []).map((r) => {
-      const lo = Number(r.min) / 1000;
-      const hi = Number(r.max) / 1000;
-      return lo === hi ? `${lo.toFixed(3)} MHz` : `${lo.toFixed(3)}–${hi.toFixed(3)} MHz`;
-    }).join(", ") || "—";
-    const batteryMv = Number(status.battery?.level);
-    const rows = [
-      ["Nome", status.name || this._selectedDevice?.name || "—"],
-      ["Modelo", info.model || status.model || "—"],
-      ["Firmware", info.version || status.firmware || "—"],
-      ["Build", info.firmware_build || "—"],
-      ["Protocolo", info.protocol_version != null ? `v${info.protocol_version}` : "—"],
-      ["Modo Repeater", status.repeat ? "Ativo" : "Desligado"],
-      ["Path Hash", info.path_hash_mode == null ? "—" : (pathLabels[Number(info.path_hash_mode)] || String(info.path_hash_mode))],
-      ["Máx. contactos", info.max_contacts ?? "—"],
-      ["Máx. canais", info.max_channels ?? "—"],
-      ["Bateria", Number.isFinite(batteryMv) ? `${(batteryMv / 1000).toFixed(3)} V` : "—"],
-      ["Storage", status.battery?.total_kb ? `${status.battery.used_kb ?? 0} / ${status.battery.total_kb} KB` : "—"],
-      ["Frequências Repeater", ranges],
-    ];
-
-    const gridInfo = document.createElement("div");
-    gridInfo.style.cssText =
-      "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px 12px;";
-    for (const [label, value] of rows) {
-      const item = document.createElement("div");
-      item.style.cssText =
-        "padding:8px 10px;border-radius:8px;background:var(--secondary-background-color);";
-      const l = document.createElement("div");
-      l.style.cssText =
-        "color:var(--secondary-text-color);font-size:10px;text-transform:uppercase;letter-spacing:.05em;";
-      l.textContent = label;
-      const v = document.createElement("div");
-      v.style.cssText =
-        "margin-top:3px;overflow-wrap:anywhere;font-size:12px;font-weight:600;";
-      v.textContent = String(value);
-      item.append(l, v);
-      gridInfo.appendChild(item);
-    }
-    card.appendChild(gridInfo);
-
-    if (Array.isArray(status.telemetry) && status.telemetry.length) {
-      const telemetry = document.createElement("div");
-      telemetry.style.cssText =
-        "display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;";
-      for (const item of status.telemetry) {
-        const chip = document.createElement("span");
-        chip.style.cssText =
-          "padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--primary-color) 9%,var(--secondary-background-color));font-size:10px;";
-        const value = typeof item.value === "object"
-          ? JSON.stringify(item.value)
-          : String(item.value ?? "—");
-        chip.textContent = `${item.type || "telemetry"}${item.channel != null ? ` ch${item.channel}` : ""}: ${value}`;
-        telemetry.appendChild(chip);
-      }
-      card.appendChild(telemetry);
-    }
   }
 
   __settingsSelect(label, options, value) {
@@ -1931,6 +1900,23 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return `${value}s`;
   }
 
+  __ensureNeighborsOverlay(container) {
+    if (this.__neighborsOverlay?.isConnected) return this.__neighborsOverlay;
+
+    const overlay = document.createElement("div");
+    overlay.className = "hive-neighbors-overlay";
+    container.appendChild(overlay);
+    this.__neighborsOverlay = overlay;
+    return overlay;
+  }
+
+  __removeNeighborsOverlay() {
+    if (this.__neighborsOverlay?.isConnected) {
+      this.__neighborsOverlay.remove();
+    }
+    this.__neighborsOverlay = null;
+  }
+
   async __loadHiveNeighbors() {
     if (!this.hass || this.__hiveNeighborsLoading) return;
 
@@ -1955,10 +1941,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
   __rerenderHivePage() {
     if (this._activeTab !== "neighbors") return;
     const container = this.shadowRoot?.querySelector(".page-container");
-    if (container) this.__renderHiveNeighbors(container);
+    if (!container) return;
+    const overlay = this.__ensureNeighborsOverlay(container);
+    this.__renderHiveNeighbors(overlay);
   }
 
   __renderHiveNeighbors(container) {
+    // 'container' is our private overlay, never Lit's .page-container.
     container.replaceChildren();
 
     const page = document.createElement("div");
