@@ -3,7 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { HomeAssistant, PanelConfig, Contact, Channel, MeshCoreDevice } from './types';
 import type { TraceResult } from './api';
 import { panelStyles } from './styles';
-import { MESHCORE_PRESET, DEFAULT_PANEL_CONFIG } from './constants';
+import { HIVEFW_PRESET, DEFAULT_PANEL_CONFIG } from './constants';
 import { getDevices, getContacts, getChannels, getUnreadAndLastRead, markConversationRead, removeContact, addContact, traceContact, type TracePathMode } from './api';
 import { UnreadController } from './chat/unread-controller';
 import './pages/chat-page';
@@ -35,7 +35,7 @@ export class MeshCorePanel extends LitElement {
    * state. Replaces the former
    * `@state() _unreadCounts` / `@state() _lastRead` maps. Constructed
    * once and owned by the panel — the panel is not remounted on tab
-   * switch, so the badge map and the `meshcore_unread_updated`
+   * switch, so the badge map and the `hivefw_unread_updated`
    * subscription state persist correctly. `<chat-page>` `subscribe`s
    * to it (and unsubscribes — but does NOT destroy — on disconnect).
    *
@@ -593,7 +593,7 @@ export class MeshCorePanel extends LitElement {
       // The backend filters unread counts by entry_id in
       // ws_get_unread_counts, so stale counts from the previously-
       // selected entry remain in the controller's count map until the
-      // next `meshcore_unread_updated` bus event fires — could be
+      // next `hivefw_unread_updated` bus event fires — could be
       // minutes on a quiet mesh. Run the unread refresh in parallel
       // with the contacts/channels refresh; both are independent
       // backend round-trips against the new entry.
@@ -618,7 +618,7 @@ export class MeshCorePanel extends LitElement {
           this._loadDeviceData();
         }
       },
-      'meshcore_channels_updated'
+      'hivefw_channels_updated'
     ).then(unsubscribe => {
       this._unsubscribeList.push(unsubscribe);
     });
@@ -629,7 +629,7 @@ export class MeshCorePanel extends LitElement {
           this._loadDeviceData();
         }
       },
-      'meshcore_channel_removed'
+      'hivefw_channel_removed'
     ).then(unsubscribe => {
       this._unsubscribeList.push(unsubscribe);
     });
@@ -642,7 +642,7 @@ export class MeshCorePanel extends LitElement {
         }
         this._loadUnreadCounts();
       },
-      'meshcore_unread_updated'
+      'hivefw_unread_updated'
     ).then(unsubscribe => {
       this._unsubscribeList.push(unsubscribe);
     });
@@ -686,7 +686,7 @@ export class MeshCorePanel extends LitElement {
       // When the error is the "no devices found" empty-state, the
       // upstream meshcore integration is most likely missing or
       // unconfigured — the companion's repair-issue plumbing
-      // (upstream_meshcore_unavailable) carries the proper remediation
+      // (radio_engine_unavailable) carries the proper remediation
       // copy, so point the user at Settings → System → Repairs.
       // Other error strings (e.g. "Failed to load: ...") keep the
       // legacy generic copy.
@@ -848,7 +848,7 @@ export class MeshCorePanel extends LitElement {
 
   /**
    * Get the node status for a device by looking up its sensor entity.
-   * Entity ID pattern: sensor.meshcore_{prefix6}_node_status_{slugified_name}
+   * Entity ID pattern: sensor.hivefw_{prefix6}_node_status_{slugified_name}
    */
   /** Derive the slugified entity suffix for a device (shared by status + battery lookups). */
   private _deviceEntitySuffix(device: MeshCoreDevice): { prefix: string; name: string } {
@@ -863,7 +863,7 @@ export class MeshCorePanel extends LitElement {
   private _getNodeStatus(device: MeshCoreDevice): string | null {
     if (!this.hass) return null;
     const { prefix, name } = this._deviceEntitySuffix(device);
-    const entityId = `sensor.meshcore_${prefix}_node_status_${name}`;
+    const entityId = `sensor.hivefw_${prefix}_node_status_${name}`;
     const state = this.hass.states[entityId];
     if (!state) return null;
     return state.state;
@@ -876,7 +876,7 @@ export class MeshCorePanel extends LitElement {
   private _getBatteryLevel(device: MeshCoreDevice): number | null {
     if (!this.hass) return null;
     const { prefix, name } = this._deviceEntitySuffix(device);
-    const entityId = `sensor.meshcore_${prefix}_battery_percentage_${name}`;
+    const entityId = `sensor.hivefw_${prefix}_battery_percentage_${name}`;
     const state = this.hass.states[entityId];
     if (!state || state.state === 'unknown' || state.state === 'unavailable') return null;
     const val = parseFloat(state.state);
@@ -910,7 +910,7 @@ export class MeshCorePanel extends LitElement {
         node_name: device.name,
         node_prefix: device.pubkey_prefix?.substring(0, 6) || '',
         entry_id: device.entry_id,
-        ...MESHCORE_PRESET,
+        ...HIVEFW_PRESET,
         ...DEFAULT_PANEL_CONFIG,
       };
 
