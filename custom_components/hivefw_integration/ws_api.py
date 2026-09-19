@@ -671,6 +671,8 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_blocked_contacts)
     websocket_api.async_register_command(hass, ws_set_contact_blocked)
     websocket_api.async_register_command(hass, ws_set_node_meta)
+    websocket_api.async_register_command(hass, ws_bulk_set_node_meta)
+    websocket_api.async_register_command(hass, ws_bulk_cleanup_contacts)
     websocket_api.async_register_command(hass, ws_get_trace_history)
     websocket_api.async_register_command(hass, ws_clear_trace_history)
     websocket_api.async_register_command(hass, ws_get_peer_activity)
@@ -799,6 +801,229 @@ async def ws_set_node_meta(hass, connection, msg):
     connection.send_result(
         msg["id"],
         {"favorite": favorite, "tags": tags},
+    )
+
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/bulk_set_node_meta",
+        vol.Optional("entry_id"): str,
+        vol.Required("public_keys"): [str],
+        vol.Optional("favorite"): bool,
+        vol.Optional("add_tags", default=[]): [str],
+        vol.Optional("remove_tags", default=[]): [str],
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_bulk_set_node_meta(hass, connection, msg):
+    """Apply Favorite/Tag metadata to multiple nodes in one persisted write."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_error(msg["id"], "not_found", "HiveFW runtime not found")
+        return
+
+    requested = {
+        str(value or "").strip().lower()
+        for value in msg.get("public_keys", [])
+        if str(value or "").strip()
+    }
+    add_tags = {
+        str(value or "").strip()[:32]
+        for value in msg.get("add_tags", [])
+        if str(value or "").strip()
+    }
+    remove_tags = {
+        str(value or "").strip()
+        for value in msg.get("remove_tags", [])
+        if str(value or "").strip()
+    }
+    favorite_value = msg.get("favorite")
+    changed = 0
+
+    for key in requested:
+        previous = runtime.node_meta.get(key, {})
+        if not isinstance(previous, dict):
+            previous = {}
+        favorite = bool(previous.get("favorite", False))
+        if favorite_value is not None:
+            favorite = bool(favorite_value)
+        tags = {
+            str(tag).strip()
+            for tag in previous.get("tags", [])
+            if str(tag).strip()
+        }
+        tags.update(add_tags)
+        tags.difference_update(remove_tags)
+        next_value = {
+            "favorite": favorite,
+            "tags": sorted(tags)[:8],
+        }
+        if next_value != {
+            "favorite": bool(previous.get("favorite", False)),
+            "tags": sorted(
+                str(tag).strip()
+                for tag in previous.get("tags", [])
+                if str(tag).strip()
+            )[:8],
+        }:
+            changed += 1
+        if next_value["favorite"] or next_value["tags"]:
+            runtime.node_meta[key] = next_value
+        else:
+            runtime.node_meta.pop(key, None)
+
+    await _save_runtime_aux(runtime)
+    connection.send_result(msg["id"], {"changed": changed, "requested": len(requested)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/bulk_cleanup_contacts",
+        vol.Optional("entry_id"): str,
+        vol.Optional("days_threshold"): vol.All(int, vol.Range(min=1, max=3650)),
+        vol.Optional("public_keys", default=[]): [str],
+        vol.Optional("dry_run", default=True): bool,
+        vol.Optional("protect_favorites", default=True): bool,
+        vol.Optional("protect_added", default=True): bool,
+        vol.Optional("protect_repeaters", default=True): bool,
+        vol.Optional("protected_tags", default=["keep", "protected"]): [str],
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_bulk_cleanup_contacts(hass, connection, msg):
+    """Preview or remove discovered contacts with explicit safety protections."""
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if not coordinator or runtime is None:
+        connection.send_error(msg["id"], "not_found", "HiveFW runtime not found")
+        return
+
+    selected = {
+        str(value or "").strip().lower()
+        for value in msg.get("public_keys", [])
+        if str(value or "").strip()
+    }
+    days_threshold = msg.get("days_threshold")
+    dry_run = bool(msg.get("dry_run", True))
+    protected_tags = {
+        str(value or "").strip().lower()
+        for value in msg.get("protected_tags", [])
+        if str(value or "").strip()
+    }
+    repeater_prefixes = {
+        str(item.get("pubkey_prefix") or "").strip().lower()
+        for item in getattr(coordinator, "_tracked_repeaters", [])
+        if str(item.get("pubkey_prefix") or "").strip()
+    }
+    now = time.time()
+    threshold_seconds = (
+        int(days_threshold) * 86400 if days_threshold is not None else None
+    )
+
+    candidates: list[str] = []
+    skipped = {
+        "favorite": 0,
+        "added": 0,
+        "repeater": 0,
+        "protected_tag": 0,
+        "age": 0,
+        "not_selected": 0,
+    }
+
+    for public_key, contact in coordinator._discovered_contacts.items():
+        key = str(public_key or "").strip().lower()
+        if selected and key not in selected:
+            skipped["not_selected"] += 1
+            continue
+
+        if msg.get("protect_added", True) and contact.get("added_to_node", False):
+            skipped["added"] += 1
+            continue
+
+        prefix = key[:12]
+        if msg.get("protect_repeaters", True) and any(
+            prefix.startswith(rep) or rep.startswith(prefix)
+            for rep in repeater_prefixes
+        ):
+            skipped["repeater"] += 1
+            continue
+
+        meta = runtime.node_meta.get(key, {})
+        if not isinstance(meta, dict):
+            meta = {}
+        if msg.get("protect_favorites", True) and bool(meta.get("favorite", False)):
+            skipped["favorite"] += 1
+            continue
+        tags = {
+            str(tag or "").strip().lower()
+            for tag in meta.get("tags", [])
+            if str(tag or "").strip()
+        }
+        if protected_tags.intersection(tags):
+            skipped["protected_tag"] += 1
+            continue
+
+        if threshold_seconds is not None:
+            lastmod = float(contact.get("lastmod") or contact.get("last_advert") or 0)
+            if lastmod and (now - lastmod) <= threshold_seconds:
+                skipped["age"] += 1
+                continue
+
+        candidates.append(key)
+
+    if dry_run:
+        connection.send_result(
+            msg["id"],
+            {
+                "dry_run": True,
+                "candidates": candidates,
+                "candidate_count": len(candidates),
+                "skipped": skipped,
+            },
+        )
+        return
+
+    entity_registry = er.async_get(hass)
+    entry_id = coordinator.config_entry.entry_id
+    removed: list[str] = []
+    for public_key in candidates:
+        contact = coordinator._discovered_contacts.pop(public_key, None)
+        if contact is None:
+            continue
+        coordinator.tracked_diagnostic_binary_contacts.discard(public_key)
+        entity_id = entity_registry.async_get_entity_id(
+            "binary_sensor",
+            DOMAIN,
+            f"{entry_id}_contact_{public_key[:12]}",
+        )
+        if entity_id:
+            entity_registry.async_remove(entity_id)
+        runtime.node_meta.pop(public_key, None)
+        removed.append(public_key)
+        if len(removed) % 20 == 0:
+            await asyncio.sleep(0)
+
+    if removed:
+        try:
+            await coordinator._store.async_save(coordinator._discovered_contacts)
+        except Exception as ex:
+            _LOGGER.error("Error saving discovered contacts after bulk cleanup: %s", ex)
+        await _save_runtime_aux(runtime)
+        updated_data = dict(coordinator.data) if coordinator.data else {}
+        updated_data["contacts"] = coordinator.get_all_contacts()
+        coordinator.async_set_updated_data(updated_data)
+
+    connection.send_result(
+        msg["id"],
+        {
+            "dry_run": False,
+            "removed": removed,
+            "removed_count": len(removed),
+            "skipped": skipped,
+        },
     )
 
 
