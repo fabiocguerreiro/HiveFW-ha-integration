@@ -1,3 +1,4 @@
+from custom_components.hivefw_integration.engine.utils import build_device_name
 """Unit tests for ``custom_components.hivefw_integration.utils``.
 
 Covers the flood-scope helpers shared by the dialog scope picker
@@ -195,3 +196,12 @@ def test_format_entity_id_uses_hivefw_prefix() -> None:
     assert entity_id == "binary_sensor.hivefw_abc123_ch_1_messages"
     assert ".meshcore_" not in entity_id
     assert ".hivefw_integration_" not in entity_id
+
+
+
+def test_device_registry_name_is_node_identity_only() -> None:
+    """Device names expose only node name + public-key prefix."""
+    expected = "SE.PLM PALMELA R4 (abb0f7)"
+    assert build_device_name("SE.PLM PALMELA R4", "abb0f7123456", "root") == expected
+    assert build_device_name("SE.PLM PALMELA R4", "abb0f7123456", "repeater") == expected
+    assert build_device_name("SE.PLM PALMELA R4", "abb0f7123456", "client") == expected
