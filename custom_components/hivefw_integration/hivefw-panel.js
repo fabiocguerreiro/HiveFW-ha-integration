@@ -41,6 +41,7 @@ class HiveFWPanel extends BasePanel {
     this.__regionName = "";
     this.__regionsBusy = false;
     this.__nodesMapPane = null;
+    this.__nodesActivityPane = null;
     this.__nodesMapElement = null;
     this.__nodesMapContacts = null;
     this.__nodesMapLoading = false;
@@ -56,6 +57,8 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapFrame = 0;
     this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
+    this.__mapLoadPromise = null;
+    this.__nodesMapRetryTimer = null;
 
     this.__diagHistory = null;
     this.__diagHistoryKey = "";
@@ -3753,17 +3756,28 @@ class HiveFWPanel extends BasePanel {
   }
 
   async __ensureMapLoaded() {
-    if (customElements.get("ha-map")) return true;
-    if (this.__mapLoadStarted) return false;
-    this.__mapLoadStarted = true;
-    try {
-      if (window.loadCardHelpers) {
-        const helpers = await window.loadCardHelpers();
-        helpers.createCardElement?.({type:"map",entities:[]});
+    if(customElements.get("ha-map"))return true;
+    if(this.__mapLoadPromise)return this.__mapLoadPromise;
+
+    this.__mapLoadPromise=(async()=>{
+      try{
+        if(window.loadCardHelpers){
+          const helpers=await window.loadCardHelpers();
+          helpers.createCardElement?.({type:"map",entities:[]});
+        }
+        await Promise.race([
+          customElements.whenDefined("ha-map"),
+          new Promise((resolve)=>setTimeout(resolve,3000)),
+        ]);
+      }catch(error){
+        console.warn("HiveFW ha-map loader failed",error);
       }
-      await Promise.race([customElements.whenDefined("ha-map"),new Promise((r)=>setTimeout(r,1500))]);
-    } catch {}
-    return !!customElements.get("ha-map");
+      return !!customElements.get("ha-map");
+    })();
+
+    const ready=await this.__mapLoadPromise;
+    this.__mapLoadPromise=null;
+    return ready;
   }
 
   __nodeCoords(contact) {
@@ -4110,14 +4124,14 @@ class HiveFWPanel extends BasePanel {
     };
 
     make("routes","ROTAS","Histórico de Trace",()=>void this.__toggleTraceHistory());
-    make("activity","ATIVIDADE","Heatmap derivado do histórico local",()=>this.__toggleActivityHeatmap());
+    make("activity","ATIVIDADE","Focar a coluna de atividade",()=>this.__toggleActivityHeatmap());
     make("topology","TOPOLOGIA","Topologia observada por caminhos reais",()=>this.__toggleTopologyOverlay());
     this.__syncNodeMapMenuState(host);
   }
 
   __syncNodeMapMenuState(filters) {
     if(!filters)return;
-    filters.querySelector(".hive-map-menu-activity")?.classList.toggle("active",!!this.__activityHeatmapVisible);
+    filters.querySelector(".hive-map-menu-activity")?.classList.toggle("active",!!this.__nodesActivityPane?.isConnected);
     filters.querySelector(".hive-map-menu-topology")?.classList.toggle("active",!!this.__topologyVisible);
     filters.querySelector(".hive-map-menu-routes")?.classList.toggle("active",!!this.__traceHistoryPanel?.isConnected);
   }
@@ -4364,7 +4378,8 @@ class HiveFWPanel extends BasePanel {
     const nroot=page?.shadowRoot;
     const content=nroot?.querySelector(".content-area");
     const pane=nroot?.querySelector(".nodes-map-pane");
-    if(!root||!page||!nroot||!content||!pane)return;
+    const activityPane=nroot?.querySelector(".nodes-activity-pane");
+    if(!root||!page||!nroot||!content||!pane||!activityPane)return;
 
     // The Nodes component now owns the layout from first paint. The wrapper
     // only augments controls and fills the native map pane.
@@ -4427,6 +4442,111 @@ class HiveFWPanel extends BasePanel {
           text-decoration:underline;
           text-underline-offset:2px;
         }
+        .nodes-activity-pane{
+          overflow:hidden;
+        }
+        .hive-activity-pane-inner{
+          display:flex;
+          flex-direction:column;
+          width:100%;
+          height:100%;
+          min-height:0;
+          background:var(--card-background-color,#fff);
+          color:var(--primary-text-color,#222);
+        }
+        .hive-activity-pane-header{
+          display:flex;
+          align-items:center;
+          gap:8px;
+          padding:10px 11px;
+          border-bottom:1px solid var(--divider-color,#ddd);
+          flex:0 0 auto;
+        }
+        .hive-activity-pane-header strong{flex:1;font-size:12px}
+        .hive-activity-pane-header button{
+          border:1px solid var(--divider-color,#ccc);
+          border-radius:7px;
+          background:transparent;
+          color:var(--primary-color,#03a9f4);
+          padding:4px 7px;
+          font:inherit;
+          font-size:10px;
+          cursor:pointer;
+        }
+        .hive-activity-pane-summary{
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:6px;
+          padding:8px 9px;
+          border-bottom:1px solid var(--divider-color,#eee);
+          flex:0 0 auto;
+        }
+        .hive-activity-stat{
+          min-width:0;
+          padding:7px;
+          border:1px solid var(--divider-color,#eee);
+          border-radius:8px;
+          background:var(--secondary-background-color,#f7f7f7);
+        }
+        .hive-activity-stat span{
+          display:block;
+          color:var(--secondary-text-color,#666);
+          font-size:9px;
+          margin-bottom:2px;
+        }
+        .hive-activity-stat strong{
+          display:block;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+          font-size:12px;
+        }
+        .hive-activity-list{
+          flex:1;
+          min-height:0;
+          overflow:auto;
+          padding:4px 8px 8px;
+        }
+        .hive-activity-row{
+          width:100%;
+          display:grid;
+          grid-template-columns:minmax(0,1fr) auto;
+          gap:8px;
+          align-items:center;
+          padding:8px 4px;
+          border:0;
+          border-bottom:1px solid var(--divider-color,#eee);
+          background:transparent;
+          color:inherit;
+          text-align:left;
+          cursor:pointer;
+        }
+        .hive-activity-row:hover{
+          background:var(--secondary-background-color,#f7f7f7);
+        }
+        .hive-activity-name{
+          min-width:0;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+          font-size:11px;
+          font-weight:600;
+        }
+        .hive-activity-detail{
+          color:var(--secondary-text-color,#666);
+          font-size:9px;
+          margin-top:2px;
+        }
+        .hive-activity-score{
+          font:700 11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          color:var(--primary-color,#03a9f4);
+        }
+        .hive-activity-empty{
+          padding:18px 10px;
+          color:var(--secondary-text-color,#666);
+          text-align:center;
+          font-size:10px;
+        }
         .hive-topology-overlay{
           position:absolute;
           inset:0;
@@ -4480,6 +4600,7 @@ class HiveFWPanel extends BasePanel {
     }
 
     this.__nodesMapPane=pane;
+    this.__nodesActivityPane=activityPane;
     pane.querySelector(".hive-map-selection")?.remove();
     nroot.querySelectorAll(".map-selection").forEach((el)=>el.remove());
 
@@ -4492,6 +4613,7 @@ class HiveFWPanel extends BasePanel {
 
     this.__decorateNodeCards(nroot);
     window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
+    this.__renderActivityPane();
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -4535,6 +4657,10 @@ class HiveFWPanel extends BasePanel {
       cancelAnimationFrame(this.__nodesMapFrame);
       this.__nodesMapFrame=0;
     }
+    if(this.__nodesMapRetryTimer){
+      clearTimeout(this.__nodesMapRetryTimer);
+      this.__nodesMapRetryTimer=null;
+    }
 
     this.__removeTraceRouteLayer();
     this.__traceHistoryPanel?.remove();
@@ -4544,8 +4670,10 @@ class HiveFWPanel extends BasePanel {
     // The pane belongs to meshcore-nodes-page now. Never remove it; only clear
     // runtime children so returning to Nós reuses the native layout.
     if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.replaceChildren();
+    if(this.__nodesActivityPane?.isConnected)this.__nodesActivityPane.replaceChildren();
 
     this.__nodesMapPane=null;
+    this.__nodesActivityPane=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
@@ -5722,91 +5850,117 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeActivityHeatmapLayer() {
-    this.__activityHeatmapVisible=false;
-    if(this.__activityHeatmapLayer?.isConnected)this.__activityHeatmapLayer.remove();
+    // Activity is a native right-hand column now; never remove or mutate map layers.
+    this.__activityHeatmapVisible=true;
     this.__activityHeatmapLayer=null;
-    this.__nodesMapPane?.querySelector(".hive-activity-overlay")?.remove();
-    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
   __toggleActivityHeatmap() {
-    if(this.__activityHeatmapVisible){
-      this.__removeActivityHeatmapLayer();
-      return;
-    }
     this.__activityHeatmapVisible=true;
-    this.__drawActivityHeatmap();
+    this.__renderActivityPane();
+    const pane=this.__nodesActivityPane;
+    if(pane){
+      pane.animate?.(
+        [{boxShadow:"0 0 0 0 rgba(3,169,244,0)"},{boxShadow:"inset 3px 0 0 var(--primary-color,#03a9f4)"},{boxShadow:"0 0 0 0 rgba(3,169,244,0)"}],
+        {duration:650,easing:"ease-out"}
+      );
+      pane.querySelector(".hive-activity-list")?.focus?.();
+    }
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
     this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
-  __drawActivityHeatmap() {
-    if(!this.__activityHeatmapVisible)return;
-    const pane=this.__nodesMapPane;
+  __renderActivityPane() {
+    const pane=this.__nodesActivityPane;
     if(!pane?.isConnected)return;
 
-    pane.querySelector(".hive-activity-overlay")?.remove();
-
-    const rows=this.__validMapContacts()
-      .map((contact)=>{
-        const activity=this.__peerActivityFor(contact);
-        const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
-        return {contact,activity,score};
-      })
-      .filter((item)=>item.score>0)
+    const all=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+    const rows=all.map((contact)=>{
+      const activity=this.__peerActivityFor(contact);
+      const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
+      return {contact,activity,score};
+    }).filter((item)=>item.score>0)
       .sort((a,b)=>b.score-a.score)
-      .slice(0,24);
+      .slice(0,40);
 
-    const overlay=document.createElement("section");
-    overlay.className="hive-activity-overlay";
-    overlay.style.cssText="position:absolute;right:12px;top:48px;z-index:44;width:min(360px,calc(100% - 24px));max-height:calc(100% - 64px);overflow:auto;padding:10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 96%,transparent);box-shadow:0 3px 14px rgba(0,0,0,.20);font-size:11px;color:var(--primary-text-color,#222);";
+    const totalRx=rows.reduce((sum,item)=>sum+(item.activity.rx||0),0);
+    const totalTx=rows.reduce((sum,item)=>sum+(item.activity.tx||0),0);
+    const activeCount=rows.length;
+    const top=rows[0];
+
+    pane.replaceChildren();
+    const inner=document.createElement("section");
+    inner.className="hive-activity-pane-inner";
 
     const header=document.createElement("div");
-    header.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:6px;";
+    header.className="hive-activity-pane-header";
     const title=document.createElement("strong");
-    title.textContent="Atividade observada";
-    title.style.flex="1";
-    const close=document.createElement("button");
-    close.type="button";
-    close.textContent="✕";
-    close.title="Fechar";
-    close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color,#666);cursor:pointer;font:inherit;";
-    close.addEventListener("click",()=>this.__removeActivityHeatmapLayer());
-    header.append(title,close);
-    overlay.appendChild(header);
+    title.textContent="Atividade";
+    const refresh=document.createElement("button");
+    refresh.type="button";
+    refresh.textContent=this.__peerActivityLoading?"A carregar…":"Atualizar";
+    refresh.disabled=!!this.__peerActivityLoading;
+    refresh.addEventListener("click",async()=>{
+      this.__peerActivityLoadedEntry=null;
+      await this.__loadPeerActivity();
+      this.__renderActivityPane();
+    });
+    header.append(title,refresh);
 
-    const hint=document.createElement("div");
-    hint.textContent="RX + TX + aparições em paths · histórico local · sem alterar o mapa";
-    hint.style.cssText="margin-bottom:6px;color:var(--secondary-text-color,#666);font-size:9px;";
-    overlay.appendChild(hint);
+    const summary=document.createElement("div");
+    summary.className="hive-activity-pane-summary";
+    const stat=(label,value)=>{
+      const box=document.createElement("div");
+      box.className="hive-activity-stat";
+      const l=document.createElement("span");l.textContent=label;
+      const v=document.createElement("strong");v.textContent=String(value);
+      box.append(l,v);
+      return box;
+    };
+    summary.append(
+      stat("Nós ativos",activeCount),
+      stat("RX",totalRx),
+      stat("TX",totalTx),
+      stat("Mais ativo",top?String(top.contact.adv_name||top.contact.pubkey_prefix||"Nó"):"—")
+    );
 
+    const list=document.createElement("div");
+    list.className="hive-activity-list";
+    list.tabIndex=0;
     if(!rows.length){
       const empty=document.createElement("div");
-      empty.textContent="Ainda sem atividade local suficiente.";
-      empty.style.color="var(--secondary-text-color,#666)";
-      overlay.appendChild(empty);
+      empty.className="hive-activity-empty";
+      empty.textContent=this.__peerActivityLoading
+        ?"A carregar atividade local…"
+        :"Ainda não existe atividade local suficiente.";
+      list.appendChild(empty);
     }else{
       for(const item of rows){
         const row=document.createElement("button");
         row.type="button";
-        row.style.cssText="display:flex;width:100%;align-items:center;gap:8px;padding:7px 5px;border:0;border-top:1px solid var(--divider-color,#eee);background:transparent;color:inherit;text-align:left;cursor:pointer;";
-        const name=document.createElement("span");
-        name.style.cssText="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+        row.className="hive-activity-row";
+        const left=document.createElement("div");
+        const name=document.createElement("div");
+        name.className="hive-activity-name";
         name.textContent=String(item.contact.adv_name||item.contact.pubkey_prefix||"Nó");
-        const value=document.createElement("strong");
-        value.textContent=String(item.score);
-        row.append(name,value);
-        row.addEventListener("click",()=>{
-          this.__focusNodeOnMap(item.contact,true);
-          this.__removeActivityHeatmapLayer();
-        });
-        overlay.appendChild(row);
+        const detail=document.createElement("div");
+        detail.className="hive-activity-detail";
+        detail.textContent="RX "+(item.activity.rx||0)+" · TX "+(item.activity.tx||0)+" · paths "+(item.activity.linkVolume||0);
+        left.append(name,detail);
+        const score=document.createElement("span");
+        score.className="hive-activity-score";
+        score.textContent=String(item.score);
+        row.append(left,score);
+        row.addEventListener("click",()=>this.__focusNodeOnMap(item.contact,true));
+        list.appendChild(row);
       }
     }
 
-    pane.appendChild(overlay);
-    this.__activityHeatmapLayer=overlay;
+    inner.append(header,summary,list);
+    pane.appendChild(inner);
+    this.__activityHeatmapVisible=true;
   }
 
   __resolveTopologyHash(hash) {
@@ -6028,6 +6182,18 @@ class HiveFWPanel extends BasePanel {
 
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
+
+    const rect=pane.getBoundingClientRect();
+    if(rect.width<180 || rect.height<220){
+      if(!this.__nodesMapRetryTimer){
+        this.__nodesMapRetryTimer=setTimeout(()=>{
+          this.__nodesMapRetryTimer=null;
+          if(pane.isConnected)this.__scheduleSplitMap(page,pane);
+        },120);
+      }
+      return;
+    }
+
     const entryId=this.__entryId()||null;
     if(!this.__repeaterStatus && !this.__repeaterLoading){
       await this.__loadRepeaterStatus();
@@ -6058,8 +6224,14 @@ class HiveFWPanel extends BasePanel {
         pane.replaceChildren();
         const note=document.createElement("div");
         note.className="hive-map-note";
-        note.textContent="Não foi possível carregar o mapa do Home Assistant.";
+        note.textContent="A carregar mapa do Home Assistant…";
         pane.appendChild(note);
+      }
+      if(!this.__nodesMapRetryTimer){
+        this.__nodesMapRetryTimer=setTimeout(()=>{
+          this.__nodesMapRetryTimer=null;
+          if(pane.isConnected)this.__scheduleSplitMap(page,pane);
+        },700);
       }
       return;
     }
