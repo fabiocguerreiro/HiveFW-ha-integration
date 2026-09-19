@@ -3,33 +3,19 @@ from __future__ import annotations
 
 from typing import Final
 
-# This integration's own domain.
-DOMAIN: Final = "hivefw_integration"
-ENTITY_PREFIX: Final = "hivefw"
-PUBLIC_EVENT_PREFIX: Final = "hivefw"
+from .engine.const import (
+    CONF_FLOOD_SCOPES as _ENGINE_CONF_FLOOD_SCOPES,
+    CONF_NAME as _ENGINE_CONF_NAME,
+    DOMAIN,
+    ENTITY_PREFIX,
+    PUBLIC_EVENT_PREFIX,
+)
 
-# Internal engine/service domain. Kept as an alias because older lifted
-# helper code still imports MESHCORE_DOMAIN, but it resolves to HiveFW itself.
+# Compatibility aliases for helper code lifted during the standalone migration.
+# Values come from the embedded HiveFW engine so there is a single source of truth.
 MESHCORE_DOMAIN: Final = DOMAIN
-
-# Upstream meshcore config-entry data key for the companion device name.
-# Mirrors meshcore-ha/custom_components/meshcore/const.py:CONF_NAME (literal "name").
-# Lifted as a literal here to avoid importing from the upstream package, so the
-# chat addon stays self-contained for HACS distribution. If meshcore-ha ever
-# changes this key, both this constant and our rename-migration logic in
-# `ws_set_device_config` break together — see
-# `_migrate_entity_ids_name_suffix` and the `name` branch of
-# `ws_set_device_config` in ws_api.py.
-CONF_NAME_UPSTREAM: Final = "name"
-
-# Upstream meshcore config-entry data key holding the comma-separated
-# region-scope allowlist the user maintains in the integration's Global
-# Settings. Mirrors meshcore-ha/custom_components/meshcore/const.py:
-# CONF_FLOOD_SCOPES (literal "flood_scopes") — same lifted-literal
-# rationale as CONF_NAME_UPSTREAM above. The key was added upstream by
-# meshcore-dev/meshcore-ha#250 and is absent on older meshcore
-# versions; consumers treat absence as "no scopes available".
-CONF_FLOOD_SCOPES_UPSTREAM: Final = "flood_scopes"
+CONF_NAME_UPSTREAM: Final = _ENGINE_CONF_NAME
+CONF_FLOOD_SCOPES_UPSTREAM: Final = _ENGINE_CONF_FLOOD_SCOPES
 
 # Public HiveFW events fired on hass.bus and consumed by the panel/store.
 EVENT_MESHCORE_MESSAGE: Final = f"{PUBLIC_EVENT_PREFIX}_message"
@@ -38,8 +24,7 @@ EVENT_MESHCORE_CONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_connected"
 EVENT_MESHCORE_DISCONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_disconnected"
 
 # ─── Storage keys ──────────────────────────────────────────────────────────
-# Per-conversation file naming. Distinct from the upstream `meshcore.*` namespace
-# to avoid file collisions if a similar feature ever lands in the core integration.
+# Per-conversation file naming. Namespaced to HiveFW so conversation storage remains isolated per integration entry.
 # Substitute the per-entry id and a sanitized entity_id (dots → underscores).
 STORAGE_KEY_INDEX: Final = "hivefw_integration.{entry_id}.message_index"
 STORAGE_KEY_CONVERSATION: Final = "hivefw_integration.{entry_id}.msgs.{safe_entity_id}"
@@ -62,12 +47,11 @@ OPT_MESSAGE_RETENTION_DAYS: Final = "message_retention_days"
 
 # ─── Constants used by the lifted ws_api.py / utils helpers ─────────────────
 # HA entity-domain string used by helpers that build entity_ids for binary
-# sensors created by the upstream integration. Not the companion's domain.
+# HiveFW binary sensors addressed by WebSocket helpers.
 ENTITY_DOMAIN_BINARY_SENSOR: Final = "binary_sensor"
 
 # Default age (days) at which a neighbor entry is considered stale and
-# eligible for cleanup via hivefw_integration/cleanup_stale_neighbors. Mirrors
-# the upstream meshcore.const value of the same name; lifted here so the
+# eligible for cleanup via hivefw_integration/cleanup_stale_neighbors. Shared with the embedded engine; retained here for WebSocket helper compatibility.
 # companion's ws_api.py can self-import it without coupling to upstream's
 # const module.
 DEFAULT_STALE_NEIGHBOR_DAYS: Final = 30
