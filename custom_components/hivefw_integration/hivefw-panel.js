@@ -104,6 +104,7 @@ class HiveFWPanel extends BasePanel {
     this.__consoleError = null;
     this.__consoleLoadedEntry = null;
     this.__consoleOverlay = null;
+    this.__shareOverlay = null;
 
     this.__chatObservedRoot = null;
     this.__chatObserver = null;
@@ -348,6 +349,178 @@ class HiveFWPanel extends BasePanel {
         const nextText = parts.join(" · ");
         if (meta.textContent !== nextText) meta.textContent = nextText;
       }
+    }
+
+    this.__decorateShareActions(croot);
+    window.setTimeout(()=>this.__decorateShareActions(croot),80);
+  }
+
+  __meshCoreContactShareUri(contact) {
+    const publicKey=String(contact?.public_key||"").trim().toLowerCase();
+    if(!/^[0-9a-f]{64}$/.test(publicKey))return "";
+    const params=new URLSearchParams();
+    params.set("name",String(contact?.adv_name||contact?.name||"Contact"));
+    params.set("public_key",publicKey);
+    params.set("type",String(Number(contact?.type)||1));
+    return "meshcore://contact/add?"+params.toString();
+  }
+
+  __meshCoreChannelShareUri(channel) {
+    const secret=String(channel?.settings?.channel_secret||"").trim().toLowerCase();
+    if(!/^[0-9a-f]{32}$/.test(secret))return "";
+    const params=new URLSearchParams();
+    params.set("name",String(channel?.name||"Channel"));
+    params.set("secret",secret);
+    const scope=String(channel?.scope||"").trim();
+    if(scope)params.set("region_scope",scope);
+    return "meshcore://channel/add?"+params.toString();
+  }
+
+  __closeShareDialog() {
+    if(this.__shareOverlay?.isConnected)this.__shareOverlay.remove();
+    this.__shareOverlay=null;
+  }
+
+  __openShareDialog(title,uri) {
+    if(!uri)return;
+    this.__closeShareDialog();
+
+    const overlay=document.createElement("div");
+    overlay.style.cssText="position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);";
+    overlay.addEventListener("click",(event)=>{if(event.target===overlay)this.__closeShareDialog();});
+
+    const dialog=document.createElement("div");
+    dialog.style.cssText="width:min(520px,100%);max-height:min(88vh,760px);overflow:auto;padding:18px;box-sizing:border-box;border-radius:14px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 12px 36px rgba(0,0,0,.35);";
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:12px;margin-bottom:14px;";
+    const heading=document.createElement("strong");
+    heading.textContent=title;
+    heading.style.cssText="flex:1;font-size:16px;";
+    const close=document.createElement("button");
+    close.type="button";
+    close.textContent="✕";
+    close.title="Fechar";
+    close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color,#666);font-size:18px;cursor:pointer;";
+    close.addEventListener("click",()=>this.__closeShareDialog());
+    header.append(heading,close);
+    dialog.appendChild(header);
+
+    if(customElements.get("ha-qr-code")){
+      const qr=document.createElement("ha-qr-code");
+      qr.data=uri;
+      qr.width=260;
+      qr.margin=2;
+      qr.style.cssText="display:grid;place-items:center;margin:0 auto 14px;max-width:100%;";
+      dialog.appendChild(qr);
+    }else{
+      const unavailable=document.createElement("div");
+      unavailable.textContent="O componente QR nativo do Home Assistant não está carregado nesta sessão; o URI abaixo continua disponível para copiar.";
+      unavailable.style.cssText="margin-bottom:12px;padding:9px 10px;border-radius:8px;background:var(--secondary-background-color,#f3f3f3);color:var(--secondary-text-color,#666);font-size:11px;";
+      dialog.appendChild(unavailable);
+    }
+
+    const uriBox=document.createElement("code");
+    uriBox.textContent=uri;
+    uriBox.style.cssText="display:block;padding:10px;border:1px solid var(--divider-color,#ddd);border-radius:8px;overflow-wrap:anywhere;white-space:normal;font-size:11px;user-select:all;";
+
+    const note=document.createElement("div");
+    note.textContent="Este URI contém os dados necessários para importar o contacto/canal. No caso de um canal, trata a chave como uma palavra-passe.";
+    note.style.cssText="margin-top:9px;color:var(--secondary-text-color,#666);font-size:10px;";
+
+    const actions=document.createElement("div");
+    actions.style.cssText="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;";
+    const copy=document.createElement("button");
+    copy.type="button";
+    copy.textContent="Copiar URI";
+    copy.style.cssText="padding:7px 11px;border:1px solid var(--divider-color,#bbb);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-color,#03a9f4);font-weight:650;cursor:pointer;";
+    copy.addEventListener("click",async()=>{
+      const original=copy.textContent;
+      try{
+        await navigator.clipboard.writeText(uri);
+        copy.textContent="Copiado";
+      }catch{
+        copy.textContent="Falhou";
+      }
+      window.setTimeout(()=>{if(copy.isConnected)copy.textContent=original;},1200);
+    });
+    actions.appendChild(copy);
+    dialog.append(uriBox,note,actions);
+    overlay.appendChild(dialog);
+    this.shadowRoot?.appendChild(overlay);
+    this.__shareOverlay=overlay;
+  }
+
+  __decorateShareActions(croot) {
+    const manage=croot?.querySelector("meshcore-manage-dialog");
+    const mroot=manage?.shadowRoot;
+    if(!manage||!mroot)return;
+
+    if(!mroot.querySelector("#hivefw-share-actions-style")){
+      const style=document.createElement("style");
+      style.id="hivefw-share-actions-style";
+      style.textContent=`
+        .hive-share-btn{
+          border:1px solid var(--divider-color,#bbb);
+          border-radius:6px;
+          padding:5px 8px;
+          background:var(--card-background-color,#fff);
+          color:var(--primary-color,#03a9f4);
+          font-size:11px;
+          font-weight:650;
+          cursor:pointer;
+          flex:0 0 auto;
+        }
+      `;
+      mroot.appendChild(style);
+    }
+
+    const contacts=Array.isArray(manage._contacts)?manage._contacts:[];
+    for(const row of mroot.querySelectorAll(".contact-item")){
+      if(row.querySelector(".hive-share-btn"))continue;
+      const prefix=String(row.querySelector(".contact-prefix")?.textContent||"").trim().toLowerCase();
+      const matches=contacts.filter((contact)=>String(contact?.pubkey_prefix||"").trim().toLowerCase()===prefix);
+      if(matches.length!==1)continue;
+      const contact=matches[0];
+      const uri=this.__meshCoreContactShareUri(contact);
+      if(!uri)continue;
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="hive-share-btn";
+      button.textContent="QR";
+      button.title="Partilhar contacto por QR/URI MeshCore";
+      button.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__openShareDialog("Partilhar contacto · "+String(contact.adv_name||contact.pubkey_prefix||"Contacto"),uri);
+      });
+      row.appendChild(button);
+    }
+
+    const channels=Array.isArray(manage._channels)?manage._channels:[];
+    for(const row of mroot.querySelectorAll(".channel-item")){
+      if(row.querySelector(".hive-share-btn"))continue;
+      const text=String(row.querySelector(".channel-idx")?.textContent||"");
+      const match=text.match(/Index\s+(\d+)/i);
+      if(!match)continue;
+      const idx=Number(match[1]);
+      const candidates=channels.filter((channel)=>Number(channel?.channel_idx)===idx);
+      if(candidates.length!==1)continue;
+      const channel=candidates[0];
+      const uri=this.__meshCoreChannelShareUri(channel);
+      if(!uri)continue;
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="hive-share-btn";
+      button.textContent="QR";
+      button.title="Partilhar canal por QR/URI MeshCore";
+      button.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__openShareDialog("Partilhar canal · "+String(channel.name||("#"+idx)),uri);
+      });
+      const actions=row.querySelector(".channel-actions");
+      if(actions)actions.prepend(button); else row.appendChild(button);
     }
   }
 
