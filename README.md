@@ -12,6 +12,20 @@ de mensagens e interface lateral. **Não é necessário instalar a integração 
 `meshcore-ha` em separado.** O protocolo/SDK MeshCore continua a ser usado internamente,
 mas a superfície pública no Home Assistant pertence ao HiveFW.
 
+## HiveFW 1.1.4
+
+Refatoração da aba **Nós** para o novo modelo ser a própria fundação da página:
+
+- o bundle HACS já nasce em **barra full-width + lista estreita + mapa**; deixou de existir o flash do layout antigo;
+- `meshcore-nodes-page` passa a possuir nativamente o `nodes-map-pane`;
+- o wrapper deixa de criar uma segunda área de mapa ou reposicionar a página depois do render;
+- lista mantém uma única coluna e pesquisa aproximadamente com a largura da lista;
+- `ROTAS · ATIVIDADE · TOPOLOGIA` continuam na barra, mas ficam isolados do mapa-base;
+- `ROTAS` já não escreve em `map.paths`;
+- `ATIVIDADE` já não reescreve `editableLocations`;
+- pins, centragem e popup foram repostos a partir do último mapa pré-overlays conhecido como funcional;
+- `TOPOLOGIA` continua como vista DOM/SVG independente sobre a área do mapa.
+
 ## HiveFW 1.1.3
 
 Correção definitiva da inicialização cartográfica na aba **Nós**:
