@@ -178,14 +178,10 @@ def build_device_name(name: str, pubkey_prefix: str, node_type: str = "unknown")
 
     pubkey_short = pubkey_prefix[:6] if pubkey_prefix else ""
 
-    if node_type == "root":
-        return f"HiveFW {name} ({pubkey_short})"
-    elif node_type == "repeater":
-        return f"HiveFW Repeater: {name} ({pubkey_short})"
-    elif node_type == "client":
-        return f"HiveFW Client: {name} ({pubkey_short})"
-    else:
-        return f"HiveFW Node: {name} ({pubkey_short})"
+    # Device-registry names are deliberately neutral. HiveFW is the
+    # integration/product identity; the Home Assistant device itself is the
+    # radio/node identity, so show only its advertised name and key prefix.
+    return f"{name} ({pubkey_short})"
 
 
 def get_device_model(node_type: str) -> str:
