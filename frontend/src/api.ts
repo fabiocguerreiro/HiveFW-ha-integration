@@ -986,6 +986,7 @@ export async function getContactsPaginated(
   options: {
     nodeType?: number;
     search?: string;
+    activity?: 'all' | 'active24h' | 'favorites' | 'gps' | 'stale';
     limit?: number;
     offset?: number;
     entryId?: string;
@@ -1001,12 +1002,28 @@ export async function getContactsPaginated(
     };
     if (options.nodeType !== undefined) msg.node_type = options.nodeType;
     if (options.search) msg.search = options.search;
+    if (options.activity && options.activity !== 'all') msg.activity = options.activity;
     if (options.entryId) msg.entry_id = options.entryId;
     if (options.sortBy) msg.sort_by = options.sortBy;
     return await hass.callWS<PaginatedContactsResponse>(msg);
   } catch {
     return { contacts: [], total: 0, counts: { clients: 0, repeaters: 0, room_servers: 0, sensors: 0 } };
   }
+}
+
+export async function setNodeMeta(
+  hass: HomeAssistant,
+  publicKey: string,
+  patch: { favorite?: boolean; tags?: string[] },
+  entryId?: string,
+): Promise<{ favorite: boolean; tags: string[] }> {
+  const msg: Record<string, unknown> = {
+    type: 'hivefw_integration/set_node_meta',
+    public_key: publicKey,
+    ...patch,
+  };
+  if (entryId) msg.entry_id = entryId;
+  return hass.callWS<{ favorite: boolean; tags: string[] }>(msg);
 }
 
 export async function clearDiscoveredContacts(
