@@ -60,8 +60,8 @@ Estas funcionalidades existem e devem permanecer em qualquer refactor:
 
 ## Próxima fase — mapa, rotas e topologia
 
-- [ ] Cores por idade do nó: <1h, <6h, <24h, <7d, stale.
-- [ ] Filtros: all, active 24h, repeaters, clients, favorites, GPS, stale.
+- [x] Cores por idade do nó: <1h, <6h, <24h, <7d, stale.
+- [x] Filtros: all, active 24h, repeaters, clients, favorites, GPS, stale.
 - [ ] Route History, não apenas o último Trace.
 - [ ] Path history por mensagem e ação **Mostrar no mapa**.
 - [ ] Contagem RX/TX por peer e volume de link.
@@ -79,7 +79,7 @@ Estas funcionalidades existem e devem permanecer em qualquer refactor:
 - [ ] Bulk cleanup por idade.
 - [ ] Proteções de cleanup para favorites, contactos adicionados, Repeaters configurados e tags protegidas.
 - [ ] Seleção e ações em massa.
-- [ ] Pesquisa avançada por nome/public key/tag.
+- [x] Pesquisa avançada por nome/public key/tag.
 
 ## Administração remota de Repeaters
 
