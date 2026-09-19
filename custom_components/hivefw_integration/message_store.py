@@ -534,6 +534,93 @@ class MessageStore:
         """Return the lightweight message index (always in memory)."""
         return self._message_index
 
+    async def get_peer_activity(self) -> dict[str, dict]:
+        """Aggregate RX/TX peer and path-link activity from stored messages.
+
+        This is derived on demand from the existing message archive. It creates
+        no RF traffic and no additional persistent data.
+        """
+        peers: dict[str, dict] = {}
+        links: dict[str, dict] = {}
+
+        for entity_id in self._message_index:
+            messages = await self._load_for_search(entity_id)
+            for message in messages:
+                prefix = str(message.get("pubkey_prefix") or "").strip().lower()
+                if prefix:
+                    peer = peers.setdefault(
+                        prefix,
+                        {
+                            "rx": 0,
+                            "tx": 0,
+                            "messages": 0,
+                            "last_timestamp": "",
+                        },
+                    )
+                    peer["messages"] += 1
+                    if message.get("outgoing", False):
+                        peer["tx"] += 1
+                    else:
+                        peer["rx"] += 1
+                    timestamp = str(message.get("timestamp") or "")
+                    if timestamp > str(peer.get("last_timestamp") or ""):
+                        peer["last_timestamp"] = timestamp
+
+                observations = message.get("rx_log_data")
+                if not isinstance(observations, list):
+                    continue
+                for observation in observations:
+                    if not isinstance(observation, dict):
+                        continue
+                    nodes = observation.get("path_nodes")
+                    if not isinstance(nodes, list):
+                        nodes = []
+                    for raw_hash in nodes:
+                        hop_hash = str(raw_hash or "").strip().lower()
+                        if not hop_hash:
+                            continue
+                        link = links.setdefault(
+                            hop_hash,
+                            {
+                                "observations": 0,
+                                "rssi_sum": 0.0,
+                                "rssi_count": 0,
+                                "snr_sum": 0.0,
+                                "snr_count": 0,
+                            },
+                        )
+                        link["observations"] += 1
+                        try:
+                            rssi = float(observation.get("rssi"))
+                        except (TypeError, ValueError):
+                            rssi = None
+                        if rssi is not None:
+                            link["rssi_sum"] += rssi
+                            link["rssi_count"] += 1
+                        try:
+                            snr = float(observation.get("snr"))
+                        except (TypeError, ValueError):
+                            snr = None
+                        if snr is not None:
+                            link["snr_sum"] += snr
+                            link["snr_count"] += 1
+
+        for link in links.values():
+            link["avg_rssi"] = (
+                round(link["rssi_sum"] / link["rssi_count"], 1)
+                if link["rssi_count"]
+                else None
+            )
+            link["avg_snr"] = (
+                round(link["snr_sum"] / link["snr_count"], 1)
+                if link["snr_count"]
+                else None
+            )
+            for key in ("rssi_sum", "rssi_count", "snr_sum", "snr_count"):
+                link.pop(key, None)
+
+        return {"peers": peers, "links": links}
+
     async def search(
         self,
         query: str,
