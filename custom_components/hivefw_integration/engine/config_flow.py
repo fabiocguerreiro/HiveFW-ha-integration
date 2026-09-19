@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Config flow for MeshCore integration."""
+"""Config flow for the standalone HiveFW integration."""
 import asyncio
 import copy
 import logging
@@ -173,7 +173,7 @@ async def validate_common(api: MeshCoreAPI) -> Dict[str, Any]:
         _LOGGER.info(f"Validating device - Name: {device_name}, Public Key: {public_key[:10]}")
         
         # If we get here, the connection was successful and we got valid info
-        return {"title": f"MeshCore Node {device_name}", "name": device_name, "pubkey": public_key}
+        return {"title": f"HiveFW {device_name}", "name": device_name, "pubkey": public_key}
     except asyncio.TimeoutError:
         raise CannotConnect("Connection timed out")
     except Exception as ex:
@@ -212,10 +212,10 @@ async def validate_tcp_input(hass: HomeAssistant, data: Dict[str, Any]) -> Dict[
     return await validate_common(api)
 
 
-class MeshCoreConfigFlow(config_entries.ConfigFlow, domain=DOMAIN): # type: ignore
-    """Handle a config flow for MeshCore."""
+class HiveFWConfigFlow(config_entries.ConfigFlow, domain=DOMAIN): # type: ignore
+    """Handle a config flow for HiveFW."""
 
-    VERSION = 3
+    VERSION = 1
 
     def __init__(self) -> None:
         """Initialize flow."""
@@ -529,7 +529,7 @@ class MeshCoreConfigFlow(config_entries.ConfigFlow, domain=DOMAIN): # type: igno
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options for MeshCore."""
+    """Handle options for HiveFW."""
 
     def __init__(self) -> None:
         """Initialize options flow."""
@@ -752,7 +752,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         coordinator = self.hass.data[DOMAIN].get(self.config_entry.entry_id) # type: ignore
         meshcore = coordinator.api.mesh_core # type: ignore
         if not meshcore:
-            errors["base"] = "Device not connected. Please ensure the MeshCore device is connected."
+            errors["base"] = "Device not connected. Please ensure the HiveFW device is connected."
             return self._show_add_repeater_form(repeater_dict, errors, user_input)
 
         # validate the repeater can be logged into
