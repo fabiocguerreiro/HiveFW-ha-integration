@@ -55,6 +55,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapInitialViewEntry = null;
     this.__mapLoadStarted = false;
 
+    this.__diagHistory = null;
+    this.__diagHistoryKey = "";
+    this.__diagHistoryLoading = false;
+    this.__diagHistoryAt = 0;
+
     this.__hiveNeighbors = null;
     this.__hiveNeighborsLoading = false;
     this.__hiveNeighborsError = null;
@@ -1176,6 +1181,184 @@ class MeshCoreRepeaterPanel extends BasePanel {
     note.textContent =
       "RF, TX Power e Path Hash permanecem no cartão Radio; adverts, sync e reboot permanecem no cartão do Companion.";
     card.appendChild(note);
+  }
+
+  __findDeviceMetricEntity(summary, needle) {
+    const wanted=String(needle||"").toLowerCase();
+    const entities=Array.isArray(summary?.entities)?summary.entities:[];
+    const direct=entities.find((entity)=>
+      String(entity?.entity_id||"").toLowerCase().includes(wanted) ||
+      String(entity?.label||"").toLowerCase().includes(wanted)
+    );
+    if(direct?.entity_id && this.hass?.states?.[direct.entity_id])return direct.entity_id;
+
+    const prefix=String(this._selectedDevice?.pubkey_prefix||this._selectedDevice?.pubkey||"")
+      .slice(0,6).toLowerCase();
+    const name=String(this._selectedDevice?.name||"").toLowerCase()
+      .replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+    const ids=Object.keys(this.hass?.states||{});
+    return ids.find((id)=>{
+      const lower=id.toLowerCase();
+      if(!lower.includes(wanted))return false;
+      if(prefix && lower.includes(prefix))return true;
+      return !!name && lower.includes(name);
+    })||null;
+  }
+
+  __readMetricState(summary, needle) {
+    const entityId=this.__findDeviceMetricEntity(summary,needle);
+    if(!entityId)return {entityId:null,value:NaN,state:null};
+    const state=this.hass?.states?.[entityId]||null;
+    const value=Number.parseFloat(state?.state);
+    return {entityId,value:Number.isFinite(value)?value:NaN,state};
+  }
+
+  async __loadDiagnosticHistory(summary) {
+    if(!this.hass||!summary)return;
+    const entry=String(this.__entryId()||"default");
+    const wanted=[
+      ["Noise floor","noise_floor","dBm"],
+      ["RSSI","last_rssi","dBm"],
+      ["SNR","last_snr","dB"],
+      ["RX rate","nb_recv_rate","msg/min"],
+      ["TX rate","nb_sent_rate","msg/min"],
+      ["RX errors","recv_errors_rate","msg/min"],
+    ];
+    const metrics=wanted.map(([label,key,unit])=>{
+      const entityId=this.__findDeviceMetricEntity(summary,key);
+      return entityId?{label,key,unit,entityId}:null;
+    }).filter(Boolean);
+    const key=entry+"|"+metrics.map((metric)=>metric.entityId).join("|");
+    const fresh=this.__diagHistoryKey===key && Date.now()-this.__diagHistoryAt<5*60*1000;
+    if(fresh||this.__diagHistoryLoading)return;
+    if(!metrics.length){
+      this.__diagHistory={metrics:[],series:{}};
+      this.__diagHistoryKey=key;
+      this.__diagHistoryAt=Date.now();
+      return;
+    }
+
+    this.__diagHistoryLoading=true;
+    try{
+      const end=new Date();
+      const start=new Date(end.getTime()-48*60*60*1000);
+      const statistics=await this.hass.callWS({
+        type:"recorder/statistics_during_period",
+        start_time:start.toISOString(),
+        end_time:end.toISOString(),
+        statistic_ids:metrics.map((metric)=>metric.entityId),
+        period:"hour",
+      });
+      const series={};
+      for(const metric of metrics){
+        const rows=Array.isArray(statistics?.[metric.entityId])?statistics[metric.entityId]:[];
+        const values=rows.map((row)=>({
+          t:new Date(row?.start??row?.start_time??0).getTime(),
+          v:Number(row?.mean??row?.state??row?.sum),
+        })).filter((point)=>Number.isFinite(point.t)&&Number.isFinite(point.v));
+        series[metric.entityId]=values;
+      }
+      this.__diagHistory={metrics,series};
+      this.__diagHistoryKey=key;
+      this.__diagHistoryAt=Date.now();
+    }catch(error){
+      console.debug("HiveFW diagnostics history unavailable:",error);
+      this.__diagHistory={metrics:[],series:{}};
+      this.__diagHistoryKey=key;
+      this.__diagHistoryAt=Date.now();
+    }finally{
+      this.__diagHistoryLoading=false;
+      if(this._activeTab==="settings")queueMicrotask(()=>this.__enhanceSettingsPage());
+    }
+  }
+
+  __sparklineSvg(values) {
+    const NS="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(NS,"svg");
+    svg.setAttribute("viewBox","0 0 220 54");
+    svg.setAttribute("preserveAspectRatio","none");
+    svg.style.cssText="display:block;width:100%;height:54px;overflow:visible;";
+    if(!Array.isArray(values)||values.length<2)return svg;
+    const nums=values.map((point)=>Number(point.v)).filter(Number.isFinite);
+    if(nums.length<2)return svg;
+    let min=Math.min(...nums),max=Math.max(...nums);
+    if(min===max){min-=1;max+=1;}
+    const points=values.map((point,index)=>{
+      const x=(index/(values.length-1))*218+1;
+      const y=52-((Number(point.v)-min)/(max-min))*48;
+      return x.toFixed(2)+","+y.toFixed(2);
+    }).join(" ");
+    const grid=document.createElementNS(NS,"line");
+    grid.setAttribute("x1","0");grid.setAttribute("x2","220");
+    grid.setAttribute("y1","52");grid.setAttribute("y2","52");
+    grid.setAttribute("stroke","var(--divider-color,#ddd)");
+    grid.setAttribute("stroke-width","1");
+    const line=document.createElementNS(NS,"polyline");
+    line.setAttribute("points",points);
+    line.setAttribute("fill","none");
+    line.setAttribute("stroke","var(--primary-color,#03a9f4)");
+    line.setAttribute("stroke-width","2");
+    line.setAttribute("vector-effect","non-scaling-stroke");
+    svg.append(grid,line);
+    return svg;
+  }
+
+  __renderDiagnosticHistory(summary,nroot,hero) {
+    let panel=nroot.querySelector(".hive-diagnostics-history");
+    if(!panel){
+      panel=document.createElement("section");
+      panel.className="hive-diagnostics-history";
+      panel.style.cssText="margin:4px 0 14px;padding:11px 12px;border:1px solid var(--divider-color,#ddd);border-radius:10px;background:var(--card-background-color,#fff);";
+      hero.insertAdjacentElement("afterend",panel);
+    }
+    panel.replaceChildren();
+    const title=document.createElement("div");
+    title.style.cssText="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;";
+    const heading=document.createElement("strong");
+    heading.textContent="Histórico RF / tráfego · 48h";
+    heading.style.cssText="font-size:11px;text-transform:uppercase;letter-spacing:.45px;";
+    const source=document.createElement("span");
+    source.textContent="Recorder do Home Assistant";
+    source.style.cssText="font-size:9px;color:var(--secondary-text-color,#777);";
+    title.append(heading,source);
+    panel.appendChild(title);
+
+    const history=this.__diagHistory;
+    if(this.__diagHistoryLoading && !history){
+      const loading=document.createElement("div");
+      loading.textContent="A carregar histórico…";
+      loading.style.cssText="padding:8px 0;font-size:11px;color:var(--secondary-text-color,#777);";
+      panel.appendChild(loading);
+      return;
+    }
+    const metrics=(history?.metrics||[]).filter((metric)=>
+      Array.isArray(history?.series?.[metric.entityId]) && history.series[metric.entityId].length>1
+    );
+    if(!metrics.length){panel.style.display="none";return;}
+    panel.style.display="block";
+    const grid=document.createElement("div");
+    grid.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;";
+    for(const metric of metrics){
+      const values=history.series[metric.entityId];
+      const nums=values.map((point)=>Number(point.v)).filter(Number.isFinite);
+      const last=nums[nums.length-1];
+      const min=Math.min(...nums),max=Math.max(...nums);
+      const card=document.createElement("div");
+      card.style.cssText="min-width:0;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);";
+      const top=document.createElement("div");
+      top.style.cssText="display:flex;justify-content:space-between;gap:6px;font-size:10px;";
+      const label=document.createElement("span");label.textContent=metric.label;label.style.fontWeight="650";
+      const value=document.createElement("span");
+      value.textContent=Number(last).toFixed(metric.unit==="msg/min"?1:0)+" "+metric.unit;
+      value.style.fontVariantNumeric="tabular-nums";
+      top.append(label,value);
+      card.append(top,this.__sparklineSvg(values));
+      const range=document.createElement("div");
+      range.textContent="mín "+min.toFixed(1)+" · máx "+max.toFixed(1);
+      range.style.cssText="font-size:9px;color:var(--secondary-text-color,#777);text-align:right;";
+      card.appendChild(range);grid.appendChild(card);
+    }
+    panel.appendChild(grid);
   }
 
   __enhanceCompanionHero(sroot) {
