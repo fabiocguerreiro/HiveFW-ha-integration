@@ -132,12 +132,16 @@ class HiveFWPanel extends BasePanel {
       product.className = "hivefw-header-product";
       product.textContent = radioName;
       title.appendChild(product);
+      const brand = document.createElement("span");
+      brand.className = "hivefw-header-brand-white";
+      brand.setAttribute("aria-label", "HiveFW");
+      brand.title = "HiveFW";
+      title.appendChild(brand);
       title.setAttribute("aria-label", radioName);
     }
 
-    // The HiveFW radio is the integration's primary device. Keep the right
-    // side of the header deliberately minimal: connection state + battery +
-    // the white HiveFW wordmark requested for the product identity.
+    // Keep the right side deliberately minimal: connection state + battery.
+    // Product identity (radio name + HiveFW wordmark) lives together on the left.
     root.querySelectorAll(".header-right .device-info-wrap").forEach((el) => el.remove());
     const connectionStatus = root.querySelector(".connection-status");
     if (connectionStatus) {
@@ -154,14 +158,6 @@ class HiveFWPanel extends BasePanel {
       label.textContent = online ? "Conectado" : "Desconectado";
     }
 
-    const headerRight = root.querySelector(".header-right");
-    if (headerRight && !headerRight.querySelector(".hivefw-header-brand-white")) {
-      const brand = document.createElement("span");
-      brand.className = "hivefw-header-brand-white";
-      brand.setAttribute("aria-label", "HiveFW");
-      brand.title = "HiveFW";
-      headerRight.appendChild(brand);
-    }
 
     this.__ensureRepeaterStyles(root);
     this.__ensureTabs(root);
@@ -503,6 +499,12 @@ class HiveFWPanel extends BasePanel {
         display:flex !important;
         align-items:center;
         gap:10px;
+      }
+      .panel-title {
+        display:inline-flex !important;
+        align-items:center;
+        gap:10px;
+        min-width:0;
       }
       .hivefw-header-brand-white {
         display:inline-block;
