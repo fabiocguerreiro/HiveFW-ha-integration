@@ -73,9 +73,11 @@ class HiveFWPanel extends BasePanel {
     this.__traceHistoryLoadedEntry = null;
     this.__traceHistoryLoading = false;
     this.__traceHistoryPanel = null;
-    this.__peerActivity = { peers: {}, links: {} };
+    this.__peerActivity = { peers: {}, links: {}, edges: {} };
     this.__peerActivityLoadedEntry = null;
     this.__peerActivityLoading = false;
+    this.__topologyVisible = false;
+    this.__topologyOverlay = null;
     this.__traceMonitorOverlay = null;
     this.__traceMonitorTimer = null;
     this.__traceMonitorRunning = false;
@@ -2739,6 +2741,7 @@ class HiveFWPanel extends BasePanel {
       this.__peerActivity={
         peers:result?.peers&&typeof result.peers==="object"?result.peers:{},
         links:result?.links&&typeof result.links==="object"?result.links:{},
+        edges:result?.edges&&typeof result.edges==="object"?result.edges:{},
       };
       this.__peerActivityLoadedEntry=entryId;
       const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
@@ -2749,9 +2752,10 @@ class HiveFWPanel extends BasePanel {
         const selected=source.find((c)=>this.__nodeId(c)===this.__nodesPopupId);
         if(selected)this.__openPersistentNodePopup(selected);
       }
+      if(this.__topologyVisible)this.__renderTopologyOverlay();
     }catch(error){
       console.warn("HiveFW peer activity load failed",error);
-      this.__peerActivity={peers:{},links:{}};
+      this.__peerActivity={peers:{},links:{},edges:{}};
       this.__peerActivityLoadedEntry=entryId;
     }finally{
       this.__peerActivityLoading=false;
@@ -3526,6 +3530,58 @@ class HiveFWPanel extends BasePanel {
           text-decoration:underline;
           text-underline-offset:2px;
         }
+        .hive-topology-overlay{
+          position:absolute;
+          inset:0;
+          z-index:45;
+          display:flex;
+          flex-direction:column;
+          min-width:0;
+          min-height:0;
+          background:var(--card-background-color,#fff);
+          color:var(--primary-text-color,#222);
+        }
+        .hive-topology-header{
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:10px 12px;
+          border-bottom:1px solid var(--divider-color,#ddd);
+          flex:0 0 auto;
+        }
+        .hive-topology-header strong{flex:1}
+        .hive-topology-header button{
+          border:1px solid var(--divider-color,#bbb);
+          border-radius:7px;
+          padding:5px 9px;
+          background:var(--card-background-color,#fff);
+          color:var(--primary-color,#03a9f4);
+          font:inherit;
+          font-weight:650;
+          cursor:pointer;
+        }
+        .hive-topology-canvas{
+          flex:1;
+          min-height:0;
+          overflow:hidden;
+          position:relative;
+          background:color-mix(in srgb,var(--card-background-color,#fff) 97%,var(--primary-color,#03a9f4));
+        }
+        .hive-topology-canvas svg{
+          width:100%;
+          height:100%;
+          display:block;
+        }
+        .hive-topology-legend{
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px 14px;
+          padding:8px 12px;
+          border-top:1px solid var(--divider-color,#ddd);
+          color:var(--secondary-text-color,#666);
+          font-size:10px;
+          flex:0 0 auto;
+        }
         @media(max-width:870px){
           .page-container.hive-nodes-split{
             grid-template-columns:1fr!important;
@@ -3588,6 +3644,7 @@ class HiveFWPanel extends BasePanel {
 
   __cleanupNodesSplit() {
     this.__closeTraceMonitor();
+    this.__closeTopologyOverlay();
     const root=this.shadowRoot;
     const container=root?.querySelector(".page-container");
     container?.classList.remove("hive-nodes-split");
@@ -4537,6 +4594,219 @@ class HiveFWPanel extends BasePanel {
     return true;
   }
 
+  __resolveTopologyHash(hash) {
+    const wanted=String(hash||"").trim().replace(/^0x/i,"").toLowerCase();
+    if(!wanted)return null;
+    const source=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+    const matches=source.filter((contact)=>{
+      const key=String(contact?.public_key||"").toLowerCase();
+      const prefix=String(contact?.pubkey_prefix||key.slice(0,12)).toLowerCase();
+      return key.startsWith(wanted)||prefix.startsWith(wanted);
+    });
+    return matches.length===1?matches[0]:null;
+  }
+
+  __topologyGraphData() {
+    const rawEdges=this.__peerActivity?.edges||{};
+    const nodes=new Map();
+    const edges=[];
+    let unresolved=0;
+
+    for(const raw of Object.values(rawEdges)){
+      if(!raw||typeof raw!=="object")continue;
+      const left=this.__resolveTopologyHash(raw.a);
+      const right=this.__resolveTopologyHash(raw.b);
+      if(!left||!right){
+        unresolved+=1;
+        continue;
+      }
+      const leftId=this.__nodeId(left);
+      const rightId=this.__nodeId(right);
+      if(!leftId||!rightId||leftId===rightId){
+        unresolved+=1;
+        continue;
+      }
+      nodes.set(leftId,left);
+      nodes.set(rightId,right);
+      edges.push({
+        leftId,
+        rightId,
+        observations:Number(raw.observations)||0,
+        avgSnr:Number.isFinite(Number(raw.avg_snr))?Number(raw.avg_snr):null,
+        avgRssi:Number.isFinite(Number(raw.avg_rssi))?Number(raw.avg_rssi):null,
+      });
+    }
+
+    return {nodes,edges,unresolved,totalRaw:Object.keys(rawEdges).length};
+  }
+
+  __closeTopologyOverlay() {
+    this.__topologyVisible=false;
+    if(this.__topologyOverlay?.isConnected)this.__topologyOverlay.remove();
+    this.__topologyOverlay=null;
+  }
+
+  __toggleTopologyOverlay() {
+    if(this.__topologyVisible){
+      this.__closeTopologyOverlay();
+      return;
+    }
+    this.__topologyVisible=true;
+    this.__renderTopologyOverlay();
+  }
+
+  __renderTopologyOverlay() {
+    if(!this.__topologyVisible)return;
+    const pane=this.__nodesMapPane;
+    if(!pane?.isConnected)return;
+
+    if(this.__topologyOverlay?.isConnected)this.__topologyOverlay.remove();
+
+    const data=this.__topologyGraphData();
+    const overlay=document.createElement("section");
+    overlay.className="hive-topology-overlay";
+
+    const header=document.createElement("div");
+    header.className="hive-topology-header";
+    const title=document.createElement("strong");
+    title.textContent="Topologia observada";
+    const stats=document.createElement("span");
+    stats.style.cssText="font-size:10px;color:var(--secondary-text-color,#666);";
+    stats.textContent=data.edges.length+" ligações · "+data.nodes.size+" nós"+(data.unresolved?" · "+data.unresolved+" ambíguas/sem contacto":"");
+    const close=document.createElement("button");
+    close.type="button";
+    close.textContent="Mapa";
+    close.addEventListener("click",()=>this.__closeTopologyOverlay());
+    header.append(title,stats,close);
+    overlay.appendChild(header);
+
+    const canvas=document.createElement("div");
+    canvas.className="hive-topology-canvas";
+    overlay.appendChild(canvas);
+
+    if(!data.edges.length){
+      const empty=document.createElement("div");
+      empty.className="hive-map-note";
+      empty.textContent=data.totalRaw
+        ?"Existem caminhos observados, mas nenhuma ligação pôde ser resolvida de forma inequívoca para contactos conhecidos."
+        :"Ainda não existem caminhos multi-hop suficientes para construir a topologia. A vista aparece à medida que mensagens com path_nodes são observadas.";
+      canvas.appendChild(empty);
+    }else{
+      const ns="http://www.w3.org/2000/svg";
+      const svg=document.createElementNS(ns,"svg");
+      svg.setAttribute("viewBox","0 0 1000 700");
+      svg.setAttribute("role","img");
+      svg.setAttribute("aria-label","Topologia de ligações observadas entre nós HiveFW");
+
+      const degree=new Map();
+      for(const edge of data.edges){
+        degree.set(edge.leftId,(degree.get(edge.leftId)||0)+Math.max(1,edge.observations));
+        degree.set(edge.rightId,(degree.get(edge.rightId)||0)+Math.max(1,edge.observations));
+      }
+      const ordered=[...data.nodes.keys()].sort((a,b)=>(degree.get(b)||0)-(degree.get(a)||0));
+      const positions=new Map();
+      if(ordered.length===2){
+        positions.set(ordered[0],[330,350]);
+        positions.set(ordered[1],[670,350]);
+      }else{
+        const hub=ordered[0];
+        positions.set(hub,[500,350]);
+        const ring=ordered.slice(1);
+        const radius=ring.length>10?285:245;
+        ring.forEach((id,index)=>{
+          const angle=-Math.PI/2+(Math.PI*2*index/Math.max(1,ring.length));
+          positions.set(id,[500+Math.cos(angle)*radius,350+Math.sin(angle)*radius]);
+        });
+      }
+
+      for(const edge of data.edges){
+        const a=positions.get(edge.leftId);
+        const b=positions.get(edge.rightId);
+        if(!a||!b)continue;
+        const line=document.createElementNS(ns,"line");
+        line.setAttribute("x1",String(a[0]));
+        line.setAttribute("y1",String(a[1]));
+        line.setAttribute("x2",String(b[0]));
+        line.setAttribute("y2",String(b[1]));
+        const snr=edge.avgSnr;
+        const stroke=snr==null?"#78909c":snr>=5?"#2e7d32":snr>=-5?"#f9a825":"#c62828";
+        const width=1.5+Math.min(8,Math.log2(Math.max(1,edge.observations)+1)*1.7);
+        line.setAttribute("stroke",stroke);
+        line.setAttribute("stroke-width",String(width));
+        line.setAttribute("stroke-opacity","0.72");
+        line.setAttribute("stroke-linecap","round");
+        const tip=document.createElementNS(ns,"title");
+        const details=[edge.observations+" observação"+(edge.observations===1?"":"ões")];
+        if(edge.avgSnr!=null)details.push("SNR observado "+edge.avgSnr.toFixed(1)+" dB");
+        if(edge.avgRssi!=null)details.push("RSSI observado "+edge.avgRssi.toFixed(1)+" dBm");
+        tip.textContent=details.join(" · ");
+        line.appendChild(tip);
+        svg.appendChild(line);
+      }
+
+      for(const id of ordered){
+        const contact=data.nodes.get(id);
+        const pos=positions.get(id);
+        if(!contact||!pos)continue;
+        const group=document.createElementNS(ns,"g");
+        const activity=this.__peerActivityFor(contact);
+        const volume=(degree.get(id)||0)+(activity.rx||0)+(activity.tx||0);
+        const radius=18+Math.min(12,Math.log2(Math.max(1,volume)+1)*2);
+        const circle=document.createElementNS(ns,"circle");
+        circle.setAttribute("cx",String(pos[0]));
+        circle.setAttribute("cy",String(pos[1]));
+        circle.setAttribute("r",String(radius));
+        circle.setAttribute("fill","var(--primary-color,#03a9f4)");
+        circle.setAttribute("stroke","var(--card-background-color,#fff)");
+        circle.setAttribute("stroke-width","4");
+        const label=document.createElementNS(ns,"text");
+        label.setAttribute("x",String(pos[0]));
+        label.setAttribute("y",String(pos[1]+radius+18));
+        label.setAttribute("text-anchor","middle");
+        label.setAttribute("font-size","13");
+        label.setAttribute("font-weight","650");
+        label.setAttribute("fill","var(--primary-text-color,#222)");
+        label.textContent=String(contact.adv_name||contact.pubkey_prefix||"Nó").slice(0,28);
+        const sub=document.createElementNS(ns,"text");
+        sub.setAttribute("x",String(pos[0]));
+        sub.setAttribute("y",String(pos[1]+radius+33));
+        sub.setAttribute("text-anchor","middle");
+        sub.setAttribute("font-size","10");
+        sub.setAttribute("fill","var(--secondary-text-color,#666)");
+        const parts=[];
+        if(activity.rx||activity.tx)parts.push("RX "+activity.rx+" · TX "+activity.tx);
+        parts.push("atividade "+(degree.get(id)||0));
+        sub.textContent=parts.join(" · ");
+        const tip=document.createElementNS(ns,"title");
+        tip.textContent=String(contact.adv_name||contact.pubkey_prefix||"Nó")+" · "+sub.textContent;
+        group.append(circle,label,sub,tip);
+        if(this.__nodeCoords(contact)){
+          group.style.cursor="pointer";
+          group.addEventListener("click",()=>{
+            this.__closeTopologyOverlay();
+            this.__focusNodeOnMap(contact,true);
+          });
+        }
+        svg.appendChild(group);
+      }
+      canvas.appendChild(svg);
+    }
+
+    const legend=document.createElement("div");
+    legend.className="hive-topology-legend";
+    legend.append(
+      document.createTextNode("Espessura = número de caminhos observados"),
+      document.createTextNode("SNR da observação: verde ≥ 5 dB · âmbar ≥ -5 dB · vermelho < -5 dB · cinzento = sem SNR"),
+      document.createTextNode("Só são ligadas hashes consecutivas resolvidas de forma única; não são inferidas relações.")
+    );
+    overlay.appendChild(legend);
+
+    pane.appendChild(overlay);
+    this.__topologyOverlay=overlay;
+  }
+
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
@@ -4653,7 +4923,17 @@ class HiveFWPanel extends BasePanel {
         event.stopPropagation();
         void this.__toggleTraceHistory();
       });
-      count.append(label,center,routes);
+      const topology=document.createElement("button");
+      topology.type="button";
+      topology.textContent="TOPOLOGIA";
+      topology.title="Ver topologia observada por atividade de caminhos";
+      topology.style.marginLeft="8px";
+      topology.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__toggleTopologyOverlay();
+      });
+      count.append(label,center,routes,topology);
     }
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
