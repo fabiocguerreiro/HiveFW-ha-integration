@@ -4038,6 +4038,20 @@ class HiveFWPanel extends BasePanel {
           align-items:center;
           flex-wrap:wrap;
         }
+        .header-actions{
+          width:100%;
+          display:flex!important;
+          align-items:center!important;
+          gap:8px!important;
+          flex-wrap:wrap!important;
+        }
+        .header-actions .search-bar{
+          flex:0 1 var(--hive-nodes-list-width,340px)!important;
+          width:min(var(--hive-nodes-list-width,340px),100%)!important;
+          max-width:var(--hive-nodes-list-width,340px)!important;
+          min-width:220px!important;
+          box-sizing:border-box!important;
+        }
         .hive-map-menu-group{
           margin-left:auto;
           display:inline-flex;
@@ -4073,7 +4087,7 @@ class HiveFWPanel extends BasePanel {
 
     if(filters.querySelector(".hive-export-btn")){
       this.__syncBulkToolbar(filters,nroot,page);
-      this.__ensureNodeMapMenus(filters,page);
+      this.__ensureNodeMapMenus(actions,page);
       return;
     }
 
@@ -4115,7 +4129,7 @@ class HiveFWPanel extends BasePanel {
 
     filters.append(exportButton,importButton,bulkButton,input);
     this.__syncBulkToolbar(filters,nroot,page);
-    this.__ensureNodeMapMenus(filters,page);
+    this.__ensureNodeMapMenus(actions,page);
   }
 
   __centerNodesMap() {
@@ -4123,36 +4137,44 @@ class HiveFWPanel extends BasePanel {
     if(local)this.__focusNodeOnMap(local,true);
   }
 
-  __ensureNodeMapMenus(filters,page) {
-    if(!filters)return;
-    let group=filters.querySelector(".hive-map-menu-group");
+  __ensureNodeMapMenus(host,page) {
+    if(!host)return;
+    const nroot=host.getRootNode?.();
+    let group=nroot?.querySelector?.(".hive-map-menu-group")||null;
+    if(group && group.parentElement!==host){
+      host.appendChild(group);
+    }
     if(!group){
       group=document.createElement("span");
       group.className="hive-map-menu-group";
-
-      const make=(key,label,title,handler)=>{
-        const button=document.createElement("button");
-        button.type="button";
-        button.className="l1-btn hive-map-menu-"+key;
-        button.textContent=label;
-        button.title=title;
-        button.addEventListener("click",(event)=>{
-          event.preventDefault();
-          event.stopPropagation();
-          handler();
-          this.__syncNodeMapMenuState(filters);
-        });
-        group.appendChild(button);
-        return button;
-      };
-
-      make("center","CENTRAR","Centrar no Repeater local",()=>this.__centerNodesMap());
-      make("routes","ROTAS","Histórico de Trace",()=>void this.__toggleTraceHistory());
-      make("activity","ATIVIDADE","Heatmap derivado do histórico local",()=>this.__toggleActivityHeatmap());
-      make("topology","TOPOLOGIA","Topologia observada por caminhos reais",()=>this.__toggleTopologyOverlay());
-      filters.appendChild(group);
+      host.appendChild(group);
     }
-    this.__syncNodeMapMenuState(filters);
+
+    // Hot-reload cleanup from 1.1.1: CENTRAR belongs on the map badge.
+    group.querySelector(".hive-map-menu-center")?.remove();
+
+    const make=(key,label,title,handler)=>{
+      let button=group.querySelector(".hive-map-menu-"+key);
+      if(button)return button;
+      button=document.createElement("button");
+      button.type="button";
+      button.className="l1-btn hive-map-menu-"+key;
+      button.textContent=label;
+      button.title=title;
+      button.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        handler();
+        this.__syncNodeMapMenuState(host);
+      });
+      group.appendChild(button);
+      return button;
+    };
+
+    make("routes","ROTAS","Histórico de Trace",()=>void this.__toggleTraceHistory());
+    make("activity","ATIVIDADE","Heatmap derivado do histórico local",()=>this.__toggleActivityHeatmap());
+    make("topology","TOPOLOGIA","Topologia observada por caminhos reais",()=>this.__toggleTopologyOverlay());
+    this.__syncNodeMapMenuState(host);
   }
 
   __syncNodeMapMenuState(filters) {
@@ -4612,6 +4634,11 @@ class HiveFWPanel extends BasePanel {
           grid-template-columns:1fr!important;
           gap:7px!important;
         }
+        /* HiveFW owns the only map. The upstream Nodes map would otherwise
+           instantiate a second ha-map (MapLibre/Leaflet + tiles) behind it. */
+        .nodes-map-pane{
+          display:none!important;
+        }
         @media(max-width:870px){
           :host{--hive-nodes-list-width:100%}
           .nodes-layout{
@@ -4625,6 +4652,18 @@ class HiveFWPanel extends BasePanel {
     }
 
     container.classList.add("hive-nodes-split");
+
+    // Stop meshcore-nodes-page from maintaining its own hidden map.
+    // Its async loader may complete after first render, so force the state
+    // back to false on every enhancement pass and remove any live ha-map.
+    try{
+      if("_mapReady" in page && page._mapReady!==false){
+        page._mapReady=false;
+        page.requestUpdate?.();
+      }
+      const upstreamPane=nroot.querySelector(".nodes-map-pane");
+      upstreamPane?.querySelector("ha-map")?.remove();
+    }catch{}
 
     let pane=container.querySelector(":scope > .hive-nodes-map-pane");
     if(!pane){
@@ -4860,7 +4899,7 @@ class HiveFWPanel extends BasePanel {
           else this.__bulkSelection.add(key);
           bulkCheck.checked=this.__bulkSelection.has(key);
           const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-          const filters=page?.shadowRoot?.querySelector(".l1-filters");
+          const filters=page?.shadowRoot?.querySelector(".header-actions");
           this.__syncBulkToolbar(filters,page?.shadowRoot,page);
         });
         root.querySelector(".contact-card")?.prepend(bulkCheck);
@@ -5835,7 +5874,7 @@ class HiveFWPanel extends BasePanel {
       this.__drawActivityHeatmap();
     }
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
   __drawActivityHeatmap() {
@@ -5905,7 +5944,7 @@ class HiveFWPanel extends BasePanel {
     if(this.__topologyOverlay?.isConnected)this.__topologyOverlay.remove();
     this.__topologyOverlay=null;
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
   __toggleTopologyOverlay() {
@@ -5916,7 +5955,7 @@ class HiveFWPanel extends BasePanel {
     this.__topologyVisible=true;
     this.__renderTopologyOverlay();
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
   __renderTopologyOverlay() {
@@ -6160,8 +6199,17 @@ class HiveFWPanel extends BasePanel {
     if(count){
       count.replaceChildren();
       const label=document.createElement("span");
-      label.textContent=`(${contacts.length}) nós com localização`;
-      count.append(label);
+      label.textContent=`(${contacts.length}) nós com localização · `;
+      const center=document.createElement("button");
+      center.type="button";
+      center.textContent="CENTRAR";
+      center.title="Centrar no Repeater local";
+      center.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__centerNodesMap();
+      });
+      count.append(label,center);
     }
 
     const mapChanged=this.__nodesMapSignature!==signature;
