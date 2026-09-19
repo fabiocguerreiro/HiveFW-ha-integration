@@ -138,6 +138,7 @@ class HiveFWPanel extends BasePanel {
 
   __headerPathHash() {
     const rawMode=
+      this._selectedDevice?.path_hash_mode ??
       this.__repeaterStatus?.radio?.path_hash_mode ??
       this.__repeaterStatus?.device_info?.path_hash_mode ??
       this.__repeaterEdit?.path_hash_mode;
