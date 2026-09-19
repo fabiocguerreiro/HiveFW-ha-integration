@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     # Skip on non-canonical repos (e.g. the private dev mirror); HACS
     # and Hassfest only make sense on the public canonical repo.
-    if: github.repository == 'mwolter805/meshcore-ha-chat'
+    if: github.repository == 'fabiocguerreiro/HiveFW-ha-integration'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -33,7 +33,7 @@ jobs:
   hacs:
     name: HACS
     runs-on: ubuntu-latest
-    if: github.repository == 'mwolter805/meshcore-ha-chat'
+    if: github.repository == 'fabiocguerreiro/HiveFW-ha-integration'
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -53,7 +53,7 @@ jobs:
     # v12 outDir break, 2026-06). This job is the gate that catches it.
     name: Frontend build & test
     runs-on: ubuntu-latest
-    if: github.repository == 'mwolter805/meshcore-ha-chat'
+    if: github.repository == 'fabiocguerreiro/HiveFW-ha-integration'
     defaults:
       run:
         working-directory: frontend
