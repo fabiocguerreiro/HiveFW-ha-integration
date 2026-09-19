@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Sensor platform for MeshCore integration."""
+"""Sensor platform for HiveFW."""
 from __future__ import annotations
 
 import logging
@@ -496,10 +496,10 @@ REPEATER_SENSORS = [
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up MeshCore sensors from a config entry."""
+    """Set up HiveFW sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    _LOGGER.debug("Setting up MeshCore sensors")
+    _LOGGER.debug("Setting up HiveFW sensors")
 
     entities = []
 
@@ -1478,7 +1478,7 @@ class MeshCoreReliabilitySensor(CoordinatorEntity, SensorEntity):
         self.public_key_short = self.pubkey_prefix[:6] if self.pubkey_prefix else ""
 
         self.device_id = f"{coordinator.config_entry.entry_id}_{node_type}_{self.pubkey_prefix}"
-        device_name = f"MeshCore {node_type.title()}: {self.node_name} ({self.public_key_short})"
+        device_name = f"HiveFW {node_type.title()}: {self.node_name} ({self.public_key_short})"
         self._attr_unique_id = f"{self.device_id}_{description.key}_{self.public_key_short}"
 
         self.entity_id = format_entity_id(
@@ -1491,7 +1491,7 @@ class MeshCoreReliabilitySensor(CoordinatorEntity, SensorEntity):
         device_info = {
             "identifiers": {(DOMAIN, self.device_id)},
             "name": device_name,
-            "manufacturer": "MeshCore",
+            "manufacturer": "HiveFW",
             "model": f"Mesh {node_type.title()}",
             "via_device": (DOMAIN, coordinator.config_entry.entry_id),
         }
@@ -1543,7 +1543,7 @@ class MeshCorePathSensor(CoordinatorEntity, SensorEntity):
         # Set friendly name
 
         # Build device name with pubkey
-        device_name = f"MeshCore {node_type.title()}: {self.node_name} ({self.public_key_short})"
+        device_name = f"HiveFW {node_type.title()}: {self.node_name} ({self.public_key_short})"
 
         # Set unique ID
         self._attr_unique_id = f"{self.device_id}_{description.key}_{self.public_key_short}"
@@ -1560,7 +1560,7 @@ class MeshCorePathSensor(CoordinatorEntity, SensorEntity):
         device_info = {
             "identifiers": {(DOMAIN, self.device_id)},
             "name": device_name,
-            "manufacturer": "MeshCore",
+            "manufacturer": "HiveFW",
             "model": f"Mesh {node_type.title()}",
             "via_device": (DOMAIN, coordinator.config_entry.entry_id),  # Link to the main device
         }
@@ -1642,7 +1642,7 @@ class MeshCoreRepeaterSensor(CoordinatorEntity, SensorEntity):
         # Set friendly name
 
         # Build device name with pubkey
-        device_name = f"MeshCore Repeater: {self.repeater_name} ({self.public_key_short})"
+        device_name = f"HiveFW Repeater: {self.repeater_name} ({self.public_key_short})"
 
         # Set unique ID
         self._attr_unique_id = f"{self.device_id}_{description.key}_{self.public_key_short}"
@@ -1659,7 +1659,7 @@ class MeshCoreRepeaterSensor(CoordinatorEntity, SensorEntity):
         device_info = {
             "identifiers": {(DOMAIN, self.device_id)},
             "name": device_name,
-            "manufacturer": "MeshCore",
+            "manufacturer": "HiveFW",
             "model": "Mesh Repeater",
             "sw_version": repeater.get("firmware_version"),
             "via_device": (DOMAIN, coordinator.config_entry.entry_id),  # Link to the main device
@@ -1969,11 +1969,11 @@ class MeshCoreNeighborSensor(CoordinatorEntity, SensorEntity):
         self._update_friendly_name()
 
         # Device info — attach to the repeater's existing device
-        device_name = f"MeshCore Repeater: {repeater_name} ({self._repeater_pubkey_short})"
+        device_name = f"HiveFW Repeater: {repeater_name} ({self._repeater_pubkey_short})"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
             name=device_name,
-            manufacturer="MeshCore",
+            manufacturer="HiveFW",
             model="Mesh Repeater",
             via_device=(DOMAIN, coordinator.config_entry.entry_id),
         )
@@ -2107,11 +2107,11 @@ class MeshCoreNeighborSeenSensor(CoordinatorEntity, SensorEntity):
         self._update_friendly_name()
 
         # Device info — attach to the repeater's existing device
-        device_name = f"MeshCore Repeater: {repeater_name} ({self._repeater_pubkey_short})"
+        device_name = f"HiveFW Repeater: {repeater_name} ({self._repeater_pubkey_short})"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
             name=device_name,
-            manufacturer="MeshCore",
+            manufacturer="HiveFW",
             model="Mesh Repeater",
             via_device=(DOMAIN, coordinator.config_entry.entry_id),
         )
@@ -2197,11 +2197,11 @@ class MeshCoreNeighborCountSensor(CoordinatorEntity, SensorEntity):
             "neighbor_count",
         )
 
-        device_name = f"MeshCore Repeater: {repeater_name} ({self._repeater_pubkey_short})"
+        device_name = f"HiveFW Repeater: {repeater_name} ({self._repeater_pubkey_short})"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
             name=device_name,
-            manufacturer="MeshCore",
+            manufacturer="HiveFW",
             model="Mesh Repeater",
             via_device=(DOMAIN, coordinator.config_entry.entry_id),
         )
