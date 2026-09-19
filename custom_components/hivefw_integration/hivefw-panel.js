@@ -105,6 +105,9 @@ class HiveFWPanel extends BasePanel {
     this.__consoleLoadedEntry = null;
     this.__consoleOverlay = null;
     this.__shareOverlay = null;
+    this.__bulkMode = false;
+    this.__bulkSelection = new Set();
+    this.__bulkOverlay = null;
 
     this.__chatObservedRoot = null;
     this.__chatObserver = null;
@@ -3555,7 +3558,13 @@ class HiveFWPanel extends BasePanel {
           margin-left:auto;
         }
         .l1-filters .hive-export-btn,
-        .l1-filters .hive-import-btn{
+        .l1-filters .hive-import-btn,
+        .l1-filters .hive-bulk-btn{
+          white-space:nowrap;
+        }
+        .hive-bulk-count{
+          font-size:11px;
+          color:var(--secondary-text-color,#666);
           white-space:nowrap;
         }
         .map-selection{
@@ -3565,7 +3574,10 @@ class HiveFWPanel extends BasePanel {
       nroot.appendChild(style);
     }
 
-    if(filters.querySelector(".hive-export-btn"))return;
+    if(filters.querySelector(".hive-export-btn")){
+      this.__syncBulkToolbar(filters,nroot,page);
+      return;
+    }
 
     const exportButton=document.createElement("button");
     exportButton.className="l1-btn hive-export-btn";
@@ -3592,7 +3604,206 @@ class HiveFWPanel extends BasePanel {
       input.click();
     });
 
-    filters.append(exportButton,importButton,input);
+    const bulkButton=document.createElement("button");
+    bulkButton.className="l1-btn hive-bulk-btn";
+    bulkButton.textContent="Selecionar";
+    bulkButton.title="Selecionar vários nós para Favoritos, Tags ou limpeza protegida";
+    bulkButton.addEventListener("click",()=>{
+      this.__bulkMode=!this.__bulkMode;
+      if(!this.__bulkMode)this.__bulkSelection.clear();
+      this.__syncBulkToolbar(filters,nroot,page);
+      this.__decorateNodeCards(nroot);
+    });
+
+    filters.append(exportButton,importButton,bulkButton,input);
+    this.__syncBulkToolbar(filters,nroot,page);
+  }
+
+  __syncBulkToolbar(filters,nroot,page) {
+    if(!filters)return;
+    const toggle=filters.querySelector(".hive-bulk-btn");
+    if(toggle)toggle.textContent=this.__bulkMode?"Terminar seleção":"Selecionar";
+
+    let count=filters.querySelector(".hive-bulk-count");
+    if(!count){
+      count=document.createElement("span");
+      count.className="hive-bulk-count";
+      filters.appendChild(count);
+    }
+    count.hidden=!this.__bulkMode;
+    count.textContent=this.__bulkSelection.size+" selecionado"+(this.__bulkSelection.size===1?"":"s");
+
+    let actions=filters.querySelector(".hive-bulk-actions");
+    if(!actions){
+      actions=document.createElement("span");
+      actions.className="hive-bulk-actions";
+      actions.style.cssText="display:inline-flex;align-items:center;gap:5px;";
+
+      const all=document.createElement("button");
+      all.type="button";all.className="l1-btn";all.textContent="Todos visíveis";
+      all.addEventListener("click",()=>{
+        for(const card of nroot?.querySelectorAll("meshcore-contact-card")||[]){
+          const key=String(card.contact?.public_key||"").trim().toLowerCase();
+          if(key)this.__bulkSelection.add(key);
+        }
+        this.__decorateNodeCards(nroot);
+        this.__syncBulkToolbar(filters,nroot,page);
+      });
+
+      const fav=document.createElement("button");
+      fav.type="button";fav.className="l1-btn";fav.textContent="★ Favorito";
+      fav.addEventListener("click",()=>void this.__bulkMetaAction({favorite:true},nroot,page));
+
+      const tag=document.createElement("button");
+      tag.type="button";tag.className="l1-btn";tag.textContent="+ Tag";
+      tag.addEventListener("click",()=>{
+        const value=window.prompt("Tag a adicionar aos nós selecionados:");
+        if(value?.trim())void this.__bulkMetaAction({add_tags:[value.trim()]},nroot,page);
+      });
+
+      const cleanup=document.createElement("button");
+      cleanup.type="button";cleanup.className="l1-btn";cleanup.textContent="Limpar";
+      cleanup.addEventListener("click",()=>this.__openBulkCleanupDialog(nroot,page));
+
+      actions.append(all,fav,tag,cleanup);
+      filters.appendChild(actions);
+    }
+    actions.hidden=!this.__bulkMode;
+  }
+
+  async __bulkMetaAction(patch,nroot,page) {
+    if(!this.hass||!this.__bulkSelection.size)return;
+    const msg={
+      type:"hivefw_integration/bulk_set_node_meta",
+      public_keys:[...this.__bulkSelection],
+      ...patch,
+    };
+    const entryId=this.__entryId();
+    if(entryId)msg.entry_id=entryId;
+    try{
+      await this.hass.callWS(msg);
+      this.__nodesMapContacts=null;
+      this.__nodesMapLoadedEntry=null;
+      await this.__loadNodesMapContacts();
+      page?._syncAll?.();
+      this.__decorateNodeCards(nroot);
+      if(this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+    }catch(error){
+      console.error("HiveFW bulk metadata action failed",error);
+    }
+  }
+
+  __closeBulkDialog() {
+    if(this.__bulkOverlay?.isConnected)this.__bulkOverlay.remove();
+    this.__bulkOverlay=null;
+  }
+
+  __openBulkCleanupDialog(nroot,page) {
+    if(!this.hass)return;
+    this.__closeBulkDialog();
+
+    const overlay=document.createElement("div");
+    overlay.style.cssText="position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.5);";
+    overlay.addEventListener("click",(event)=>{if(event.target===overlay)this.__closeBulkDialog();});
+    const dialog=document.createElement("div");
+    dialog.style.cssText="width:min(560px,100%);padding:18px;border-radius:14px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 12px 36px rgba(0,0,0,.35);";
+
+    const title=document.createElement("strong");
+    title.textContent=this.__bulkSelection.size?"Limpeza dos nós selecionados":"Limpeza por idade";
+    title.style.cssText="display:block;font-size:16px;margin-bottom:12px;";
+
+    const age=document.createElement("input");
+    age.type="number";age.min="1";age.max="3650";age.value="90";
+    age.style.cssText="width:90px;padding:6px;border:1px solid var(--divider-color,#bbb);border-radius:6px;background:var(--primary-background-color,#fff);color:var(--primary-text-color,#222);";
+    const ageRow=document.createElement("label");
+    ageRow.style.cssText="display:flex;align-items:center;gap:8px;margin:8px 0;";
+    ageRow.append(document.createTextNode("Remover se sem atividade há mais de"),age,document.createTextNode("dias"));
+
+    const makeCheck=(labelText,checked=true)=>{
+      const label=document.createElement("label");
+      label.style.cssText="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:12px;";
+      const input=document.createElement("input");input.type="checkbox";input.checked=checked;
+      label.append(input,document.createTextNode(labelText));
+      return {label,input};
+    };
+    const favorite=makeCheck("Proteger Favoritos",true);
+    const added=makeCheck("Proteger contactos adicionados ao rádio",true);
+    const repeaters=makeCheck("Proteger Repeaters configurados",true);
+
+    const tags=document.createElement("input");
+    tags.type="text";tags.value="keep, protected";tags.placeholder="keep, protected";
+    tags.style.cssText="box-sizing:border-box;width:100%;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:6px;background:var(--primary-background-color,#fff);color:var(--primary-text-color,#222);";
+    const tagsLabel=document.createElement("label");
+    tagsLabel.style.cssText="display:block;margin-top:10px;font-size:12px;";
+    tagsLabel.append(document.createTextNode("Tags protegidas (separadas por vírgula)"),tags);
+
+    const preview=document.createElement("div");
+    preview.style.cssText="margin-top:12px;padding:9px;border-radius:8px;background:var(--secondary-background-color,#f3f3f3);font-size:11px;color:var(--secondary-text-color,#666);";
+    preview.textContent="A calcular pré-visualização…";
+
+    const buildMsg=(dryRun)=>({
+      type:"hivefw_integration/bulk_cleanup_contacts",
+      ...(this.__entryId()?{entry_id:this.__entryId()}:{}),
+      days_threshold:Math.max(1,Number(age.value)||90),
+      public_keys:[...this.__bulkSelection],
+      dry_run:dryRun,
+      protect_favorites:favorite.input.checked,
+      protect_added:added.input.checked,
+      protect_repeaters:repeaters.input.checked,
+      protected_tags:tags.value.split(",").map((v)=>v.trim()).filter(Boolean),
+    });
+
+    const runPreview=async()=>{
+      preview.textContent="A calcular pré-visualização…";
+      try{
+        const result=await this.hass.callWS(buildMsg(true));
+        const skipped=result?.skipped||{};
+        preview.textContent=
+          (result?.candidate_count||0)+" seriam removidos · protegidos: "+
+          "★ "+(skipped.favorite||0)+" · adicionados "+(skipped.added||0)+
+          " · repeaters "+(skipped.repeater||0)+" · tags "+(skipped.protected_tag||0);
+      }catch(error){
+        preview.textContent="Não foi possível calcular: "+String(error);
+      }
+    };
+    for(const input of [age,favorite.input,added.input,repeaters.input,tags]){
+      input.addEventListener("change",()=>void runPreview());
+    }
+
+    const actions=document.createElement("div");
+    actions.style.cssText="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;";
+    const cancel=document.createElement("button");
+    cancel.type="button";cancel.textContent="Cancelar";
+    const remove=document.createElement("button");
+    remove.type="button";remove.textContent="Remover elegíveis";
+    remove.style.cssText="padding:7px 11px;border:1px solid var(--error-color,#db4437);border-radius:7px;background:transparent;color:var(--error-color,#db4437);font-weight:650;cursor:pointer;";
+    cancel.addEventListener("click",()=>this.__closeBulkDialog());
+    remove.addEventListener("click",async()=>{
+      if(!window.confirm("Remover definitivamente os contactos elegíveis da descoberta HiveFW?"))return;
+      remove.disabled=true;remove.textContent="A remover…";
+      try{
+        const result=await this.hass.callWS(buildMsg(false));
+        this.__bulkSelection.clear();
+        this.__closeBulkDialog();
+        this.__nodesMapContacts=null;this.__nodesMapLoadedEntry=null;this.__nodesMapSignature="";
+        await this.__loadNodesMapContacts();
+        page?._syncAll?.();
+        this.__decorateNodeCards(nroot);
+        this.__syncBulkToolbar(nroot?.querySelector(".l1-filters"),nroot,page);
+        if(this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+        console.info("HiveFW bulk cleanup removed",result?.removed_count||0);
+      }catch(error){
+        preview.textContent="Erro na limpeza: "+String(error);
+        remove.disabled=false;remove.textContent="Remover elegíveis";
+      }
+    });
+    actions.append(cancel,remove);
+
+    dialog.append(title,ageRow,favorite.label,added.label,repeaters.label,tagsLabel,preview,actions);
+    overlay.appendChild(dialog);
+    this.shadowRoot?.appendChild(overlay);
+    this.__bulkOverlay=overlay;
+    void runPreview();
   }
 
   async __refreshNodeMapAfterMutation(pubkey,page) {
@@ -3838,6 +4049,9 @@ class HiveFWPanel extends BasePanel {
 
   __cleanupNodesSplit() {
     this.__closeTraceMonitor();
+    this.__closeBulkDialog();
+    this.__bulkMode=false;
+    this.__bulkSelection.clear();
     this.__closeTopologyOverlay();
     this.__removeActivityHeatmapLayer();
     const root=this.shadowRoot;
