@@ -63,18 +63,32 @@ coordinator source, and the repair surface uses a HiveFW-native
 `radio_engine_unavailable` issue. The project policy explicitly targets clean
 installs only; no old `meshcore.*` public compatibility surface is required.
 
+## Latest completed step
+
+Clean-install architecture is now enforced on `main`:
+
+- HiveFW owns the embedded radio coordinator and repair surface.
+- The external MeshCore Home Assistant integration is no longer part of setup/runtime assumptions.
+- `HiveFWConfigFlow` is native and starts at config-entry version 1.
+- The inherited meshcore-ha install migration path was removed.
+- Public helper/entity/device labels are being converted to HiveFW names/IDs.
+- Legacy config-flow and repair tests were rewritten for the embedded-engine model.
+
+Runtime identity migrations for changing a radio name/public key remain because they
+support normal device operations, not compatibility with old installations.
+
 ## NEXT STEP
 
-**Next commit: remove obsolete install-migration/legacy-compatibility code from the embedded engine and top-level backend.**
+**Audit the remaining public-facing MeshCore residue and validate the standalone install path.**
 
 Specifically:
 
-1. Remove config-entry migrations that only exist for old meshcore-ha installs.
-2. Remove legacy service/version fallback branches that cannot occur in a clean HiveFW install.
-3. Audit public service/event/entity identifiers so only HiveFW names remain.
-4. Validate the fresh config-flow -> coordinator -> platforms -> services path.
+1. Find explicit `meshcore_*` entity IDs, display names or public event/service references that remain outside protocol-internal code.
+2. Remove old-version service fallbacks that only supported older meshcore-ha releases.
+3. Finish updating stale tests that still model a separate upstream integration.
+4. Run/inspect CI and fix fresh-install setup failures before implementing the Console tab.
 
 After that:
 
-- Next commit: Console tab.
+- Next commit group: Console tab.
 - Following commits: roadmap features in small functional commits.
