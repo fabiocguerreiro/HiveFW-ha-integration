@@ -1933,6 +1933,7 @@ def ws_get_managed_devices(hass, connection, msg):
 
         repeaters.append(
             {
+                "type": "repeater",
                 "name": repeater_name,
                 "pubkey_prefix": pubkey_prefix,
                 "password": "***" if repeater_config.get("password") else "",
@@ -1961,6 +1962,7 @@ def ws_get_managed_devices(hass, connection, msg):
 
         clients.append(
             {
+                "type": "client",
                 "name": client_name,
                 "pubkey_prefix": pubkey_prefix,
                 "update_interval": update_interval,
