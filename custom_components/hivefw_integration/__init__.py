@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -236,7 +236,7 @@ async def _async_evaluate_health(
     cleared = {key: value for key, value in previous.items() if key not in alerts}
     runtime.health_state = {
         "active": alerts,
-        "updated_at": __import__("datetime").datetime.now().astimezone().isoformat(),
+        "updated_at": datetime.now().astimezone().isoformat(),
     }
 
     event_data = {
