@@ -8,7 +8,6 @@ import type {
   PrimaryCategory, TypeCounts, NodeCounts,
 } from '../api';
 import '../components/contact-card';
-import '../components/node-card';
 import '../components/node-detail-dialog';
 
 const PAGE_SIZE = 50;
@@ -36,7 +35,7 @@ const TYPE_LABELS: Record<NodeType, string> = {
 export class NodesPage extends LitElement {
   @property({ type: Array }) contacts: Contact[] = [];
   @property({ type: Array }) channels: Channel[] = [];
-  // managedDevices removed — devices now live on the Devices tab
+  // Managed-device administration is consolidated under Dispositivo.
   @property({ type: Boolean }) narrow = false;
   @property({ type: Object }) hass?: HomeAssistant;
   @property({ type: Object }) config?: PanelConfig;
