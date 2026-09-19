@@ -22,6 +22,7 @@ EVENT_MESHCORE_MESSAGE: Final = f"{PUBLIC_EVENT_PREFIX}_message"
 EVENT_MESHCORE_DELIVERY_UPDATE: Final = f"{PUBLIC_EVENT_PREFIX}_delivery_update"
 EVENT_MESHCORE_CONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_connected"
 EVENT_MESHCORE_DISCONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_disconnected"
+EVENT_HEALTH_TRANSITION: Final = f"{PUBLIC_EVENT_PREFIX}_health_transition"
 
 # ─── Storage keys ──────────────────────────────────────────────────────────
 # Per-conversation file naming. Namespaced to HiveFW so conversation storage remains isolated per integration entry.
