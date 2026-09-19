@@ -4112,6 +4112,18 @@ class HiveFWPanel extends BasePanel {
     this.__ensureNodeMapMenus(filters,page);
   }
 
+  __centerNodesMap() {
+    const local=this.__localRepeaterMapContact();
+    if(!local)return;
+    const id=this.__nodeId(local);
+    const marker=this.__nodesLeafletMarkers.get(id);
+    if(marker?.fire){
+      marker.fire("click");
+      return;
+    }
+    this.__focusNodeOnMap(local,true);
+  }
+
   __ensureNodeMapMenus(filters,page) {
     if(!filters)return;
     let group=filters.querySelector(".hive-map-menu-group");
@@ -4135,6 +4147,7 @@ class HiveFWPanel extends BasePanel {
         return button;
       };
 
+      make("center","CENTRAR","Centrar no Repeater local",()=>this.__centerNodesMap());
       make("routes","ROTAS","Histórico de Trace",()=>void this.__toggleTraceHistory());
       make("activity","ATIVIDADE","Heatmap derivado do histórico local",()=>this.__toggleActivityHeatmap());
       make("topology","TOPOLOGIA","Topologia observada por caminhos reais",()=>this.__toggleTopologyOverlay());
@@ -6294,31 +6307,8 @@ class HiveFWPanel extends BasePanel {
     if(count){
       count.replaceChildren();
       const label=document.createElement("span");
-      label.textContent=`${contacts.length} nós com localização - `;
-      const center=document.createElement("button");
-      center.type="button";
-      center.textContent="CENTRAR";
-      center.title="Centrar no repetidor local";
-      center.addEventListener("click",(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-
-        const local=this.__localRepeaterMapContact();
-        if(!local)return;
-
-        const id=this.__nodeId(local);
-        const marker=this.__nodesLeafletMarkers.get(id);
-
-        // This is intentionally the same operation as clicking the actual
-        // local contact marker. Because "local" is now the real discovered
-        // contact, its marker id/coordinates are the same ones shown on map.
-        if(marker?.fire){
-          marker.fire("click");
-          return;
-        }
-        this.__focusNodeOnMap(local,true);
-      });
-      count.append(label,center);
+      label.textContent=`(${contacts.length}) nós com localização`;
+      count.append(label);
     }
 
     // Keep HiveFW markers in an independent Leaflet LayerGroup.
