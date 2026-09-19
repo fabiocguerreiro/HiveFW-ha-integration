@@ -104,11 +104,9 @@ CONF_LIMIT_DISCOVERED_CONTACTS: Final = "limit_discovered_contacts"
 CONF_MAX_DISCOVERED_CONTACTS: Final = "max_discovered_contacts"
 DEFAULT_MAX_DISCOVERED_CONTACTS: Final = 100
 
-# Contact discovery mode: a single tri-state setting controlling how much
-# discovered-contact machinery runs. Supersedes the legacy per-flag discovery
-# settings, mapped on entry migration from the old "disable_contact_discovery"
-# and "large_mesh_mode" keys (see async_migrate_entry). Machine values are
-# stored in config_entry.data; the user-facing labels come from the translations.
+# Contact discovery mode: the canonical tri-state setting controlling how much
+# discovered-contact machinery runs. Machine values are stored directly in
+# config_entry.data; the user-facing labels come from the translations.
 #   full      - every discovered contact gets a per-contact binary_sensor (default)
 #   data_only - discovered contacts are tracked as data only, no per-contact entity
 #   off       - discovered contacts are not processed at all
