@@ -5,6 +5,7 @@ from typing import Final
 
 # This integration's own domain.
 DOMAIN: Final = "hivefw_integration"
+PUBLIC_EVENT_PREFIX: Final = "hivefw"
 
 # Domain of the upstream meshcore integration we listen to and consume from.
 # Used for: filtering binary_sensor entities by their source integration,
@@ -34,10 +35,10 @@ CONF_FLOOD_SCOPES_UPSTREAM: Final = "flood_scopes"
 
 # Events fired on hass.bus by the upstream meshcore integration that we
 # subscribe to from __init__.py.
-EVENT_MESHCORE_MESSAGE: Final = f"{DOMAIN}_message"
-EVENT_MESHCORE_DELIVERY_UPDATE: Final = f"{DOMAIN}_delivery_update"
-EVENT_MESHCORE_CONNECTED: Final = f"{DOMAIN}_connected"
-EVENT_MESHCORE_DISCONNECTED: Final = f"{DOMAIN}_disconnected"
+EVENT_MESHCORE_MESSAGE: Final = f"{PUBLIC_EVENT_PREFIX}_message"
+EVENT_MESHCORE_DELIVERY_UPDATE: Final = f"{PUBLIC_EVENT_PREFIX}_delivery_update"
+EVENT_MESHCORE_CONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_connected"
+EVENT_MESHCORE_DISCONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_disconnected"
 
 # ─── Storage keys ──────────────────────────────────────────────────────────
 # Per-conversation file naming. Distinct from the upstream `meshcore.*` namespace
