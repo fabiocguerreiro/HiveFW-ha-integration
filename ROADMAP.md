@@ -62,9 +62,9 @@ Estas funcionalidades existem e devem permanecer em qualquer refactor:
 
 - [x] Cores por idade do nó: <1h, <6h, <24h, <7d, stale.
 - [x] Filtros: all, active 24h, repeaters, clients, favorites, GPS, stale.
-- [ ] Route History, não apenas o último Trace.
-- [ ] Path history por mensagem e ação **Mostrar no mapa**.
-- [ ] Contagem RX/TX por peer e volume de link.
+- [x] Route History, não apenas o último Trace.
+- [x] Path history por mensagem e ação **Mostrar no mapa**.
+- [x] Contagem RX/TX por peer e volume de link.
 - [ ] Distância hop-to-hop e distância acumulada da rota.
 - [ ] Topology graph com links baseados em SNR/atividade.
 - [ ] Activity heatmap com origem dos dados claramente indicada.
