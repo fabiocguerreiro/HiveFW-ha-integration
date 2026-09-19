@@ -52,6 +52,7 @@ class HiveFWRuntimeData:
     store: MessageStore
     node_meta_store: Store
     node_meta: dict[str, dict[str, Any]]
+    trace_history: list[dict[str, Any]]
 
 
 # Type alias for ConfigEntry parameterized with our runtime data shape.
@@ -167,13 +168,21 @@ async def async_setup_entry(
         f"hivefw_integration.{entry.entry_id}.node_meta",
     )
     raw_node_meta = await node_meta_store.async_load()
-    node_meta = raw_node_meta if isinstance(raw_node_meta, dict) else {}
+    if isinstance(raw_node_meta, dict) and isinstance(raw_node_meta.get("nodes"), dict):
+        node_meta = raw_node_meta["nodes"]
+        raw_traces = raw_node_meta.get("traces", [])
+        trace_history = raw_traces if isinstance(raw_traces, list) else []
+    else:
+        # v1 migration: the old store was the node map itself.
+        node_meta = raw_node_meta if isinstance(raw_node_meta, dict) else {}
+        trace_history = []
 
     # Per-entry runtime state lives on entry.runtime_data.
     entry.runtime_data = HiveFWRuntimeData(
         store=store,
         node_meta_store=node_meta_store,
         node_meta=node_meta,
+        trace_history=trace_history[-100:],
     )
 
     # Best-effort retention pass at startup. Failures here must not block
