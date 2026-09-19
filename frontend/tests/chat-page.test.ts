@@ -42,11 +42,11 @@ vi.mock('../src/api', () => ({
 vi.mock('../src/chat/entity-resolver', () => ({
   discoverChannelEntity: vi.fn(
     (_hass: unknown, _config: unknown, idx: number) =>
-      `binary_sensor.meshcore_aa_ch_${idx}_messages`,
+      `binary_sensor.hivefw_aa_ch_${idx}_messages`,
   ),
   discoverContactEntity: vi.fn(
     (_hass: unknown, _config: unknown, prefix: string) =>
-      `binary_sensor.meshcore_aa_${prefix.substring(0, 6)}_messages`,
+      `binary_sensor.hivefw_aa_${prefix.substring(0, 6)}_messages`,
   ),
 }));
 
@@ -73,12 +73,12 @@ function makeConfig(overrides: Partial<PanelConfig> = {}): PanelConfig {
   return {
     node_name: 'TestNode',
     node_prefix: 'aa',
-    channel_entity_pattern: 'binary_sensor.meshcore_aa_ch_{idx}_messages',
-    contact_entity_pattern: 'binary_sensor.meshcore_aa_{contact}_messages',
-    recipient_type_entity: 'select.meshcore_recipient_type',
-    channel_entity: 'select.meshcore_channel',
-    contact_entity: 'select.meshcore_contact',
-    domain_filter: 'meshcore',
+    channel_entity_pattern: 'binary_sensor.hivefw_aa_ch_{idx}_messages',
+    contact_entity_pattern: 'binary_sensor.hivefw_aa_{contact}_messages',
+    recipient_type_entity: 'select.hivefw_recipient_type',
+    channel_entity: 'select.hivefw_channel',
+    contact_entity: 'select.hivefw_contact',
+    domain_filter: 'hivefw',
     hours_to_show: 48,
     initial_hours: 1,
     max_messages: 500,
@@ -267,7 +267,7 @@ describe('Phase 3 — chat-page drives the UnreadController', () => {
   it('selecting a conversation calls beginConversation and does not request mark-read', async () => {
     const page = await mountChatPage({
       conversations: [makeChannel(0)],
-      unreadCounts: { 'binary_sensor.meshcore_aa_ch_0_messages': 5 },
+      unreadCounts: { 'binary_sensor.hivefw_aa_ch_0_messages': 5 },
     });
     const beginSpy = vi.spyOn(page.unread, 'beginConversation');
     const markReadSpy = vi.fn();
@@ -281,7 +281,7 @@ describe('Phase 3 — chat-page drives the UnreadController', () => {
 
     expect(beginSpy).toHaveBeenCalledTimes(1);
     expect(beginSpy.mock.calls[0][0]).toBe(
-      'binary_sensor.meshcore_aa_ch_0_messages',
+      'binary_sensor.hivefw_aa_ch_0_messages',
     );
     // Opening a conversation must not advance the cursor.
     expect(markReadSpy).not.toHaveBeenCalled();
@@ -308,7 +308,7 @@ describe('Phase 3 — chat-page drives the UnreadController', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        entityId: 'binary_sensor.meshcore_aa_ch_0_messages',
+        entityId: 'binary_sensor.hivefw_aa_ch_0_messages',
         lastMessageVisible: true,
         hasNewerMessages: false,
       }),
@@ -400,7 +400,7 @@ describe('Phase 3 — chat-page drives the UnreadController', () => {
     expect(pillSpy).toHaveBeenCalledTimes(1);
     expect(pillSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        entityId: 'binary_sensor.meshcore_aa_ch_0_messages',
+        entityId: 'binary_sensor.hivefw_aa_ch_0_messages',
       }),
     );
   });
@@ -488,7 +488,7 @@ describe('chat-page — selection lifecycle', () => {
     //   (1) initial mount with conversations populated,
     //   (2) entry switch (config.entry_id transitions),
     //   (3) parent re-firing `_loadDeviceData` after a subscribed
-    //       `meshcore_channels_updated` event (config new ref, same
+    //       `hivefw_channels_updated` event (config new ref, same
     //       entry_id, conversations new ref).
     // After Phase 2 none of these fire `selectedId`.
 
@@ -867,7 +867,7 @@ describe('Phase 4 — indicator visibility', () => {
 //
 // A channel's persisted region scope (Channel.scope, served by
 // ws_get_channels) must ride along on every send as
-// `meshcore.send_channel_message`'s `scope` argument, and surface in
+// `hivefw_integration.send_channel_message`'s `scope` argument, and surface in
 // the thread header as an always-visible chip while the scoped
 // channel is active.
 describe('region scope', () => {
