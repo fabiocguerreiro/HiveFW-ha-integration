@@ -1368,6 +1368,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
       ["RX rate","nb_recv_rate","msg/min"],
       ["TX rate","nb_sent_rate","msg/min"],
       ["RX errors","recv_errors_rate","msg/min"],
+      ["TX airtime","airtime_utilization","%"],
+      ["RX airtime","rx_airtime_utilization","%"],
     ];
     const metrics=wanted.map(([label,key,unit])=>{
       const entityId=this.__findDeviceMetricEntity(summary,key);
@@ -3106,6 +3108,34 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return !!(map.leafletMap && map.Leaflet);
   }
 
+  __traceMonitorStorageKey(contact=this.__traceMonitorContact) {
+    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
+    const key=String(contact?.public_key||contact?.pubkey_prefix||"unknown").toLowerCase().replace(/[^a-z0-9]/g,"");
+    return "hivefw.trace_monitor.v1."+entry+"."+key;
+  }
+
+  __loadTraceMonitorSamples(contact) {
+    try{
+      const parsed=JSON.parse(localStorage.getItem(this.__traceMonitorStorageKey(contact))||"[]");
+      return Array.isArray(parsed)?parsed.slice(-100):[];
+    }catch{return [];}
+  }
+
+  __saveTraceMonitorSamples() {
+    try{
+      localStorage.setItem(
+        this.__traceMonitorStorageKey(),
+        JSON.stringify(this.__traceMonitorSamples.slice(-100))
+      );
+    }catch{}
+  }
+
+  __clearTraceMonitorSamples() {
+    this.__traceMonitorSamples=[];
+    try{localStorage.removeItem(this.__traceMonitorStorageKey());}catch{}
+    this.__renderTraceMonitorOverlay();
+  }
+
   __stopTraceMonitor() {
     if(this.__traceMonitorTimer){
       window.clearInterval(this.__traceMonitorTimer);
@@ -3146,6 +3176,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         result,
       });
       if(this.__traceMonitorSamples.length>100)this.__traceMonitorSamples=this.__traceMonitorSamples.slice(-100);
+      this.__saveTraceMonitorSamples();
       this.__recordTraceResult(result,contact,"monitor");
     }catch(error){
       this.__traceMonitorSamples.push({
@@ -3153,6 +3184,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         error:error?.message||error?.code||String(error),
       });
       if(this.__traceMonitorSamples.length>100)this.__traceMonitorSamples=this.__traceMonitorSamples.slice(-100);
+      this.__saveTraceMonitorSamples();
     }finally{
       this.__traceMonitorBusy=false;
       this.__renderTraceMonitorOverlay();
@@ -3219,10 +3251,14 @@ class MeshCoreRepeaterPanel extends BasePanel {
     one.type="button";one.textContent=this.__traceMonitorBusy?"A medir…":"Medir agora";one.disabled=this.__traceMonitorBusy;
     one.style.cssText="padding:7px 12px;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:inherit;font-size:12px;font-weight:600;cursor:pointer;";
     one.addEventListener("click",()=>void this.__runTraceMonitorSample());
+    const clearHistory=document.createElement("button");
+    clearHistory.type="button";clearHistory.textContent="Limpar histórico";
+    clearHistory.style.cssText="padding:7px 9px;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:inherit;font-size:10px;cursor:pointer;";
+    clearHistory.addEventListener("click",()=>this.__clearTraceMonitorSamples());
     const count=document.createElement("span");
     count.textContent=this.__traceMonitorSamples.length+" amostras";
     count.style.cssText="margin-left:auto;font-size:10px;color:var(--secondary-text-color,#777);";
-    controls.append(select,toggle,one,count);dialog.appendChild(controls);
+    controls.append(select,toggle,one,clearHistory,count);dialog.appendChild(controls);
 
     if(!contact?.added_to_node){
       const warning=document.createElement("div");
@@ -3269,7 +3305,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
   __openTraceMonitor(contact) {
     this.__closeTraceMonitor();
     this.__traceMonitorContact=contact;
-    this.__traceMonitorSamples=[];
+    this.__traceMonitorSamples=this.__loadTraceMonitorSamples(contact);
     this.__traceMonitorInterval=300;
     const overlay=document.createElement("div");
     overlay.id="hive-trace-monitor-overlay";
