@@ -513,7 +513,7 @@ class MeshCoreTelemetrySensor(CoordinatorEntity, SensorEntity):
 
         if node_type == "root":
             # For root node, use cleaner entity IDs
-            device_name = "meshcore"
+            device_name = "hivefw"
             entity_key = f"{sensor_type_name}_ch{channel}"
             self.entity_id = format_entity_id("sensor", device_name, entity_key)
         else:
