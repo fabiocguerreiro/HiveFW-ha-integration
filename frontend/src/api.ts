@@ -5,7 +5,6 @@ import type {
   Channel,
   ManagedDevice,
   DeviceConfig,
-  NeighborInfo,
   HiveNeighborsResponse,
   LocalRepeaterStatus,
   StoredMessage,
@@ -500,27 +499,6 @@ export async function getStoredMessageCount(
     return result.count;
   } catch {
     return 0;
-  }
-}
-
-/**
- * Get neighbor information
- */
-export async function getNeighbors(
-  hass: HomeAssistant,
-  targetPrefix: string,
-  entryId?: string,
-): Promise<NeighborInfo[]> {
-  try {
-    const msg: Record<string, unknown> = {
-      type: 'hivefw_integration/get_neighbors',
-      target_prefix: targetPrefix,
-    };
-    if (entryId) msg.entry_id = entryId;
-    const result = await hass.callWS<{ neighbors: NeighborInfo[] }>(msg);
-    return result.neighbors || [];
-  } catch {
-    return [];
   }
 }
 
