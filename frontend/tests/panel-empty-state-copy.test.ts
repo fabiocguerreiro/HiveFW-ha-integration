@@ -5,9 +5,9 @@ import '../src/hivefw-integration-panel';
 
 // Phase 1 of the runtime-removal-detection proposal sharpens the
 // panel's empty-state copy: when the discovery path returns zero
-// devices (meaning the upstream meshcore integration is most likely
+// devices (meaning the HiveFW radio coordinator is most likely
 // missing or unconfigured), the panel points the user at the Repairs
-// UI where the upstream_meshcore_unavailable issue carries the actual
+// UI where the radio_engine_unavailable issue carries the actual
 // remediation copy. Other error strings (e.g. "Failed to load: ...")
 // keep the legacy generic copy.
 
@@ -45,12 +45,12 @@ async function mountPanelWithError(error: string) {
 }
 
 describe('hivefw-integration-panel empty-state copy (Phase 1)', () => {
-  it('renders Repairs + Devices&Services links when error is "No MeshCore devices found"', async () => {
-    const panel = await mountPanelWithError('No MeshCore devices found');
+  it('renders Repairs + Devices&Services links when error is "No HiveFW devices found"', async () => {
+    const panel = await mountPanelWithError('No HiveFW devices found');
     const root = panel.shadowRoot;
     expect(root).not.toBeNull();
     const text = root?.textContent ?? '';
-    expect(text).toContain('No MeshCore devices found');
+    expect(text).toContain('No HiveFW devices found');
     // The new conditional copy points at the Repairs UI.
     const repairsLink = root?.querySelector('a[href="/config/repairs"]');
     expect(repairsLink, 'Repairs link should be rendered').not.toBeNull();
@@ -63,7 +63,7 @@ describe('hivefw-integration-panel empty-state copy (Phase 1)', () => {
     ).not.toBeNull();
     // The legacy generic copy is replaced for this error path.
     expect(text).not.toContain(
-      'Check that the MeshCore integration is loaded and connected.',
+      'Check that HiveFW is configured and the radio is connected.',
     );
   });
 
@@ -78,7 +78,7 @@ describe('hivefw-integration-panel empty-state copy (Phase 1)', () => {
     expect(root?.querySelector('a[href="/config/integrations"]')).toBeNull();
     // Legacy copy remains.
     expect(text).toContain(
-      'Check that the MeshCore integration is loaded and connected.',
+      'Check that HiveFW is configured and the radio is connected.',
     );
   });
 });
