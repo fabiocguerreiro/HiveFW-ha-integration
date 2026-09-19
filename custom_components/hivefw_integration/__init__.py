@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -50,9 +50,9 @@ class HiveFWRuntimeData:
     """
 
     store: MessageStore
-    node_meta_store: Store
-    node_meta: dict[str, dict[str, Any]]
-    trace_history: list[dict[str, Any]]
+    node_meta_store: Store | None = None
+    node_meta: dict[str, dict[str, Any]] = field(default_factory=dict)
+    trace_history: list[dict[str, Any]] = field(default_factory=list)
 
 
 # Type alias for ConfigEntry parameterized with our runtime data shape.
