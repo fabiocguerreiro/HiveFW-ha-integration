@@ -2010,7 +2010,7 @@ class HiveFWPanel extends BasePanel {
 
     const title = document.createElement("div");
     title.className = "card-title";
-    title.textContent = "Equipamentos MeshCore geridos";
+    title.textContent = "Equipamentos HiveFW geridos";
     card.appendChild(title);
 
     if (this.__managedDevicesLoading) {
@@ -2069,7 +2069,7 @@ class HiveFWPanel extends BasePanel {
       const name = document.createElement("div");
       name.style.cssText =
         "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;";
-      name.textContent = device.name || "MeshCore";
+      name.textContent = device.name || "HiveFW";
       const meta = document.createElement("div");
       meta.style.cssText =
         "margin-top:3px;color:var(--secondary-text-color);font-size:10px;";
@@ -2509,7 +2509,7 @@ class HiveFWPanel extends BasePanel {
     return String(number);
   }
 
-  async __exportMeshCoreContacts(button) {
+  async __exportHiveFWContacts(button) {
     if(!this.hass)return;
     const original=button?.textContent||"Exportar";
     if(button){
@@ -2548,7 +2548,7 @@ class HiveFWPanel extends BasePanel {
       const url=URL.createObjectURL(blob);
       const link=document.createElement("a");
       link.href=url;
-      link.download="meshcore_discovered_contacts.json";
+      link.download="hivefw_discovered_contacts.json";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -2573,7 +2573,7 @@ class HiveFWPanel extends BasePanel {
     }
   }
 
-  async __importMeshCoreContacts(file,button,page) {
+  async __importHiveFWContacts(file,button,page) {
     if(!this.hass||!file)return;
     const original=button?.textContent||"Importar";
     if(button){
@@ -2666,8 +2666,8 @@ class HiveFWPanel extends BasePanel {
     const exportButton=document.createElement("button");
     exportButton.className="l1-btn hive-export-btn";
     exportButton.textContent="Exportar";
-    exportButton.title="Exportar no formato discovered_contacts da app MeshCore";
-    exportButton.addEventListener("click",()=>void this.__exportMeshCoreContacts(exportButton));
+    exportButton.title="Exportar contactos no formato discovered_contacts compatível com MeshCore";
+    exportButton.addEventListener("click",()=>void this.__exportHiveFWContacts(exportButton));
 
     const importButton=document.createElement("button");
     importButton.className="l1-btn hive-import-btn";
@@ -2680,7 +2680,7 @@ class HiveFWPanel extends BasePanel {
     input.hidden=true;
     input.addEventListener("change",()=>{
       const file=input.files?.[0];
-      if(file)void this.__importMeshCoreContacts(file,importButton,page);
+      if(file)void this.__importHiveFWContacts(file,importButton,page);
       input.value="";
     });
     importButton.addEventListener("click",()=>{
@@ -3269,7 +3269,7 @@ class HiveFWPanel extends BasePanel {
 
     const note=document.createElement("div");
     note.style.cssText="padding:10px 16px 4px;font-size:10px;line-height:1.45;color:var(--secondary-text-color,#777);";
-    note.textContent="On-demand: cada amostra executa um Trace MeshCore e pode usar path discovery/flood. O monitor só corre enquanto esta janela estiver aberta; mínimo 2 minutos.";
+    note.textContent="On-demand: cada amostra executa um Trace HiveFW e pode usar path discovery/flood. O monitor só corre enquanto esta janela estiver aberta; mínimo 2 minutos.";
     dialog.appendChild(note);
 
     const controls=document.createElement("div");
