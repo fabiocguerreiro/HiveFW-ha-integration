@@ -83,6 +83,8 @@ class HiveFWPanel extends BasePanel {
     this.__neighborsOverlay = null;
 
     this.__consoleHistory = [];
+    this.__consoleCommandHistory = [];
+    this.__consoleHistoryIndex = -1;
     this.__consoleBusy = false;
     this.__consoleError = null;
     this.__consoleLoadedEntry = null;
@@ -1321,6 +1323,12 @@ class HiveFWPanel extends BasePanel {
     const modal=sroot.querySelector('.modal-card[data-a11y="companion-settings"]');
     const body=modal?.querySelector(".modal-body");
     if(!body)return;
+
+    // Command execution now lives in the dedicated top-level Console tab.
+    // Remove the old modal launcher so Device contains device settings only.
+    for (const button of body.querySelectorAll(".modal-action")) {
+      if (button.textContent?.trim() === "Issue Command") button.remove();
+    }
 
     let edit=body.querySelector(".hive-edit-menu-action");
     if(!edit){
@@ -4208,6 +4216,11 @@ class HiveFWPanel extends BasePanel {
       if (entryId) msg.entry_id = entryId;
       const result = await this.hass.callWS(msg);
       this.__consoleHistory = Array.isArray(result?.history) ? result.history : [];
+      this.__consoleCommandHistory = this.__consoleHistory
+        .map((item) => String(item?.command || "").trim())
+        .filter(Boolean)
+        .slice(-50);
+      this.__consoleHistoryIndex = this.__consoleCommandHistory.length;
       this.__consoleError = null;
     } catch (error) {
       this.__consoleError = error?.message || "Não foi possível carregar o histórico da Console.";
@@ -4353,6 +4366,28 @@ class HiveFWPanel extends BasePanel {
       if (event.key === "Enter") {
         event.preventDefault();
         execute();
+        return;
+      }
+      if (event.key === "ArrowUp" && this.__consoleCommandHistory.length) {
+        event.preventDefault();
+        this.__consoleHistoryIndex = Math.max(
+          0,
+          Math.min(this.__consoleHistoryIndex - 1, this.__consoleCommandHistory.length - 1),
+        );
+        input.value = this.__consoleCommandHistory[this.__consoleHistoryIndex] || "";
+        input.setSelectionRange(input.value.length, input.value.length);
+        return;
+      }
+      if (event.key === "ArrowDown" && this.__consoleCommandHistory.length) {
+        event.preventDefault();
+        this.__consoleHistoryIndex = Math.min(
+          this.__consoleCommandHistory.length,
+          this.__consoleHistoryIndex + 1,
+        );
+        input.value = this.__consoleHistoryIndex >= this.__consoleCommandHistory.length
+          ? ""
+          : (this.__consoleCommandHistory[this.__consoleHistoryIndex] || "");
+        input.setSelectionRange(input.value.length, input.value.length);
       }
     });
     row.append(input, run);
