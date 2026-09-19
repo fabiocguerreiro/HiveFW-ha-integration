@@ -3931,7 +3931,7 @@ class HiveFWPanel extends BasePanel {
       page?._syncAll?.();
       if(this.__nodesMapPane?.isConnected){
         await this.__loadNodesMapContacts();
-        void this.__ensureSplitMap(page,this.__nodesMapPane);
+        this.__scheduleSplitMap(page,this.__nodesMapPane);
       }
 
       if(button){
@@ -4198,7 +4198,7 @@ class HiveFWPanel extends BasePanel {
       await this.__loadNodesMapContacts();
       page?._syncAll?.();
       this.__decorateNodeCards(nroot);
-      if(this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+      if(this.__nodesMapPane?.isConnected)this.__scheduleSplitMap(page,this.__nodesMapPane);
     }catch(error){
       console.error("HiveFW bulk metadata action failed",error);
     }
@@ -4301,7 +4301,7 @@ class HiveFWPanel extends BasePanel {
         page?._syncAll?.();
         this.__decorateNodeCards(nroot);
         this.__syncBulkToolbar(nroot?.querySelector(".l1-filters"),nroot,page);
-        if(this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+        if(this.__nodesMapPane?.isConnected)this.__scheduleSplitMap(page,this.__nodesMapPane);
         console.info("HiveFW bulk cleanup removed",result?.removed_count||0);
       }catch(error){
         preview.textContent="Erro na limpeza: "+String(error);
@@ -4642,6 +4642,17 @@ class HiveFWPanel extends BasePanel {
     this.__traceHistoryPanel=null;
     this.__nodesMapPane=null;
     this.__closePersistentNodePopup();
+    const leafletMap=this.__nodesMapElement?.leafletMap;
+    if(this.__nodesMarkerLayer && leafletMap){
+      if(Array.isArray(this.__nodesMarkerLayer.__hiveLayers)){
+        for(const marker of this.__nodesMarkerLayer.__hiveLayers){
+          try{leafletMap.removeLayer(marker);}catch{}
+        }
+      }else{
+        try{leafletMap.removeLayer(this.__nodesMarkerLayer);}catch{}
+      }
+    }
+    this.__nodesMarkerLayer=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
@@ -4763,7 +4774,7 @@ class HiveFWPanel extends BasePanel {
     if(nroot)this.__decorateNodeCards(nroot);
     if(this.__nodesMapPane?.isConnected){
       this.__nodesMapLoadedEntry=null;
-      void this.__loadNodesMapContacts().then(()=>this.__ensureSplitMap(page,this.__nodesMapPane));
+      void this.__loadNodesMapContacts().then(()=>this.__scheduleSplitMap(page,this.__nodesMapPane));
     }
     if(this.__nodesPersistentPopup){
       this.__openPersistentNodePopup(contact);
@@ -5761,8 +5772,8 @@ class HiveFWPanel extends BasePanel {
     const coords=this.__nodeCoords(localRepeater);
     if(!coords)return false;
 
-    const bounds=mapEl.Leaflet.circle(coords,{radius:100000}).getBounds();
-    mapEl.leafletMap.fitBounds(bounds,{animate:false});
+    mapEl.leafletMap.setView(coords,9,{animate:false});
+    try{mapEl.leafletMap.invalidateSize?.({pan:false,animate:false});}catch{}
 
     const center=mapEl.leafletMap.getCenter?.();
     const zoom=mapEl.leafletMap.getZoom?.();
@@ -5795,9 +5806,8 @@ class HiveFWPanel extends BasePanel {
       this.__activityHeatmapVisible=true;
       this.__drawActivityHeatmap();
     }
-    // Re-render the map toolbar so the button reflects the current state.
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
-    if(page&&this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
   }
 
   __drawActivityHeatmap() {
@@ -5932,6 +5942,8 @@ class HiveFWPanel extends BasePanel {
     this.__topologyVisible=false;
     if(this.__topologyOverlay?.isConnected)this.__topologyOverlay.remove();
     this.__topologyOverlay=null;
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
   }
 
   __toggleTopologyOverlay() {
@@ -5941,6 +5953,8 @@ class HiveFWPanel extends BasePanel {
     }
     this.__topologyVisible=true;
     this.__renderTopologyOverlay();
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".l1-filters"));
   }
 
   __renderTopologyOverlay() {
@@ -6151,7 +6165,7 @@ class HiveFWPanel extends BasePanel {
 
       const map=document.createElement("ha-map");
       map.autoFit=false;
-      map.clusterMarkers=true;
+      map.clusterMarkers=false;
       map.scaleRuler=true;
       map.themeMode="light";
       map.addEventListener("editable-location-clicked",(e)=>{
@@ -6199,47 +6213,31 @@ class HiveFWPanel extends BasePanel {
         }
         this.__focusNodeOnMap(local,true);
       });
-      const routes=document.createElement("button");
-      routes.type="button";
-      routes.textContent="ROTAS";
-      routes.title="Abrir histórico de Trace";
-      routes.style.marginLeft="8px";
-      routes.addEventListener("click",(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-        void this.__toggleTraceHistory();
-      });
-      const topology=document.createElement("button");
-      topology.type="button";
-      topology.textContent="TOPOLOGIA";
-      topology.title="Ver topologia observada por atividade de caminhos";
-      topology.style.marginLeft="8px";
-      topology.addEventListener("click",(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-        this.__toggleTopologyOverlay();
-      });
-      const activity=document.createElement("button");
-      activity.type="button";
-      activity.textContent=this.__activityHeatmapVisible?"ATIVIDADE ✓":"ATIVIDADE";
-      activity.title="Heatmap derivado do histórico local de mensagens e RX_LOG";
-      activity.style.marginLeft="8px";
-      activity.addEventListener("click",(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-        this.__toggleActivityHeatmap();
-      });
-      count.append(label,center,routes,topology,activity);
+      count.append(label,center);
     }
 
-    // Home Assistant 2026.9's ha-map has no editableLocations API yet.
-    // It does expose Leaflet layers, so use real Leaflet markers there.
-    // Newer HA builds are feature-detected and use editableLocations/entities.
-    if(this.__nodesMapSignature!==signature){
+    // Keep HiveFW markers in an independent Leaflet LayerGroup.
+    // Never assign ha-map.layers: that property belongs to Home Assistant and
+    // replacing it can remove/rebuild the base tile layer (blank territory).
+    const mapChanged=this.__nodesMapSignature!==signature;
+    if(mapChanged){
       const map=this.__nodesMapElement;
       if("layers" in map && await this.__waitForLegacyLeaflet(map)){
-        map.entities=[];
-        map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
+        if(this.__nodesMarkerLayer && map.leafletMap){
+          try{map.leafletMap.removeLayer(this.__nodesMarkerLayer);}catch{}
+        }
+        const markers=this.__legacyLeafletLayers(map,mapContacts,page);
+        this.__nodesMarkerLayer=map.Leaflet?.layerGroup
+          ? map.Leaflet.layerGroup(markers).addTo(map.leafletMap)
+          : {__hiveLayers:markers};
+        if(!map.Leaflet?.layerGroup){
+          for(const marker of markers){
+            try{marker.addTo(map.leafletMap);}catch{}
+          }
+        }
+        requestAnimationFrame(()=>{
+          try{map.leafletMap?.invalidateSize?.({pan:false,animate:false});}catch{}
+        });
       }else{
         map.entities=this.__mapEntities(mapContacts);
         if("editableLocations" in map){
@@ -6254,8 +6252,8 @@ class HiveFWPanel extends BasePanel {
         this.__nodesMapInitialViewEntry=entryId;
       }
     }
-    this.__drawLastTraceRoute();
-    if(this.__activityHeatmapVisible)this.__drawActivityHeatmap();
+    if(mapChanged || !this.__traceRouteLayer)this.__drawLastTraceRoute();
+    if(this.__activityHeatmapVisible && (mapChanged || !this.__activityHeatmapLayer))this.__drawActivityHeatmap();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
