@@ -725,13 +725,13 @@ async def test_ws_get_device_config_error_no_coordinator(
 
 
 def _make_meshcore_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """Companion helper: a meshcore-domain config entry with id matching
+    """Companion helper: a HiveFW-domain config entry with id matching
     the coordinator fixture's `config_entry.entry_id`. Lives in
     `hass.config_entries` so `async_get_entry` resolves it.
     """
     entry = MockConfigEntry(
         domain=MESHCORE_DOMAIN,
-        title="MeshCore",
+        title="HiveFW",
         entry_id="meshcore_entry",
         data={"name": "MyDevice"},
         options={},
@@ -791,7 +791,7 @@ def test_migrate_entity_ids_name_suffix_empty_returns_empty(
 def test_migrate_entity_ids_name_suffix_rewrites_matching(
     hass: HomeAssistant,
 ) -> None:
-    """Multi-entity rename: every meshcore-owned entity with `_old`
+    """Multi-entity rename: every HiveFW-owned entity with `_old`
     suffix becomes `_new`; entities owned by other entries are left
     alone; entities not ending in `_old` are left alone.
     """
@@ -799,7 +799,7 @@ def test_migrate_entity_ids_name_suffix_rewrites_matching(
 
     # Both config entries must be live in `hass.config_entries` for the
     # entity registry's foreign-key validation to accept them.
-    mc_entry = MockConfigEntry(domain="meshcore", entry_id="meshcore_entry")
+    mc_entry = MockConfigEntry(domain=DOMAIN, entry_id="meshcore_entry")
     mc_entry.add_to_hass(hass)
     other_entry = MockConfigEntry(
         domain="other_integration", entry_id="other_entry"
@@ -807,21 +807,21 @@ def test_migrate_entity_ids_name_suffix_rewrites_matching(
     other_entry.add_to_hass(hass)
 
     registry = er.async_get(hass)
-    # Three meshcore-owned entities, two ending in _mattdub:
+    # Three HiveFW-owned entities, two ending in _mattdub:
     e1 = registry.async_get_or_create(
-        "sensor", "meshcore", "uid_battery_voltage_1ed4c1",
+        "sensor", DOMAIN, "uid_battery_voltage_1ed4c1",
         config_entry=mc_entry,
-        suggested_object_id="meshcore_1ed4c1_battery_voltage_mattdub",
+        suggested_object_id="hivefw_1ed4c1_battery_voltage_mattdub",
     )
     e2 = registry.async_get_or_create(
-        "sensor", "meshcore", "uid_node_count_1ed4c1",
+        "sensor", DOMAIN, "uid_node_count_1ed4c1",
         config_entry=mc_entry,
-        suggested_object_id="meshcore_1ed4c1_node_count_mattdub",
+        suggested_object_id="hivefw_1ed4c1_node_count_mattdub",
     )
     e3 = registry.async_get_or_create(
-        "sensor", "meshcore", "uid_unrelated_no_suffix",
+        "sensor", DOMAIN, "uid_unrelated_no_suffix",
         config_entry=mc_entry,
-        suggested_object_id="meshcore_unrelated_no_suffix",
+        suggested_object_id="hivefw_unrelated_no_suffix",
     )
     # One entity owned by a different config entry — must NOT be migrated.
     e4 = registry.async_get_or_create(
@@ -838,23 +838,23 @@ def test_migrate_entity_ids_name_suffix_rewrites_matching(
     # repair-issue entity_list placeholder.
     pair_dict = dict(pairs)
     assert (
-        pair_dict["sensor.meshcore_1ed4c1_battery_voltage_mattdub"]
-        == "sensor.meshcore_1ed4c1_battery_voltage_newdub"
+        pair_dict["sensor.hivefw_1ed4c1_battery_voltage_mattdub"]
+        == "sensor.hivefw_1ed4c1_battery_voltage_newdub"
     )
     assert (
-        pair_dict["sensor.meshcore_1ed4c1_node_count_mattdub"]
-        == "sensor.meshcore_1ed4c1_node_count_newdub"
+        pair_dict["sensor.hivefw_1ed4c1_node_count_mattdub"]
+        == "sensor.hivefw_1ed4c1_node_count_newdub"
     )
 
     # e1 + e2 rewritten; e3 untouched (no _mattdub suffix); e4 untouched
     # (different config entry).
     assert registry.async_get(e1.entity_id) is None
     assert registry.async_get(
-        "sensor.meshcore_1ed4c1_battery_voltage_newdub"
+        "sensor.hivefw_1ed4c1_battery_voltage_newdub"
     ) is not None
     assert registry.async_get(e2.entity_id) is None
     assert registry.async_get(
-        "sensor.meshcore_1ed4c1_node_count_newdub"
+        "sensor.hivefw_1ed4c1_node_count_newdub"
     ) is not None
     assert registry.async_get(e3.entity_id) is not None
     assert registry.async_get(e4.entity_id) is not None
@@ -866,13 +866,13 @@ def test_migrate_entity_ids_name_suffix_no_matches_returns_empty(
     """No entities ending in `_old` → returns empty list, no mutations."""
     from homeassistant.helpers import entity_registry as er
 
-    mc_entry = MockConfigEntry(domain="meshcore", entry_id="meshcore_entry")
+    mc_entry = MockConfigEntry(domain=DOMAIN, entry_id="meshcore_entry")
     mc_entry.add_to_hass(hass)
     registry = er.async_get(hass)
     e1 = registry.async_get_or_create(
-        "sensor", "meshcore", "uid_no_suffix_match",
+        "sensor", DOMAIN, "uid_no_suffix_match",
         config_entry=mc_entry,
-        suggested_object_id="meshcore_unrelated",
+        suggested_object_id="hivefw_unrelated",
     )
     pairs = ws_api._migrate_entity_ids_name_suffix(
         hass, "meshcore_entry", "nonexistent", "newname"
@@ -895,13 +895,13 @@ async def test_ws_set_device_config_writes_name(
     """
     from homeassistant.helpers import entity_registry as er
 
-    # Seed one meshcore-owned entity that should migrate.
+    # Seed one HiveFW-owned entity that should migrate.
     mc_entry = _make_meshcore_entry(hass)
     registry = er.async_get(hass)
     registry.async_get_or_create(
-        "sensor", "meshcore", "uid_battery_mydevice",
+        "sensor", DOMAIN, "uid_battery_mydevice",
         config_entry=mc_entry,
-        suggested_object_id="meshcore_battery_mydevice",
+        suggested_object_id="hivefw_battery_mydevice",
     )
 
     # set_name returns OK Event (Phase 2 inspects .type).
@@ -3635,7 +3635,7 @@ async def test_ws_clear_discovered_contacts_clear_all_uses_correct_identifiers(
     coordinator._store.async_save = AsyncMock()
 
     reg = MagicMock()
-    reg.async_get_entity_id = MagicMock(return_value="binary_sensor.meshcore_contact")
+    reg.async_get_entity_id = MagicMock(return_value="binary_sensor.hivefw_contact")
     reg.async_remove = MagicMock()
 
     with patch(
@@ -3656,7 +3656,7 @@ async def test_ws_clear_discovered_contacts_clear_all_uses_correct_identifiers(
     reg.async_get_entity_id.assert_called_once_with(
         "binary_sensor", MESHCORE_DOMAIN, f"meshcore_entry_contact_{_RC_PREFIX}"
     )
-    reg.async_remove.assert_called_once_with("binary_sensor.meshcore_contact")
+    reg.async_remove.assert_called_once_with("binary_sensor.hivefw_contact")
 
 
 # ─── ws_set_device_config: device-config commands report real outcomes ──
