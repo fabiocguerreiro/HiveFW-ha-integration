@@ -17,6 +17,7 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 - The latest successful Trace is persisted per HiveFW entry and drawn on the Nodes map as a dashed route through uniquely resolved contacts with GPS. Ambiguous or unknown hashes are listed rather than guessed.
 - Added a map overlay summary for the latest Trace with target, RTT, hops, final SNR, unresolved hashes, and a **Limpar** action.
 - Added an explicit **Trace Monitor** for added forwarding-class contacts. It supports one-shot measurements or user-started intervals of 2, 5, 10, or 30 minutes, records up to 100 samples, graphs RTT/SNR, and updates the map's latest route.
+- Trace Monitor samples are persisted locally per HiveFW entry/contact (up to 100) so route-health history survives closing/reopening the monitor; **Limpar histórico** resets it.
 - Trace Monitor is deliberately **on-demand only**: it stops when its window or the Nodes view closes and never starts in the background. Each sample is clearly identified as RF traffic that may use path discovery/flood.
 
 ### RX observations
