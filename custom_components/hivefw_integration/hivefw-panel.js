@@ -3575,8 +3575,8 @@ class HiveFWPanel extends BasePanel {
       this.__drawLastTraceRoute();
       const data=this.__traceRouteData();
       if(data?.points?.length){
-        const map=this.__nodesMapElement?.leafletMap;
-        try{map?.fitBounds?.(data.points,{padding:[40,40],maxZoom:12});}catch{}
+        const map=this.__nodesMapElement;
+        try{map?.fitMap?.({zoom:12,pad:0.22});}catch{}
       }
     },120);
   }
@@ -4189,12 +4189,7 @@ class HiveFWPanel extends BasePanel {
       const height=Math.max(1,Math.ceil(header.getBoundingClientRect().height));
       container.style.setProperty("--hive-nodes-toolbar-height",height+"px");
       page.style.setProperty("--hive-nodes-toolbar-height",height+"px");
-      const map=this.__nodesMapElement?.leafletMap;
-      if(map?.invalidateSize){
-        requestAnimationFrame(()=>{
-          try{map.invalidateSize({pan:false,animate:false});}catch{}
-        });
-      }
+      // ha-map observes its own size. Do not poke the private map engine here.
     };
     apply();
     if(!this.__nodesHeaderResizeObserver && typeof ResizeObserver!=="undefined"){
@@ -5873,56 +5868,54 @@ class HiveFWPanel extends BasePanel {
 
   __closePersistentNodePopup() {
     const popup=this.__nodesPersistentPopup;
-    const map=this.__nodesMapElement?.leafletMap;
-    if(popup && map){
-      try{ map.removeLayer(popup); }catch{}
-    }
+    if(popup?.isConnected)popup.remove();
     this.__nodesPersistentPopup=null;
     this.__nodesPopupId="";
   }
 
   __openPersistentNodePopup(contact) {
-    const mapEl=this.__nodesMapElement;
-    const map=mapEl?.leafletMap;
-    const L=mapEl?.Leaflet;
+    const pane=this.__nodesMapPane;
     const coords=this.__nodeCoords(contact);
-    if(!map||!L||!coords)return false;
+    if(!pane||!coords)return false;
 
     this.__closePersistentNodePopup();
 
-    const id=this.__nodeId(contact);
-    const popup=L.popup({
-      autoPan:true,
-      autoClose:false,
-      closeOnClick:false,
-      closeButton:true,
-      minWidth:320,
-      maxWidth:440,
-      className:"hivefw-node-popup",
-      offset:[0,-10],
-    })
-      .setLatLng(coords)
-      .setContent(this.__nodeMapPopup(contact));
+    const popup=document.createElement("section");
+    popup.className="hivefw-node-popup-card";
+    popup.style.cssText="position:absolute;right:12px;top:48px;z-index:48;width:min(390px,calc(100% - 24px));max-height:calc(100% - 62px);overflow:auto;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:11px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 5px 20px rgba(0,0,0,.24);";
 
-    popup.on?.("remove",()=>{
-      if(this.__nodesPersistentPopup===popup){
-        this.__nodesPersistentPopup=null;
-        this.__nodesPopupId="";
-      }
+    const close=document.createElement("button");
+    close.type="button";
+    close.textContent="✕";
+    close.title="Fechar";
+    close.style.cssText="position:absolute;right:7px;top:7px;z-index:2;border:0;background:var(--card-background-color,#fff);color:var(--secondary-text-color,#666);font-size:16px;cursor:pointer;border-radius:50%;width:28px;height:28px;";
+    close.addEventListener("click",(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      this.__closePersistentNodePopup();
     });
 
-    popup.addTo(map);
+    const body=document.createElement("div");
+    body.style.cssText="padding:12px 38px 12px 12px;";
+    body.appendChild(this.__nodeMapPopup(contact));
+    popup.append(close,body);
+    pane.appendChild(popup);
     this.__nodesPersistentPopup=popup;
-    this.__nodesPopupId=id;
+    this.__nodesPopupId=this.__nodeId(contact);
     return true;
   }
 
   __resetNodesMapView() {
-    const map=this.__nodesMapElement?.leafletMap;
+    const map=this.__nodesMapElement;
     const saved=this.__nodesInitialViewport;
     if(!map||!saved)return false;
     this.__closePersistentNodePopup();
-    map.setView([saved.lat,saved.lng],saved.zoom,{animate:true});
+    if(typeof map.panTo==="function"){
+      map.zoom=saved.zoom;
+      map.panTo([saved.lat,saved.lng]);
+      return true;
+    }
+    map.setView?.([saved.lat,saved.lng],saved.zoom);
     return true;
   }
 
@@ -6362,19 +6355,14 @@ class HiveFWPanel extends BasePanel {
     const map=this.__nodesMapElement;
     if(map.leafletMap){
       map.leafletMap.setView(coords,12,{animate:true});
-      if(openPopup){
-        const marker=this.__nodesLeafletMarkers.get(id);
-        marker?.setZIndexOffset?.(2000);
-        window.setTimeout(()=>{
-          this.__openPersistentNodePopup(contact);
-        },180);
-      }
+      if(openPopup)window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
     }else if(typeof map.panTo==="function"){
       this.__applyPublicMapLocations(contacts);
       map.zoom=12;
       map.panTo(coords);
-      // Current ha-map owns its markers; selection remains visible through
-      // the highlighted marker even though Leaflet popups are unavailable.
+      if(openPopup){
+        window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
+      }
     }else{
       map.entities=[];
       if("editableLocations" in map)this.__applyPublicMapLocations(contacts);
