@@ -62,6 +62,8 @@ class HiveFWPanel extends BasePanel {
     this.__rxLogOverlay = null;
     this.__rxLogRows = [];
     this.__rxLogLoading = false;
+    this.__rxLogLoadedEntry = null;
+    this.__rxLogFilter = "";
 
     this.__lastSeenTraceResult = null;
     this.__lastTrace = null;
@@ -109,23 +111,16 @@ class HiveFWPanel extends BasePanel {
 
     const title = root.querySelector(".panel-title");
     if (title) {
-      let logo = title.querySelector(".hivefw-header-logo");
-      let product = title.querySelector(".hivefw-header-product");
-      if (!logo || !product) {
-        title.textContent = "";
-        logo = document.createElement("span");
-        logo.className = "hivefw-header-logo";
-        logo.setAttribute("aria-hidden", "true");
-        product = document.createElement("span");
-        product.className = "hivefw-header-product";
-        title.append(logo, product);
-      }
       const radioName = this._selectedDevice?.name
         || this.__repeaterStatus?.name
         || this._config?.name
         || "HiveFW";
-      product.textContent = `– ${radioName}`;
-      title.setAttribute("aria-label", `HiveFW – ${radioName}`);
+      title.replaceChildren();
+      const product = document.createElement("span");
+      product.className = "hivefw-header-product";
+      product.textContent = radioName;
+      title.appendChild(product);
+      title.setAttribute("aria-label", radioName);
     }
 
     // The HiveFW radio is the integration's primary device. Keep the right
@@ -1204,12 +1199,14 @@ class HiveFWPanel extends BasePanel {
       if(entryId)msg.entry_id=entryId;
       const result=await this.hass.callWS(msg);
       this.__rxLogRows=Array.isArray(result?.rows)?result.rows:[];
+      this.__rxLogLoadedEntry=this.__entryId()||null;
     }catch(error){
       console.error("HiveFW RX Log failed:",error);
       this.__rxLogRows=[];
     }finally{
       this.__rxLogLoading=false;
       if(this.__rxLogOverlay?.isConnected)this.__renderRxLogOverlay();
+      if(this._activeTab==="settings")this.__enhanceSettingsPage();
     }
   }
 
@@ -1348,14 +1345,7 @@ class HiveFWPanel extends BasePanel {
       body.prepend(edit);
     }
 
-    let rx=body.querySelector(".hive-rxlog-action");
-    if(!rx){
-      rx=document.createElement("button");
-      rx.type="button";rx.className="modal-action hive-rxlog-action";
-      rx.innerHTML='<span class="modal-action-icon" aria-hidden="true">📡</span>RX Log';
-      rx.addEventListener("click",(event)=>{event.preventDefault();event.stopPropagation();this.__openRxLog(settingsPage);});
-      edit.insertAdjacentElement("afterend",rx);
-    }
+    body.querySelector(".hive-rxlog-action")?.remove();
   }
 
   __enhanceSettingsPage() {
@@ -1407,6 +1397,7 @@ class HiveFWPanel extends BasePanel {
 
     this.__renderSettingsRepeaterCard(sroot, grid);
     this.__renderRegionsScopesCard(sroot, grid);
+    this.__renderRxLogCard(sroot, grid);
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
@@ -2299,7 +2290,136 @@ class HiveFWPanel extends BasePanel {
     }
   }
 
-  __renderRegionsScopesCard(sroot, grid) {
+  __renderRxLogCard(sroot, grid) {
+    let card=sroot.querySelector("#hive-rxlog-card");
+    if(!card){
+      card=document.createElement("div");
+      card.id="hive-rxlog-card";
+      card.className="device-section";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const entryId=this.__entryId()||null;
+    if(this.__rxLogLoadedEntry!==entryId && !this.__rxLogLoading){
+      queueMicrotask(()=>void this.__loadRxLogRows());
+    }
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+    const title=document.createElement("div");
+    title.className="card-title";
+    title.textContent="RX Log";
+    title.style.marginRight="auto";
+
+    const refresh=document.createElement("button");
+    refresh.type="button";
+    refresh.className="action-btn";
+    refresh.textContent=this.__rxLogLoading?"A carregar…":"Atualizar";
+    refresh.disabled=this.__rxLogLoading;
+    refresh.addEventListener("click",()=>void this.__loadRxLogRows());
+
+    const exportBtn=document.createElement("button");
+    exportBtn.type="button";
+    exportBtn.className="action-btn";
+    exportBtn.textContent="Exportar JSON";
+    exportBtn.disabled=!this.__rxLogRows.length;
+    exportBtn.addEventListener("click",()=>{
+      const blob=new Blob([JSON.stringify({rx_log:this.__rxLogRows},null,2)],{type:"application/json;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="hivefw_rx_log.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    });
+    header.append(title,refresh,exportBtn);
+    card.appendChild(header);
+
+    const note=document.createElement("div");
+    note.className="hive-settings-note";
+    note.textContent="Observações RX já guardadas no Home Assistant · sem tráfego RF adicional · máximo 150 linhas";
+    card.appendChild(note);
+
+    const filter=document.createElement("input");
+    filter.type="search";
+    filter.placeholder="Filtrar por nó, conversa, path ou texto…";
+    filter.value=this.__rxLogFilter||"";
+    filter.style.cssText="box-sizing:border-box;width:100%;margin:9px 0;padding:8px 10px;border:1px solid var(--divider-color);border-radius:8px;background:var(--primary-background-color);color:var(--primary-text-color);font:inherit;font-size:12px;";
+    card.appendChild(filter);
+
+    const body=document.createElement("div");
+    body.style.cssText="max-height:340px;overflow:auto;border:1px solid var(--divider-color);border-radius:9px;";
+    card.appendChild(body);
+
+    const renderRows=()=>{
+      body.replaceChildren();
+      const q=(this.__rxLogFilter||"").trim().toLowerCase();
+      const rows=this.__rxLogRows.filter((row)=>{
+        if(!q)return true;
+        const hay=[row.sender,row.conversation_name,row.pubkey_prefix,row.text,row.path,Array.isArray(row.path_nodes)?row.path_nodes.join(","):""].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+
+      if(this.__rxLogLoading&&!rows.length){
+        const msg=document.createElement("div");
+        msg.textContent="A carregar…";
+        msg.style.cssText="padding:24px;text-align:center;color:var(--secondary-text-color);";
+        body.appendChild(msg);
+        return;
+      }
+      if(!rows.length){
+        const msg=document.createElement("div");
+        msg.textContent="Sem observações RX guardadas para este filtro.";
+        msg.style.cssText="padding:24px;text-align:center;color:var(--secondary-text-color);";
+        body.appendChild(msg);
+        return;
+      }
+
+      for(const row of rows){
+        const item=document.createElement("div");
+        item.style.cssText="display:grid;grid-template-columns:132px minmax(120px,1fr) minmax(170px,1.5fr) auto;gap:8px;align-items:start;padding:8px;border-top:1px solid var(--divider-color);font-size:11px;";
+        const time=document.createElement("div");
+        time.textContent=this.__rxLogTime(row.timestamp);
+        time.style.color="var(--secondary-text-color)";
+
+        const who=document.createElement("div");
+        const sender=document.createElement("div");
+        sender.textContent=row.sender||row.conversation_name||"—";
+        sender.style.fontWeight="650";
+        const conv=document.createElement("div");
+        conv.textContent=row.conversation_name||"";
+        conv.style.cssText="margin-top:2px;font-size:9px;color:var(--secondary-text-color);";
+        who.append(sender,conv);
+
+        const route=document.createElement("div");
+        const pathNodes=Array.isArray(row.path_nodes)?row.path_nodes.join(" → "):String(row.path||"");
+        route.textContent=pathNodes||row.text||"—";
+        route.style.cssText="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;";
+
+        const radio=document.createElement("div");
+        const stats=[];
+        if(Number.isFinite(Number(row.rssi)))stats.push("RSSI "+Number(row.rssi).toFixed(0));
+        if(Number.isFinite(Number(row.snr)))stats.push("SNR "+Number(row.snr).toFixed(1));
+        if(Number.isFinite(Number(row.hop_count)))stats.push(Number(row.hop_count)+" hops");
+        radio.textContent=stats.join(" · ")||"—";
+        radio.style.whiteSpace="nowrap";
+
+        item.append(time,who,route,radio);
+        body.appendChild(item);
+      }
+    };
+
+    filter.addEventListener("input",()=>{
+      this.__rxLogFilter=filter.value;
+      renderRows();
+    });
+    renderRows();
+  }
+
+    __renderRegionsScopesCard(sroot, grid) {
     let card = sroot.querySelector("#hive-regions-scopes-card");
     if (!card) {
       card = document.createElement("div");
