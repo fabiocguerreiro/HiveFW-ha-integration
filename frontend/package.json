@@ -1,8 +1,8 @@
 {
   "name": "hivefw-ha-integration-panel",
-  "version": "0.11.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "HiveFW Companion-Repeater management panel for Home Assistant",
+  "description": "Standalone HiveFW Companion-Repeater integration panel for Home Assistant",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c --watch",
