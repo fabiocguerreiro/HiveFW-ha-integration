@@ -1,13 +1,10 @@
 """HiveFW sidebar panel registration.
 
-Adapted from the upstream meshcore integration's panel registration.
+Registers the standalone HiveFW panel, branding and frontend resources.
 
-Differences vs. upstream:
-- All HTTP/sidebar URLs are scoped under `hivefw_integration` so the companion
-  panel co-exists with upstream's panel if both are installed.
-- Sidebar title is "HiveFW" for the HiveFW Companion+Repeater UI.
-- A small wrapper loads the existing production bundle and adds HiveFW-specific UI
-  until the canonical TypeScript bundle is rebuilt.
+The panel is owned entirely by the HiveFW config entry. MeshCore remains an
+internal protocol/SDK dependency; no second Home Assistant integration is
+required.
 """
 from __future__ import annotations
 
@@ -46,7 +43,7 @@ PANEL_SIDEBAR_BRAND_URL = "/hivefw_integration_panel/sidebar-brand.js"
 # Filesystem paths to the production bundle, HiveFW panel wrapper and shared brand.
 PANEL_FRONTEND_PATH = str(Path(__file__).parent / "hivefw-integration-panel.js")
 PANEL_WRAPPER_PATH = str(Path(__file__).parent / "hivefw-panel.js")
-PANEL_LOGO_PATH = str(Path(__file__).parent / "brand" / "hivefw-wordmark.png")
+PANEL_LOGO_PATH = str(Path(__file__).parent / "brand" / "logo.png")
 PANEL_BRAND_ICON_PATH = str(Path(__file__).parent / "brand" / "icon.png")
 PANEL_SIDEBAR_BRAND_PATH = str(Path(__file__).parent / "sidebar-brand.js")
 
