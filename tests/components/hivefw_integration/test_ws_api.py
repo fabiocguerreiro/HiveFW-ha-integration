@@ -660,9 +660,11 @@ async def test_ws_get_managed_devices_happy(
     await _call_ws(ws_api.ws_get_managed_devices, hass, conn, {"id": 1})
     payload = conn.results[0][1]
     assert len(payload["repeaters"]) == 1
+    assert payload["repeaters"][0]["type"] == "repeater"
     # Password masked
     assert payload["repeaters"][0]["password"] == "***"
     assert len(payload["clients"]) == 1
+    assert payload["clients"][0]["type"] == "client"
 
 
 async def test_ws_get_managed_devices_error_no_coordinator(
