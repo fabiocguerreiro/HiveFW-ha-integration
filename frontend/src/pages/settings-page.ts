@@ -17,7 +17,6 @@ import {
 import type { IdentityFlowStep, SetDeviceConfigRenameResult } from '../api';
 import '../components/confirm-dialog';
 import '../components/command-dialog';
-import '../components/sensor-tile';
 import '../components/node-summary';
 import { attachDialogA11y } from '../utils/dialog-a11y';
 import type { CompanionDeviceDescriptor } from '../components/node-summary';
