@@ -13,7 +13,7 @@ import { classifyEntity, type EntityInfo } from '../src/utils/classify-entity';
 import type { CompanionDeviceDescriptor } from '../src/components/node-summary';
 import type { HomeAssistant } from '../src/types';
 
-const NODE = 'meshcore_1ed4c1_';
+const NODE = 'hivefw_1ed4c1_';
 const SUFFIX = '_mattdub';
 
 interface RawSpec {
