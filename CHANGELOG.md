@@ -4,6 +4,14 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.13] - 2026-09-19
+
+- Added a pencil **Edit metrics** control to the Dispositivo metric area.
+- Metrics can be reordered by drag-and-drop or arrow controls without moving Lit-owned DOM nodes; display order is applied through CSS `order`.
+- Any metric card can be hidden or shown from the editor.
+- Added **Repor padrão** to restore the default metric order and visibility.
+- Metric layout preferences are stored per HiveFW entry in browser localStorage and reapplied whenever the Dispositivo page renders.
+
 ## [0.10.12] - 2026-09-19
 
 - Added an inline contact selector to the map popup header: **👤 Adicionar** for discovered nodes and **👤 Remover** for already-added contacts.

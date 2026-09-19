@@ -121,6 +121,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (this._activeTab !== "neighbors") {
       this.__removeNeighborsOverlay();
     }
+    if (this._activeTab !== "settings") {
+      this.__closeMetricEditor();
+    }
 
     if (this._activeTab === "nodes") {
       this.__enhanceNodesPage();
@@ -732,6 +735,285 @@ class MeshCoreRepeaterPanel extends BasePanel {
     root.appendChild(style);
   }
 
+  __metricLayoutStorageKey() {
+    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
+    return `hivefw.metric_layout.v1.${entry}`;
+  }
+
+  __loadMetricLayout() {
+    try{
+      const raw=localStorage.getItem(this.__metricLayoutStorageKey());
+      if(!raw)return {order:[],hidden:[]};
+      const parsed=JSON.parse(raw);
+      return {
+        order:Array.isArray(parsed?.order)?parsed.order.map(String):[],
+        hidden:Array.isArray(parsed?.hidden)?parsed.hidden.map(String):[],
+      };
+    }catch{
+      return {order:[],hidden:[]};
+    }
+  }
+
+  __saveMetricLayout(layout) {
+    try{
+      localStorage.setItem(this.__metricLayoutStorageKey(),JSON.stringify({
+        order:Array.isArray(layout?.order)?layout.order:[],
+        hidden:Array.isArray(layout?.hidden)?layout.hidden:[],
+      }));
+    }catch{}
+  }
+
+  __metricTileInfo(hero) {
+    const seen=new Map();
+    return [...hero.querySelectorAll(":scope > .hero-tile")].map((tile,index)=>{
+      let id=tile.dataset.hiveMetricId;
+      const head=tile.querySelector(".hero-tile-head");
+      const title=(head?.textContent||`Métrica ${index+1}`).trim().replace(/\s+/g," ");
+      if(!id){
+        if(tile.dataset.repeaterExtra){
+          id=`hive:${tile.dataset.repeaterExtra}`;
+        }else{
+          const base=title.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+            .replace(/[^a-z0-9]+/g,"-")
+            .replace(/^-|-$/g,"") || `metric-${index+1}`;
+          const count=(seen.get(base)||0)+1;
+          seen.set(base,count);
+          id=`native:${base}${count>1?`-${count}`:""}`;
+        }
+        tile.dataset.hiveMetricId=id;
+      }
+      return {id,title,tile,index};
+    });
+  }
+
+  __applyMetricLayout(hero) {
+    const items=this.__metricTileInfo(hero);
+    if(!items.length)return;
+    const saved=this.__loadMetricLayout();
+    const knownIds=new Set(items.map((item)=>item.id));
+    const storedOrder=saved.order.filter((id)=>knownIds.has(id));
+    const missing=items.map((item)=>item.id).filter((id)=>!storedOrder.includes(id));
+    const order=[...storedOrder,...missing];
+    const hidden=new Set(saved.hidden.filter((id)=>knownIds.has(id)));
+
+    items.forEach(({id,tile})=>{
+      const position=order.indexOf(id);
+      tile.style.order=String(position<0?999:position);
+      tile.style.display=hidden.has(id)?"none":"";
+    });
+  }
+
+  __closeMetricEditor() {
+    this.shadowRoot?.querySelector("#hive-metric-editor-overlay")?.remove();
+  }
+
+  __openMetricEditor(summary,nroot,hero) {
+    this.__closeMetricEditor();
+    const items=this.__metricTileInfo(hero);
+    if(!items.length)return;
+
+    const saved=this.__loadMetricLayout();
+    const byId=new Map(items.map((item)=>[item.id,item]));
+    const stored=saved.order.filter((id)=>byId.has(id));
+    const order=[...stored,...items.map((item)=>item.id).filter((id)=>!stored.includes(id))];
+    const hidden=new Set(saved.hidden.filter((id)=>byId.has(id)));
+
+    const overlay=document.createElement("div");
+    overlay.id="hive-metric-editor-overlay";
+    overlay.style.cssText="position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.48);display:grid;place-items:center;padding:18px;box-sizing:border-box;";
+
+    const dialog=document.createElement("div");
+    dialog.style.cssText="width:min(520px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.28);overflow:hidden;";
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--divider-color,#ddd);";
+    const title=document.createElement("div");
+    title.textContent="Editar métricas";
+    title.style.cssText="flex:1;font-size:16px;font-weight:700;";
+    const close=document.createElement("button");
+    close.type="button";
+    close.textContent="✕";
+    close.title="Fechar";
+    close.style.cssText="width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:inherit;font-size:17px;cursor:pointer;";
+    close.addEventListener("click",()=>this.__closeMetricEditor());
+    header.append(title,close);
+
+    const help=document.createElement("div");
+    help.textContent="Arrasta para ordenar. Usa o olho para mostrar ou ocultar cartões.";
+    help.style.cssText="padding:10px 16px 5px;font-size:11px;color:var(--secondary-text-color,#777);";
+
+    const list=document.createElement("div");
+    list.style.cssText="overflow:auto;padding:7px 12px 12px;display:flex;flex-direction:column;gap:6px;";
+
+    const persist=()=>{
+      const ids=[...list.querySelectorAll("[data-metric-editor-id]")].map((row)=>row.dataset.metricEditorId);
+      const hiddenIds=[...list.querySelectorAll("[data-metric-editor-id]")]
+        .filter((row)=>row.dataset.hidden==="1")
+        .map((row)=>row.dataset.metricEditorId);
+      this.__saveMetricLayout({order:ids,hidden:hiddenIds});
+      this.__applyMetricLayout(hero);
+    };
+
+    const buildRow=(id)=>{
+      const info=byId.get(id);
+      if(!info)return null;
+      const row=document.createElement("div");
+      row.dataset.metricEditorId=id;
+      row.dataset.hidden=hidden.has(id)?"1":"0";
+      row.draggable=true;
+      row.style.cssText="display:grid;grid-template-columns:28px minmax(0,1fr) 30px 30px 38px;align-items:center;gap:6px;min-height:42px;padding:6px 8px;border:1px solid var(--divider-color,#ddd);border-radius:8px;background:var(--secondary-background-color,#f5f5f5);";
+
+      const drag=document.createElement("span");
+      drag.textContent="☰";
+      drag.title="Arrastar";
+      drag.style.cssText="cursor:grab;text-align:center;opacity:.65;font-size:17px;user-select:none;";
+
+      const label=document.createElement("span");
+      label.textContent=info.title;
+      label.style.cssText="min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+
+      const up=document.createElement("button");
+      up.type="button"; up.textContent="↑"; up.title="Subir";
+      const down=document.createElement("button");
+      down.type="button"; down.textContent="↓"; down.title="Descer";
+      for(const btn of [up,down]){
+        btn.style.cssText="width:28px;height:28px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:6px;background:var(--card-background-color,#fff);color:inherit;cursor:pointer;";
+      }
+
+      const eye=document.createElement("button");
+      eye.type="button";
+      const refreshEye=()=>{
+        const isHidden=row.dataset.hidden==="1";
+        eye.textContent=isHidden?"◉":"👁";
+        eye.title=isHidden?"Mostrar":"Ocultar";
+        eye.style.opacity=isHidden?".48":"1";
+        label.style.opacity=isHidden?".48":"1";
+      };
+      eye.style.cssText="width:36px;height:28px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:6px;background:var(--card-background-color,#fff);color:inherit;cursor:pointer;font-size:14px;";
+      refreshEye();
+
+      eye.addEventListener("click",()=>{
+        row.dataset.hidden=row.dataset.hidden==="1"?"0":"1";
+        refreshEye();
+        persist();
+      });
+      up.addEventListener("click",()=>{
+        const prev=row.previousElementSibling;
+        if(prev){list.insertBefore(row,prev);persist();}
+      });
+      down.addEventListener("click",()=>{
+        const next=row.nextElementSibling;
+        if(next){list.insertBefore(next,row);persist();}
+      });
+
+      row.addEventListener("dragstart",(event)=>{
+        event.dataTransfer?.setData("text/plain",id);
+        if(event.dataTransfer)event.dataTransfer.effectAllowed="move";
+        row.style.opacity=".55";
+      });
+      row.addEventListener("dragend",()=>{row.style.opacity="1";});
+      row.addEventListener("dragover",(event)=>{
+        event.preventDefault();
+        if(event.dataTransfer)event.dataTransfer.dropEffect="move";
+      });
+      row.addEventListener("drop",(event)=>{
+        event.preventDefault();
+        const draggedId=event.dataTransfer?.getData("text/plain");
+        if(!draggedId||draggedId===id)return;
+        const dragged=list.querySelector(`[data-metric-editor-id="${CSS.escape(draggedId)}"]`);
+        if(!dragged)return;
+        const box=row.getBoundingClientRect();
+        const before=event.clientY<box.top+box.height/2;
+        list.insertBefore(dragged,before?row:row.nextElementSibling);
+        persist();
+      });
+
+      row.append(drag,label,up,down,eye);
+      return row;
+    };
+
+    order.forEach((id)=>{
+      const row=buildRow(id);
+      if(row)list.appendChild(row);
+    });
+
+    const footer=document.createElement("div");
+    footer.style.cssText="display:flex;justify-content:space-between;gap:8px;padding:12px 16px;border-top:1px solid var(--divider-color,#ddd);";
+    const reset=document.createElement("button");
+    reset.type="button";
+    reset.textContent="Repor padrão";
+    reset.style.cssText="padding:7px 11px;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:inherit;font-size:12px;font-weight:600;cursor:pointer;";
+    reset.addEventListener("click",()=>{
+      try{localStorage.removeItem(this.__metricLayoutStorageKey());}catch{}
+      this.__applyMetricLayout(hero);
+      this.__closeMetricEditor();
+      this.__openMetricEditor(summary,nroot,hero);
+    });
+    const done=document.createElement("button");
+    done.type="button";
+    done.textContent="Concluído";
+    done.style.cssText="padding:7px 13px;border:1px solid var(--primary-color,#03a9f4);border-radius:7px;background:var(--primary-color,#03a9f4);color:#fff;font-size:12px;font-weight:700;cursor:pointer;";
+    done.addEventListener("click",()=>this.__closeMetricEditor());
+    footer.append(reset,done);
+
+    dialog.append(header,help,list,footer);
+    overlay.appendChild(dialog);
+    overlay.addEventListener("click",(event)=>{
+      if(event.target===overlay)this.__closeMetricEditor();
+    });
+    this.shadowRoot?.appendChild(overlay);
+  }
+
+  __ensureMetricEditor(summary,nroot,hero) {
+    let style=nroot.querySelector("#hive-metric-editor-style");
+    if(!style){
+      style=document.createElement("style");
+      style.id="hive-metric-editor-style";
+      style.textContent=`
+        .hive-metric-toolbar{
+          display:flex;
+          justify-content:flex-end;
+          align-items:center;
+          margin:-3px 0 5px;
+          min-height:28px;
+        }
+        .hive-metric-edit-btn{
+          width:28px;height:28px;padding:0;border:1px solid var(--divider-color,#d0d0d0);
+          border-radius:7px;background:var(--card-background-color,#fff);
+          color:var(--secondary-text-color,#666);font-size:15px;cursor:pointer;
+          display:grid;place-items:center;
+        }
+        .hive-metric-edit-btn:hover{
+          color:var(--primary-color,#03a9f4);
+          border-color:var(--primary-color,#03a9f4);
+        }
+      `;
+      nroot.appendChild(style);
+    }
+
+    let toolbar=nroot.querySelector(".hive-metric-toolbar");
+    if(!toolbar){
+      toolbar=document.createElement("div");
+      toolbar.className="hive-metric-toolbar";
+      const edit=document.createElement("button");
+      edit.type="button";
+      edit.className="hive-metric-edit-btn";
+      edit.textContent="✎";
+      edit.title="Editar ordem e visibilidade das métricas";
+      edit.setAttribute("aria-label","Editar métricas");
+      edit.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__openMetricEditor(summary,nroot,hero);
+      });
+      toolbar.appendChild(edit);
+      hero.parentNode?.insertBefore(toolbar,hero);
+    }
+
+    this.__applyMetricLayout(hero);
+  }
+
   __enhanceSettingsPage() {
     const settingsPage = this.shadowRoot?.querySelector("meshcore-settings-page");
     const sroot = settingsPage?.shadowRoot;
@@ -1089,6 +1371,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
         }
       }
     }
+
+    this.__ensureMetricEditor(summary,nroot,hero);
   }
 
   async __loadManagedDevices() {
