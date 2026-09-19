@@ -217,6 +217,7 @@ export interface MeshCoreDevice {
   pubkey_prefix: string;
   firmware: string;
   connected: boolean;
+  path_hash_mode?: number;
 }
 
 /**
