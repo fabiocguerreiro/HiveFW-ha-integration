@@ -5,7 +5,7 @@
 from enum import IntEnum
 from typing import Final
 
-DOMAIN: Final = "meshcore"
+DOMAIN: Final = "hivefw_integration"
 
 # Connection types
 CONF_CONNECTION_TYPE: Final = "connection_type"
@@ -70,7 +70,7 @@ PLATFORM_MESSAGE: Final = "message"
 ENTITY_DOMAIN_BINARY_SENSOR: Final = "binary_sensor"
 ENTITY_DOMAIN_SENSOR: Final = "sensor"
 ENTITY_DOMAIN_BUTTON: Final = "button"
-DEFAULT_DEVICE_NAME: Final = "meshcore"
+DEFAULT_DEVICE_NAME: Final = "HiveFW"
 MESSAGES_SUFFIX: Final = "messages"
 CONTACT_SUFFIX: Final = "contact"
 ONLINE_SUFFIX: Final = "online"

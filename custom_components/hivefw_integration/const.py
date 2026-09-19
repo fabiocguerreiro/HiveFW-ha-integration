@@ -11,7 +11,7 @@ DOMAIN: Final = "hivefw_integration"
 # subscribing to events fired on hass.bus, and as the prefix on services
 # we call (`meshcore.send_message`, etc.) — never appears in our own
 # data namespace, only as a reference to the producer.
-MESHCORE_DOMAIN: Final = "meshcore"
+MESHCORE_DOMAIN: Final = DOMAIN
 
 # Upstream meshcore config-entry data key for the companion device name.
 # Mirrors meshcore-ha/custom_components/meshcore/const.py:CONF_NAME (literal "name").
@@ -34,10 +34,10 @@ CONF_FLOOD_SCOPES_UPSTREAM: Final = "flood_scopes"
 
 # Events fired on hass.bus by the upstream meshcore integration that we
 # subscribe to from __init__.py.
-EVENT_MESHCORE_MESSAGE: Final = "meshcore_message"
-EVENT_MESHCORE_DELIVERY_UPDATE: Final = "meshcore_delivery_update"
-EVENT_MESHCORE_CONNECTED: Final = "meshcore_connected"
-EVENT_MESHCORE_DISCONNECTED: Final = "meshcore_disconnected"
+EVENT_MESHCORE_MESSAGE: Final = f"{DOMAIN}_message"
+EVENT_MESHCORE_DELIVERY_UPDATE: Final = f"{DOMAIN}_delivery_update"
+EVENT_MESHCORE_CONNECTED: Final = f"{DOMAIN}_connected"
+EVENT_MESHCORE_DISCONNECTED: Final = f"{DOMAIN}_disconnected"
 
 # ─── Storage keys ──────────────────────────────────────────────────────────
 # Per-conversation file naming. Distinct from the upstream `meshcore.*` namespace

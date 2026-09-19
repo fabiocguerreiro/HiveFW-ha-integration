@@ -565,7 +565,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     if not hass.data.get(STATIC_PATH_REGISTERED_KEY):
         await hass.http.async_register_static_paths([
-            StaticPathConfig("/api/meshcore/static", str(icons_path), should_cache)
+            StaticPathConfig("/api/hivefw/static", str(icons_path), should_cache)
         ])
         hass.data[STATIC_PATH_REGISTERED_KEY] = True
     

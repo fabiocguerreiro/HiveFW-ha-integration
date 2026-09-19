@@ -128,12 +128,19 @@ def _sync_upstream_repair_issue(hass: HomeAssistant) -> None:
 # imports during package load. The deliberate-ordering noqa silences the
 # E402 module-level-import-not-at-top warning.
 from .ws_api import async_register_ws_commands  # noqa: E402
+from .engine.integration import async_setup_entry as async_setup_engine_entry  # noqa: E402
+from .engine.integration import async_unload_entry as async_unload_engine_entry  # noqa: E402
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: MeshCoreChatConfigEntry
 ) -> bool:
-    """Set up HiveFW from a config entry."""
+    """Set up the unified HiveFW radio engine and UI from one config entry."""
+    # The embedded MeshCore engine owns the physical TCP/BLE/USB connection,
+    # creates HA entities/services and starts telemetry before the HiveFW
+    # panel/store layer subscribes to its events.
+    if not await async_setup_engine_entry(hass, entry):
+        return False
     # Test-before-setup: refuse setup until the upstream meshcore
     # integration has at least one coordinator. The chat companion is
     # useless without it, and HA will retry async_setup_entry
@@ -147,8 +154,7 @@ async def async_setup_entry(
     if not _upstream_meshcore_present(hass):
         _sync_upstream_repair_issue(hass)
         raise ConfigEntryNotReady(
-            "Upstream meshcore integration has no active config entries — "
-            "set one up via Settings → Devices & Services."
+            "HiveFW internal radio engine did not create a coordinator."
         )
 
     # Upstream is back (or never went away) — clear any stale repair
@@ -317,7 +323,8 @@ async def async_unload_entry(
         if tracker is not None:
             tracker.clear()
 
-    return True
+    engine_ok = await async_unload_engine_entry(hass, entry)
+    return bool(engine_ok)
 
 
 # ─── event handlers ─────────────────────────────────────────────────────

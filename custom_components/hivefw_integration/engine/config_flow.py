@@ -562,8 +562,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_global_settings()
             elif action == "mqtt_brokers":
                 return await self.async_step_mqtt_brokers()
+            elif action == "hivefw_storage":
+                return await self.async_step_hivefw_storage()
             else:
-                return self.async_create_entry(title="", data={})
+                return self.async_create_entry(title="", data=dict(self.config_entry.options))
 
         # Get device counts for display
         repeater_count = len(self.repeater_subscriptions)
@@ -591,6 +593,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "manage_devices": "Manage Monitored Devices",
                 "global_settings": "Global Settings",
                 "mqtt_brokers": "Manage MQTT Brokers",
+                "hivefw_storage": "HiveFW message storage",
             })
         })
 
@@ -603,6 +606,46 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
         
         
+    async def async_step_hivefw_storage(self, user_input=None):
+        """Configure HiveFW local message retention."""
+        from ..const import (
+            DEFAULT_MAX_MESSAGES_PER_CONVERSATION,
+            DEFAULT_MESSAGE_RETENTION_DAYS,
+            OPT_MAX_MESSAGES_PER_CONVERSATION,
+            OPT_MESSAGE_RETENTION_DAYS,
+        )
+
+        if user_input is not None:
+            merged = dict(self.config_entry.options)
+            merged[OPT_MAX_MESSAGES_PER_CONVERSATION] = int(
+                user_input[OPT_MAX_MESSAGES_PER_CONVERSATION]
+            )
+            merged[OPT_MESSAGE_RETENTION_DAYS] = int(
+                user_input[OPT_MESSAGE_RETENTION_DAYS]
+            )
+            return self.async_create_entry(title="", data=merged)
+
+        current = self.config_entry.options
+        return self.async_show_form(
+            step_id="hivefw_storage",
+            data_schema=vol.Schema({
+                vol.Required(
+                    OPT_MAX_MESSAGES_PER_CONVERSATION,
+                    default=current.get(
+                        OPT_MAX_MESSAGES_PER_CONVERSATION,
+                        DEFAULT_MAX_MESSAGES_PER_CONVERSATION,
+                    ),
+                ): vol.All(cv.positive_int, vol.Range(min=50, max=5000)),
+                vol.Required(
+                    OPT_MESSAGE_RETENTION_DAYS,
+                    default=current.get(
+                        OPT_MESSAGE_RETENTION_DAYS,
+                        DEFAULT_MESSAGE_RETENTION_DAYS,
+                    ),
+                ): vol.All(cv.positive_int, vol.Range(min=1, max=365)),
+            }),
+        )
+
     def _get_repeater_contacts(self):
         """Get repeater contacts from coordinator's cached data."""
         repeater_contacts = []

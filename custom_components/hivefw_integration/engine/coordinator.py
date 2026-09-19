@@ -161,10 +161,10 @@ class MeshCoreDataUpdateCoordinator(DataUpdateCoordinator):
         self._manual_mode_initialized = False
 
         # Storage for discovered contacts
-        self._store = Store[dict[str, dict]](hass, 1, f"meshcore.{config_entry.entry_id}.discovered_contacts")
+        self._store = Store[dict[str, dict]](hass, 1, f"hivefw_integration.{config_entry.entry_id}.discovered_contacts")
         # Storage for neighbor data (persists SNR, seen_timestamps, etc. across restarts)
         self._neighbor_store = Store[dict[str, dict]](
-            hass, 1, f"meshcore.{config_entry.entry_id}.neighbor_data"
+            hass, 1, f"hivefw_integration.{config_entry.entry_id}.neighbor_data"
         )
         self._neighbor_data_loaded = False
         # Get name and pubkey from config_entry.data (not options)

@@ -753,7 +753,7 @@ class MeshCoreContactDiagnosticBinarySensor(CoordinatorEntity, BinarySensorEntit
             
         # Add entity picture if we have an icon
         if icon_file:
-            attributes["entity_picture"] = f"/api/meshcore/static/{icon_file}"
+            attributes["entity_picture"] = f"/api/hivefw/static/{icon_file}"
         
         # Format last advertisement time if available
         last_advert = self._contact_data.get("last_advert", 0)
