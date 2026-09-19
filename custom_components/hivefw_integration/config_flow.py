@@ -1,6 +1,5 @@
-"""Config flow for the unified HiveFW integration."""
+"""Config flow for the standalone HiveFW integration."""
 
-from .engine.config_flow import MeshCoreConfigFlow as HiveFWConfigFlow
-from .engine.config_flow import OptionsFlowHandler
+from .engine.config_flow import HiveFWConfigFlow, OptionsFlowHandler
 
 __all__ = ["HiveFWConfigFlow", "OptionsFlowHandler"]
