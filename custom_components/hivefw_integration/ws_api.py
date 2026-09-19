@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import time
 from datetime import datetime
@@ -21,6 +22,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import (
     DEFAULT_OBSERVABILITY_SETTINGS,
@@ -685,6 +687,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_peer_activity)
     websocket_api.async_register_command(hass, ws_get_observability_settings)
     websocket_api.async_register_command(hass, ws_set_observability_settings)
+    websocket_api.async_register_command(hass, ws_get_los_profile)
 
     # Paginated contacts & counts
     websocket_api.async_register_command(hass, ws_get_contacts_paginated)
@@ -1158,6 +1161,152 @@ async def ws_set_observability_settings(hass, connection, msg):
     connection.send_result(
         msg["id"],
         {"settings": _observability_settings(runtime), "saved": True},
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/get_los_profile",
+        vol.Required("start_lat"): vol.All(float, vol.Range(min=-90, max=90)),
+        vol.Required("start_lon"): vol.All(float, vol.Range(min=-180, max=180)),
+        vol.Required("end_lat"): vol.All(float, vol.Range(min=-90, max=90)),
+        vol.Required("end_lon"): vol.All(float, vol.Range(min=-180, max=180)),
+        vol.Required("frequency_mhz"): vol.All(float, vol.Range(min=100, max=1000)),
+        vol.Optional("start_height_m", default=2.0): vol.All(float, vol.Range(min=0, max=500)),
+        vol.Optional("end_height_m", default=2.0): vol.All(float, vol.Range(min=0, max=500)),
+        vol.Optional("samples", default=60): vol.All(int, vol.Range(min=10, max=100)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_get_los_profile(hass, connection, msg):
+    """Calculate terrain LOS and first-Fresnel clearance on demand."""
+    lat1 = float(msg["start_lat"])
+    lon1 = float(msg["start_lon"])
+    lat2 = float(msg["end_lat"])
+    lon2 = float(msg["end_lon"])
+    samples = int(msg.get("samples", 60))
+    frequency_mhz = float(msg["frequency_mhz"])
+    h1 = float(msg.get("start_height_m", 2.0))
+    h2 = float(msg.get("end_height_m", 2.0))
+
+    def _haversine(a_lat, a_lon, b_lat, b_lon):
+        radius = 6371008.8
+        p1 = math.radians(a_lat)
+        p2 = math.radians(b_lat)
+        dp = math.radians(b_lat - a_lat)
+        dl = math.radians(b_lon - a_lon)
+        value = (
+            math.sin(dp / 2) ** 2
+            + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        )
+        return 2 * radius * math.asin(min(1.0, math.sqrt(value)))
+
+    total_m = _haversine(lat1, lon1, lat2, lon2)
+    if total_m < 1:
+        connection.send_error(msg["id"], "invalid_distance", "Points are too close")
+        return
+
+    # Linear WGS84 interpolation is accurate enough at the sub-regional
+    # distances where LoRa links are useful, while the distance axis itself
+    # is geodesic (haversine).
+    fractions = [index / (samples - 1) for index in range(samples)]
+    lats = [lat1 + (lat2 - lat1) * fraction for fraction in fractions]
+    lons = [lon1 + (lon2 - lon1) * fraction for fraction in fractions]
+
+    session = async_get_clientsession(hass)
+    try:
+        async with session.get(
+            "https://api.open-meteo.com/v1/elevation",
+            params={
+                "latitude": ",".join(f"{value:.6f}" for value in lats),
+                "longitude": ",".join(f"{value:.6f}" for value in lons),
+            },
+            timeout=20,
+        ) as response:
+            response.raise_for_status()
+            payload = await response.json()
+    except Exception as ex:
+        _LOGGER.warning("LOS elevation request failed: %s", ex)
+        connection.send_error(
+            msg["id"], "elevation_unavailable", "Elevation source unavailable"
+        )
+        return
+
+    elevations = payload.get("elevation") if isinstance(payload, dict) else None
+    if not isinstance(elevations, list) or len(elevations) != samples:
+        connection.send_error(
+            msg["id"], "elevation_invalid", "Elevation source returned invalid data"
+        )
+        return
+
+    try:
+        elevations = [float(value) for value in elevations]
+    except (TypeError, ValueError):
+        connection.send_error(
+            msg["id"], "elevation_invalid", "Elevation source returned non-numeric data"
+        )
+        return
+
+    start_radio_alt = elevations[0] + h1
+    end_radio_alt = elevations[-1] + h2
+    wavelength = 299_792_458.0 / (frequency_mhz * 1_000_000.0)
+    effective_radius = (4.0 / 3.0) * 6_371_008.8
+
+    profile = []
+    min_clearance = float("inf")
+    min_fresnel_clearance = float("inf")
+    min_index = 0
+
+    for index, (fraction, elevation) in enumerate(zip(fractions, elevations)):
+        d1 = total_m * fraction
+        d2 = total_m - d1
+        line_alt = start_radio_alt + (end_radio_alt - start_radio_alt) * fraction
+        curvature = (d1 * d2) / (2.0 * effective_radius)
+        terrain_effective = elevation + curvature
+        fresnel = (
+            math.sqrt(wavelength * d1 * d2 / total_m)
+            if d1 > 0 and d2 > 0
+            else 0.0
+        )
+        clearance = line_alt - terrain_effective
+        fresnel_clearance = clearance - (0.6 * fresnel)
+        if fresnel_clearance < min_fresnel_clearance:
+            min_fresnel_clearance = fresnel_clearance
+            min_clearance = clearance
+            min_index = index
+        profile.append(
+            {
+                "distance_km": round(d1 / 1000.0, 3),
+                "elevation_m": round(elevation, 1),
+                "line_m": round(line_alt, 1),
+                "curvature_m": round(curvature, 2),
+                "fresnel_m": round(fresnel, 2),
+                "clearance_m": round(clearance, 2),
+                "fresnel_clearance_m": round(fresnel_clearance, 2),
+            }
+        )
+
+    connection.send_result(
+        msg["id"],
+        {
+            "distance_km": round(total_m / 1000.0, 3),
+            "frequency_mhz": frequency_mhz,
+            "profile": profile,
+            "minimum": {
+                "index": min_index,
+                "distance_km": profile[min_index]["distance_km"],
+                "clearance_m": round(min_clearance, 2),
+                "fresnel_clearance_m": round(min_fresnel_clearance, 2),
+            },
+            "line_of_sight_clear": min_clearance > 0,
+            "fresnel_60_clear": min_fresnel_clearance > 0,
+            "source": {
+                "name": "Open-Meteo Elevation API / Copernicus DEM GLO-90",
+                "resolution_m": 90,
+                "model": "Copernicus DEM 2021 GLO-90",
+            },
+        },
     )
 
 
