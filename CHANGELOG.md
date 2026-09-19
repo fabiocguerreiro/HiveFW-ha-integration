@@ -4,6 +4,30 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-19
+
+### Network observability
+- Added aggregated **RF Health**, **Airtime**, **Reliability**, **Integrity**, **Current Traffic**, **Network Activity**, and **Health** metric cards to the local HiveFW device dashboard.
+- Added 48-hour mini-history charts backed by Home Assistant Recorder statistics for noise floor, RSSI, SNR, RX/TX message rates, and RX error rate when those statistics are available.
+- Health warnings now include local noise/queue/clock/reliability checks and the meshcore-ha latching radio fault flags for packet-pool exhaustion, CAD timeout, and RX timeout when Self Diagnostics exposes them.
+- Added local first-seen tracking from a clean baseline so future newly discovered contacts can be counted over 24-hour and 7-day windows without mislabelling packet totals as advert counts.
+
+### Nodes, routes, and traces
+- Added per-public-key local **Favorites** and **Tags**. They survive contact renames, appear in the node list and map tooltips, and can be edited directly from the map popup.
+- The latest successful Trace is persisted per HiveFW entry and drawn on the Nodes map as a dashed route through uniquely resolved contacts with GPS. Ambiguous or unknown hashes are listed rather than guessed.
+- Added a map overlay summary for the latest Trace with target, RTT, hops, final SNR, unresolved hashes, and a **Limpar** action.
+- Added an explicit **Trace Monitor** for added forwarding-class contacts. It supports one-shot measurements or user-started intervals of 2, 5, 10, or 30 minutes, records up to 100 samples, graphs RTT/SNR, and updates the map's latest route.
+- Trace Monitor is deliberately **on-demand only**: it stops when its window or the Nodes view closes and never starts in the background. Each sample is clearly identified as RF traffic that may use path discovery/flood.
+
+### RX observations
+- Added a bounded **RX Log** under the existing Companion gear menu. It reads already-stored message RX observations from Home Assistant, with filter, refresh, RSSI/SNR/hops/path information when present, and JSON export.
+- RX Log does not enable a raw radio sniffer and does not generate additional mesh traffic.
+
+### Existing interface integration
+- All new metric cards participate in **Editar Menu**, so users can reorder or hide them alongside existing metrics.
+- New node metadata and diagnostic preferences are stored locally per HiveFW entry and do not alter MeshCore contact flags or firmware state.
+
+
 ## [0.10.15] - 2026-09-19
 
 - Reworked the map's local repeater identity: the connected HiveFW device is dynamically matched to the real discovered contact by full public key, pubkey prefix, then normalized exact name.
