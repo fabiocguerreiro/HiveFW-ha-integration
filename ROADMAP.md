@@ -67,7 +67,7 @@ Estas funcionalidades existem e devem permanecer em qualquer refactor:
 - [x] Contagem RX/TX por peer e volume de link.
 - [x] Distância hop-to-hop e distância acumulada da rota.
 - [x] Topology graph com links baseados em SNR/atividade.
-- [ ] Activity heatmap com origem dos dados claramente indicada.
+- [x] Activity heatmap com origem dos dados claramente indicada.
 - [ ] Continuar a nunca adivinhar hashes ambíguos.
 - [ ] Ferramenta LOS/elevation/Fresnel quando existir uma fonte de elevação adequada.
 
