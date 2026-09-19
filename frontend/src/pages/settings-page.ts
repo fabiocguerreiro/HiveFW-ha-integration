@@ -81,7 +81,7 @@ const IDENTITY_FLOW_STEP_ORDER: ReadonlyArray<{
   { step: 'importing', label: 'Sending key to device' },
   { step: 'rebooting', label: 'Rebooting device' },
   { step: 'reconnecting', label: 'Waiting for device reconnect' },
-  { step: 'reloading', label: 'Reloading MeshCore integration' },
+  { step: 'reloading', label: 'Reloading HiveFW integration' },
   { step: 'verifying', label: 'Verifying new identity' },
 ];
 
@@ -914,7 +914,7 @@ export class SettingsPage extends LitElement {
 
             <!-- Remote MeshCore devices managed by the upstream integration -->
             <div class="device-section managed-devices-card">
-              <div class="card-title">Equipamentos MeshCore geridos</div>
+              <div class="card-title">Equipamentos HiveFW geridos</div>
               ${this._renderManagedDevices()}
             </div>
 
@@ -2240,7 +2240,7 @@ export class SettingsPage extends LitElement {
           </div>
           <div class="dialog-body">
             <p style="margin: 0 0 12px 0;">
-              The MeshCore device was renamed from
+              The HiveFW device was renamed from
               <code>${r.old_name}</code> to <code>${r.new_name}</code>.
             </p>
             <p style="margin: 0 0 12px 0;">
