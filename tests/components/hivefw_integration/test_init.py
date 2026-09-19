@@ -306,7 +306,7 @@ async def test_message_handler_inbound_fires_derived_unread_event(
 
     events: list[dict] = []
     hass.bus.async_listen(
-        "meshcore_unread_updated",
+        "hivefw_unread_updated",
         lambda e: events.append(dict(e.data)),
     )
 
@@ -342,7 +342,7 @@ async def test_message_handler_outgoing_does_not_fire_unread(
 
     events: list[dict] = []
     hass.bus.async_listen(
-        "meshcore_unread_updated",
+        "hivefw_unread_updated",
         lambda e: events.append(dict(e.data)),
     )
 
