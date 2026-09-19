@@ -483,6 +483,10 @@ export class MessageBubble extends LitElement {
                 <div class="message-dialog-route" @click=${() => this._copyText(routeText)}>
                   Route: ${routeText}
                 </div>
+                <button class="message-dialog-action" @click=${() => this._showRouteOnMap(msg)}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z"/></svg>
+                  Mostrar no mapa
+                </button>
               `
             : html``}
           <div style=${footerStyle}>
@@ -516,6 +520,17 @@ export class MessageBubble extends LitElement {
       document.execCommand('copy');
       document.body.removeChild(textarea);
     }
+    this._selectedMessage = null;
+  }
+
+  private _showRouteOnMap(msg: ChatMessage) {
+    this.dispatchEvent(
+      new CustomEvent('show-message-route', {
+        detail: { message: msg },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     this._selectedMessage = null;
   }
 
