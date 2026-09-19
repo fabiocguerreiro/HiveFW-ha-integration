@@ -1622,7 +1622,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     };
 
     const active=!!status.repeat;
-    hero.appendChild(makeTile("Repeater mode",active?"Active":"Off","· Companion always on",active?100:0,0,100,active?"good":"info","state"));
+    hero.appendChild(makeTile("Repeater mode",active?"Active":"Off","· Companion always on",active?100:0,0,100,active?"good":"info","state",clickEntity("repeater_mode")));
 
     const uptimeSecs=Number(status.stats?.core?.uptime_secs);
     if(Number.isFinite(uptimeSecs)){
@@ -1635,7 +1635,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(Number.isFinite(clock)&&clock>0){
       const drift=Number(status.clock?.drift_seconds||0), abs=Math.abs(drift);
       const t=new Date(clock*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
-      hero.appendChild(makeTile("Device clock",t,abs<=2?"· synchronized":`· drift ${drift>0?"+":""}${drift}s`,Math.min(abs,120),0,120,abs<=2?"good":abs<=30?"warn":"bad","clock"));
+      hero.appendChild(makeTile("Device clock",t,abs<=2?"· synchronized":`· drift ${drift>0?"+":""}${drift}s`,Math.min(abs,120),0,120,abs<=2?"good":abs<=30?"warn":"bad","clock",clickEntity("device_clock","clock")));
     }
 
     const noise=Number(status.stats?.radio?.noise_floor);
@@ -1673,14 +1673,14 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const info=status.device_info||{};
     const model=info.model||status.model;
     if(model){
-      hero.appendChild(makeTile("Hardware",String(model),info.firmware_build?`· ${info.firmware_build}`:"",100,0,100,"info","hardware"));
+      hero.appendChild(makeTile("Hardware",String(model),info.firmware_build?`· ${info.firmware_build}`:"",100,0,100,"info","hardware",clickEntity("firmware","model")));
     }
 
     if(info.protocol_version!=null || info.path_hash_mode!=null){
       const pathLabels=["1 byte","2 bytes","3 bytes"];
       const protocol=info.protocol_version!=null?`v${info.protocol_version}`:"—";
       const path=info.path_hash_mode==null?"—":(pathLabels[Number(info.path_hash_mode)]||String(info.path_hash_mode));
-      hero.appendChild(makeTile("Protocol / Path",protocol,`· ${path}`,100,0,100,"info","protocol",null,"compact"));
+      hero.appendChild(makeTile("Protocol / Path",protocol,`· ${path}`,100,0,100,"info","protocol",clickEntity("path_hash_mode","protocol_version"),"compact"));
     }
 
     if(info.max_contacts!=null || info.max_channels!=null){
@@ -1688,7 +1688,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         "Capacity",
         `${info.max_contacts??"—"} / ${info.max_channels??"—"}`,
         "contacts / channels",
-        100,0,100,"info","capacity",null,"compact"
+        100,0,100,"info","capacity",clickEntity("max_contacts","max_channels"),"compact"
       ));
     }
 
