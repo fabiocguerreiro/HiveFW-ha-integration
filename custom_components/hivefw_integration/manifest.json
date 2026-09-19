@@ -22,7 +22,7 @@
     "paho-mqtt>=1.6.0",
     "pynacl>=1.5.0"
   ],
-  "version": "1.0.0",
+  "version": "1.1.0",
   "loggers": [
     "custom_components.hivefw_integration",
     "meshcore"
