@@ -4039,6 +4039,16 @@ class HiveFWPanel extends BasePanel {
           event.preventDefault?.();
           event.stopPropagation();
           event.stopImmediatePropagation?.();
+          if(this.__bulkMode){
+            const key=String(contact?.public_key||"").trim().toLowerCase();
+            if(key){
+              if(this.__bulkSelection.has(key))this.__bulkSelection.delete(key);
+              else this.__bulkSelection.add(key);
+              this.__decorateNodeCards(nroot);
+              this.__syncBulkToolbar(nroot.querySelector(".l1-filters"),nroot,page);
+            }
+            return;
+          }
           this.__focusNodeOnMap(contact);
         }
       },true);
@@ -4205,6 +4215,32 @@ class HiveFWPanel extends BasePanel {
         badge.style.cssText="margin-left:5px;font-size:10px;color:var(--primary-color,#03a9f4);font-weight:650;";
         name.appendChild(badge);
       }
+      const contactKey=String(card.contact?.public_key||"").trim().toLowerCase();
+      let bulkCheck=root.querySelector(".hive-bulk-check");
+      if(!bulkCheck){
+        bulkCheck=document.createElement("input");
+        bulkCheck.type="checkbox";
+        bulkCheck.className="hive-bulk-check";
+        bulkCheck.title="Selecionar este nó";
+        bulkCheck.style.cssText="width:16px;height:16px;flex:0 0 auto;accent-color:var(--primary-color,#03a9f4);";
+        bulkCheck.addEventListener("click",(event)=>{
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation?.();
+          const key=String(card.contact?.public_key||"").trim().toLowerCase();
+          if(!key)return;
+          if(this.__bulkSelection.has(key))this.__bulkSelection.delete(key);
+          else this.__bulkSelection.add(key);
+          bulkCheck.checked=this.__bulkSelection.has(key);
+          const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+          const filters=page?.shadowRoot?.querySelector(".l1-filters");
+          this.__syncBulkToolbar(filters,page?.shadowRoot,page);
+        });
+        root.querySelector(".contact-card")?.prepend(bulkCheck);
+      }
+      bulkCheck.hidden=!this.__bulkMode;
+      bulkCheck.checked=!!contactKey&&this.__bulkSelection.has(contactKey);
+
       const meta=this.__nodeMeta(card.contact);
       const parts=[];
       if(meta.favorite)parts.push("★");
