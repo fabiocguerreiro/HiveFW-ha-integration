@@ -1,13 +1,11 @@
-# Pinned test dependencies for meshcore-ha-chat (Phase 4 of HA Quality
-# Remediation). Install into a Python 3.14 virtualenv (matching the
-# Python version in the deployed HA Docker image):
+# Test dependencies for HiveFW Home Assistant integration.
 #
+# Recommended:
 #   uv venv --python 3.14 .venv
 #   uv pip install -r requirements_test.txt
 #   .venv/bin/python -m pytest tests/ -v
 #
-# pytest-homeassistant-custom-component pulls Home Assistant core as a
-# transitive dep, so this single line gets the entire HA test surface
-# (hass fixture, MockConfigEntry, registry fakes, etc.).
+# pytest-homeassistant-custom-component pulls the Home Assistant test surface
+# used by the backend tests.
 
 pytest-homeassistant-custom-component
