@@ -3567,7 +3567,7 @@ async def ws_remove_contact(hass, connection, msg):
 def _trace_error_for(
     upstream_code: str, result: dict | None, msg: dict
 ) -> tuple[str, str]:
-    """Translate an upstream meshcore.trace error envelope into the
+    """Translate an HiveFW trace error envelope into the
     pre-migration ``(chat_code, message)`` pair the frontend has always
     seen.
 
@@ -3639,7 +3639,7 @@ def _trace_error_for(
         vol.Optional("entry_id"): str,
         # Optional comma-separated hex hops, e.g. "86,AE".  When provided,
         # backend skips path discovery and calls send_trace() with this
-        # path directly.  Absent/empty → upstream meshcore.trace service.
+        # path directly.  Absent/empty → HiveFW trace service.
         vol.Optional("path"): str,
     }
 )
