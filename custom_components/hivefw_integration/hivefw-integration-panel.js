@@ -6077,7 +6077,7 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
 
           <!-- Search + actions row -->
           <div class="header-actions">
-            <div class="search-bar" style="flex: 1;">
+            <div class="search-bar">
               <span class="search-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></span>
               <input
                 type="text"
@@ -6109,6 +6109,9 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
         <div class="content-area">
           ${0}
         </div>
+
+        <!-- Native HiveFW map host: the wrapper only fills this pane. -->
+        <section class="nodes-map-pane" aria-label="Mapa de nós"></section>
       </div>
 
       <!-- Node detail dialog -->
@@ -6175,12 +6178,19 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
     }
 
     .nodes-layout {
-      display: flex;
-      flex-direction: column;
+      --nodes-list-width: 340px;
+      display: grid;
+      grid-template-columns: var(--nodes-list-width) minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      width: 100%;
       height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .nodes-header {
+      grid-column: 1 / -1;
+      grid-row: 1;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -6366,6 +6376,16 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
       display: flex;
       align-items: center;
       gap: 8px;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .header-actions .search-bar {
+      flex: 0 1 var(--nodes-list-width);
+      width: min(var(--nodes-list-width), 100%);
+      max-width: var(--nodes-list-width);
+      min-width: 220px;
+      box-sizing: border-box;
     }
 
     .sync-btn {
@@ -6399,11 +6419,25 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
     /* ─── Content area ──────────────────────────────────────────────── */
 
     .content-area {
-      flex: 1;
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
-      padding: 12px;
+      padding: 8px;
       background: var(--primary-background-color, #fafafa);
+    }
+
+    .nodes-map-pane {
+      grid-column: 2;
+      grid-row: 2;
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--card-background-color, #fff);
+      border-left: 1px solid var(--divider-color, #e0e0e0);
     }
 
     .content-area::-webkit-scrollbar { width: 6px; }
@@ -6415,7 +6449,7 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
 
     .nodes-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
@@ -6481,6 +6515,23 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
     :host([narrow]) .l1-btn { font-size: 11px; padding: 5px 10px; }
     :host([narrow]) .l2-btn { font-size: 11px; padding: 5px 10px; }
     :host([narrow]) .nodes-grid { grid-template-columns: 1fr; }
+    :host([narrow]) .nodes-layout {
+      --nodes-list-width: 100%;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(300px, 45%) minmax(300px, 55%);
+      overflow-y: auto;
+    }
+    :host([narrow]) .nodes-header { grid-column: 1; grid-row: 1; }
+    :host([narrow]) .content-area {
+      grid-column: 1;
+      grid-row: 2;
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
+    :host([narrow]) .nodes-map-pane {
+      grid-column: 1;
+      grid-row: 3;
+      border-left: none;
+    }
   `)),Es([Qn({type:Array})],md.prototype,"contacts",void 0),Es([Qn({type:Array})],md.prototype,"channels",void 0),Es([Qn({type:Boolean})],md.prototype,"narrow",void 0),Es([Qn({type:Object})],md.prototype,"hass",void 0),Es([Qn({type:Object})],md.prototype,"config",void 0),Es([Jn()],md.prototype,"_viewportNarrow",void 0),Es([Jn()],md.prototype,"_primaryFilter",void 0),Es([Jn()],md.prototype,"_typeFilter",void 0),Es([Jn()],md.prototype,"_searchQuery",void 0),Es([Jn()],md.prototype,"_displayedContacts",void 0),Es([Jn()],md.prototype,"_totalCount",void 0),Es([Jn()],md.prototype,"_typeCounts",void 0),Es([Jn()],md.prototype,"_l1Counts",void 0),Es([Jn()],md.prototype,"_loading",void 0),Es([Jn()],md.prototype,"_selectedNode",void 0),Es([Jn()],md.prototype,"_nodeDetailDialogOpen",void 0),Es([Jn()],md.prototype,"_pendingAction",void 0),Es([Jn()],md.prototype,"_sortBy",void 0),md=Es([Gn("meshcore-nodes-page")],md);const vd=[{step:"generating",label:"Generating new key"},{step:"importing",label:"Sending key to device"},{step:"rebooting",label:"Rebooting device"},{step:"reconnecting",label:"Waiting for device reconnect"},{step:"reloading",label:"Reloading HiveFW integration"},{step:"verifying",label:"Verifying new identity"}];let fd=class extends Un{constructor(){super(),this.narrow=!1,this._deviceConfig=null,this._loading=!0,this._error=null,this._editValues={},this._saving=!1,this._commandDialogOpen=!1,this._confirmAction=null,this._confirmDialogOpen=!1,this._locationSource="manual",this._importKeyValue="",this._deviceEntities={},this._meshcoreDeviceMap={},this._entityRegistryLoaded=!1,this._hiddenSensors={},this._contextMenu=null,this._overlayPointerStarted=!1,this._settingsModalOpen=!1,this._keyManagementModalOpen=!1,this._identityFlowState={kind:"closed"},this._identityFlowUnsubscribe=null,this._renameSuccess=null,this._hiddenSensorsModalKey=null,this._statusMessage=null,this._statusMessageTimeout=null,this._onCompanionTrace=()=>{var e;const t=null===(e=this.selectedDevice)||void 0===e?void 0:e.entry_id;this.dispatchEvent(new CustomEvent("companion-trace-requested",{detail:{entryId:t},bubbles:!0,composed:!0}))},zl(this,{isOpen:()=>null!==this._contextMenu,onEscape:()=>this._closeContextMenu(),getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="tile-context"]')}}),zl(this,{isOpen:()=>this._settingsModalOpen,onEscape:()=>this._closeSettingsModal(),getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="companion-settings"]')}}),zl(this,{isOpen:()=>this._keyManagementModalOpen,onEscape:()=>this._closeKeyManagementModal(),getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="key-management"]')}}),zl(this,{isOpen:()=>null!==this._hiddenSensorsModalKey,onEscape:()=>this._closeHiddenSensorsModal(),getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="hidden-sensors"]')}}),zl(this,{isOpen:()=>"closed"!==this._identityFlowState.kind,onEscape:()=>{"success"!==this._identityFlowState.kind&&"failure"!==this._identityFlowState.kind||this._closeIdentityFlowModal()},getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="identity-flow"]')}}),zl(this,{isOpen:()=>null!==this._renameSuccess,onEscape:()=>this._closeRenameSuccessModal(),getScope:()=>{var e;return null===(e=this.shadowRoot)||void 0===e?void 0:e.querySelector('[data-a11y="rename-success"]')}})}connectedCallback(){super.connectedCallback(),this._loadDeviceConfig(),this._loadHiddenSensors()}disconnectedCallback(){super.disconnectedCallback(),null!==this._statusMessageTimeout&&(clearTimeout(this._statusMessageTimeout),this._statusMessageTimeout=null)}updated(e){e.has("config")&&this._loadDeviceConfig(),e.has("hass")&&this.hass&&!this._entityRegistryLoaded&&this._loadEntityRegistry()}async _loadDeviceConfig(){if(this.hass){this._loading=!0,this._error=null;try{var e,t;this._deviceConfig=await ll(this.hass,null===(e=this.config)||void 0===e?void 0:e.entry_id),null!==(t=this._deviceConfig)&&void 0!==t&&t.location_source&&(this._locationSource=this._deviceConfig.location_source)}catch(e){this._error=`Failed to load device configuration: ${String(e)}`}finally{this._loading=!1}}}render(){var e,t,i,o,r;return this._loading?Mn(Jr||(Jr=Fs`
         <div class="settings-page">
           <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--secondary-text-color);">
