@@ -1,135 +1,70 @@
-# HiveFW Home Assistant Roadmap
+# HiveFW Home Assistant — Estado de implementação
 
-Este ficheiro é a fonte de verdade para desenvolvimento futuro da integração standalone **HiveFW**.
+A fase funcional planeada para a integração standalone **HiveFW 1.1.0** está implementada.
+Este ficheiro fica temporariamente como checklist de validação pós-HACS. Depois da
+validação em hardware pode ser removido e o histórico passa a viver nas releases/commits.
 
-## Objetivo
+## Implementação concluída
 
-Uma única integração Home Assistant:
+- [x] Integração standalone: ligação TCP/Wi-Fi, BLE ou USB sem `meshcore-ha` separado.
+- [x] Engine MeshCore incorporado sob `hivefw_integration`.
+- [x] Entidades, serviços, eventos, storage, WebSocket API e painel próprios.
+- [x] Dispositivo: métricas compactas, Repeater, Regions & Scopes, RX Log e Console.
+- [x] Chat & Canais com histórico, unread, pesquisa, scopes e metadados RX.
+- [x] Nós em split view lista + mapa, filtros, Favorites, Tags, import/export.
+- [x] Route History e path por mensagem.
+- [x] Distância hop-to-hop e distância acumulada.
+- [x] Topologia observada por paths reais, com volume e SNR.
+- [x] Heatmap de atividade derivado do histórico local.
+- [x] Resolução conservadora: hashes ambíguos nunca são adivinhados.
+- [x] LOS/elevation/Fresnel on-demand com perfil de terreno.
+- [x] Channel QR / URI MeshCore.
+- [x] Contact QR / URI MeshCore.
+- [x] Seleção e ações em massa.
+- [x] Bulk cleanup por idade com dry-run.
+- [x] Proteções de cleanup para Favorites, contactos adicionados, Repeaters configurados e tags protegidas.
+- [x] Administração remota de Repeaters: acesso, estado, firmware, vizinhos, Path/Trace, Route Health e console.
+- [x] Passwords remotas permanecem no backend/ConfigEntry e nunca são devolvidas ao frontend.
+- [x] Tendências 7/30 dias por peer a partir do histórico local.
+- [x] Thresholds de saúde configuráveis.
+- [x] Evento HA `hivefw_health_transition` para automações.
+- [x] Notificações persistentes opcionais em transições de alerta.
+- [x] Python compile/test em CI.
+- [x] Frontend typecheck/build/test em CI.
+- [x] Hassfest e HACS validation em CI.
+- [x] Versão preparada como HiveFW 1.1.0.
 
-- HiveFW possui a ligação TCP/Wi-Fi, BLE ou USB ao rádio;
-- não é necessária uma instalação separada de `meshcore-ha`;
-- entidades, serviços, eventos, config flow, storage, WebSocket API e frontend pertencem ao HiveFW;
-- MeshCore permanece como protocolo/SDK e como origem devidamente atribuída de partes do engine;
-- funcionalidades que geram RF devem ser on-demand sempre que possível.
+## Trabalho de firmware — fora deste repositório
 
-## Base standalone — concluída
+Os pontos abaixo pertencem ao
+[HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater),
+não à integração Home Assistant:
 
-- [x] Branch de rollback `main-stable` criada antes da consolidação.
-- [x] Engine MeshCore HA adaptado e incorporado em `hivefw_integration.engine`.
-- [x] Proveniência upstream e commit base documentados.
-- [x] Runtime requirements geridos pelo próprio HiveFW.
-- [x] Config flow HiveFW configura TCP/Wi-Fi, BLE ou USB diretamente.
-- [x] HiveFW inicia e termina o coordinator/engine.
-- [x] Plataformas HA expostas pelo domínio HiveFW: sensor, binary_sensor, device_tracker, button, select e text.
-- [x] Serviços públicos em `hivefw_integration.*`.
-- [x] Entidades públicas com prefixo `hivefw_*`.
-- [x] Eventos públicos com prefixo `hivefw_*`.
-- [x] Painel/sidebar e recursos estáticos próprios.
-- [x] Message store, unread, scopes e helpers pertencem à mesma config entry.
-- [x] UI/help removidos de dependências numa segunda integração Home Assistant MeshCore.
-- [x] Map uploader e MQTT uploader ligados ao engine HiveFW.
-- [x] Telemetria, diagnostics, managed devices e consultas de firmware integradas.
-- [x] README/HACS/security atualizados para arquitetura standalone.
+- investigação da recorrência/recuperação de `CAD Timeout`;
+- novos campos que o Companion Protocol ainda não disponibilize;
+- telemetria adicional específica do firmware Repeater.
 
-## Interface atual — preservar
+## Validação pós-HACS em hardware
 
-Estas funcionalidades existem e devem permanecer em qualquer refactor:
+Estes pontos não devem ser marcados como concluídos sem teste real:
 
-- [x] **Dispositivo** com cockpit de métricas e editor de layout.
-- [x] Configuração Companion/Repeater.
-- [x] Local Advert, Flood Advert, Sync Clock, Trace e Reboot.
-- [x] Regions & Scopes.
-- [x] RX Log inline e export JSON.
-- [x] **Chat & Canais**.
-- [x] Histórico persistente, search e unread.
-- [x] Gestão de contactos e canais.
-- [x] Hops/RSSI/SNR nas mensagens quando disponíveis.
-- [x] **Nós** em split view lista + mapa.
-- [x] Matching dinâmico do rádio local.
-- [x] Contact add/remove no popup do mapa.
-- [x] Import/export de contactos.
-- [x] Favorites e Tags locais.
-- [x] Trace e rota mais recente no mapa.
-- [x] Trace Monitor / Route Health on-demand.
-- [x] **Vizinhos** zero-hop.
-- [x] **Console** com comandos livres e catálogo pré-definido.
-- [x] Command history ↑/↓ e transcript.
-- [x] RF Health, Airtime, Reliability, Integrity e Current Traffic.
-- [x] Network Activity / first-seen.
-- [x] 48h Recorder mini-history.
-
-## Próxima fase — mapa, rotas e topologia
-
-- [x] Cores por idade do nó: <1h, <6h, <24h, <7d, stale.
-- [x] Filtros: all, active 24h, repeaters, clients, favorites, GPS, stale.
-- [x] Route History, não apenas o último Trace.
-- [x] Path history por mensagem e ação **Mostrar no mapa**.
-- [x] Contagem RX/TX por peer e volume de link.
-- [x] Distância hop-to-hop e distância acumulada da rota.
-- [x] Topology graph com links baseados em SNR/atividade.
-- [x] Activity heatmap com origem dos dados claramente indicada.
-- [x] Guardrail de resolução: nunca adivinhar hashes ambíguos; relações/rotas exigem correspondência única.
-- [ ] Ferramenta LOS/elevation/Fresnel quando existir uma fonte de elevação adequada.
-
-## Contactos, canais e partilha
-
-- [x] Criar/editar/remover canais.
-- [ ] Channel QR.
-- [ ] Contact QR / share URI.
-- [ ] Bulk cleanup por idade.
-- [ ] Proteções de cleanup para favorites, contactos adicionados, Repeaters configurados e tags protegidas.
-- [ ] Seleção e ações em massa.
-- [x] Pesquisa avançada por nome/public key/tag.
-
-## Administração remota de Repeaters
-
-- [ ] UI dedicada de login remoto.
-- [ ] Estado/telemetria/vizinhos remotos consolidados.
-- [ ] Path discovery remoto.
-- [ ] Trace/Route Health por Repeater.
-- [ ] Console administrativo remoto.
-- [ ] Estado de firmware/versão.
-- [ ] Passwords apenas em config data backend; nunca em payloads frontend.
-
-## Observabilidade
-
-- [x] RF Health.
-- [x] Airtime.
-- [x] Reliability.
-- [x] Erros/duplicates/integrity.
-- [x] Taxas atuais RX/TX.
-- [x] Network Activity / first-seen.
-- [x] Health alerts.
-- [x] Recorder history.
-- [x] RX Log.
-- [x] Trace Monitor.
-- [ ] Tendências long-term por peer.
-- [ ] Thresholds configuráveis.
-- [ ] Notificações/automations HA para transições significativas.
-
-## Firmware / protocolo HiveFW
-
-Itens que exigem alterações ao firmware devem ser tratados no projeto
-[HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
-
-Exemplos:
-
-- [ ] investigar recorrência e recuperação de `CAD Timeout`;
-- [ ] expor dados que o Companion protocol ainda não fornece;
-- [ ] melhorar telemetria específica de Repeater quando necessário.
-
-## Qualidade e release
-
-- [ ] Python import/compile checks em CI.
-- [ ] Frontend build/typecheck em CI.
-- [ ] Testes frontend/backend ativos em GitHub Actions.
-- [ ] HACS/Home Assistant validation.
-- [ ] Fresh install sem `meshcore-ha`.
-- [ ] Teste TCP/Wi-Fi.
-- [ ] Teste BLE.
-- [ ] Teste USB quando disponível.
-- [ ] Teste multi-entry.
-- [ ] Reload/restart/reconnect.
+- [ ] Instalação limpa sem `meshcore-ha`.
+- [ ] TCP/Wi-Fi.
+- [ ] BLE.
+- [ ] USB, quando houver hardware disponível.
+- [ ] Multi-entry.
+- [ ] Reload / restart / reconnect.
 - [ ] Confirmar ausência de ligações duplicadas ao rádio.
-- [ ] Rebuild do bundle após a limpeza da antiga Devices page.
-- [ ] Release standalone HiveFW 1.0.0.
+- [ ] Confirmar nome do Device Registry sem prefixo `MeshCore` nem sufixo de pubkey.
+- [ ] Confirmar header: nome do Repeater seguido imediatamente pelo logo HiveFW.
+- [ ] Confirmar QR de contactos/canais na app MeshCore.
+- [ ] Confirmar administração remota com um Repeater real.
+- [ ] Confirmar LOS/Fresnel com dois nós GPS conhecidos.
+
+## Nota sobre o bundle
+
+O source TypeScript continua validado e compilado em CI. A camada
+`custom_components/hivefw_integration/hivefw-panel.js` é o wrapper distribuído que
+aplica as funcionalidades HiveFW e mantém compatibilidade com o bundle base atualmente
+incluído no repositório. Uma futura consolidação pode absorver todo o wrapper no source
+TypeScript e eliminar definitivamente essa camada de compatibilidade.
