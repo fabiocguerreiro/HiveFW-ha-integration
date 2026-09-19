@@ -376,18 +376,6 @@ export interface ChannelFormData {
 }
 
 /**
- * Neighbor information
- */
-export interface NeighborInfo {
-  name: string;
-  pubkey_prefix: string;
-  snr: number;
-  last_seen: string;
-  seen_48h?: number;
-  entity_ids?: Record<string, string>;
-}
-
-/**
  * Direct zero-hop repeater heard by HiveFW while repeater mode is enabled.
  * Reading this table is local to the Companion connection and creates no
  * additional LoRa traffic.
