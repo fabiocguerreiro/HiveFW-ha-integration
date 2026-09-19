@@ -99,41 +99,34 @@ export class NodeSummary extends LitElement {
     /* ─── Hero row ─── */
     .hero-row {
       display: grid;
-      grid-template-columns: repeat(10, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       grid-auto-flow: dense;
-      grid-auto-rows: 1fr;
-      gap: 8px;
+      gap: 10px;
       margin-bottom: 14px;
       align-items: stretch;
     }
-    .hero-row > .hero-tile { grid-column: span 2; }
+    .hero-row > .hero-tile { grid-column: span 2; min-width: 0; }
     .hero-row > .hero-tile.hive-metric-compact { grid-column: span 1; }
     .hero-tile {
       background: var(--secondary-background-color, #f0f0f0);
-      border-radius: 9px;
-      padding: 9px 10px;
+      border-radius: 13px;
+      padding: 12px 13px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 7px;
       cursor: pointer;
       border: 1px solid transparent;
-      transition: border-color 0.15s;
-      min-height: 82px;
+      transition: border-color 0.15s, transform 0.15s;
+      min-height: 96px;
       height: 100%;
       box-sizing: border-box;
     }
-    @container (max-width: 1050px) {
-      .hero-row { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    @container (max-width: 900px) {
+      .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-row > .hero-tile { grid-column: span 2; }
+      .hero-row > .hero-tile.hive-metric-compact { grid-column: span 1; }
     }
-    @container (max-width: 780px) {
-      .hero-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-    }
-    @container (max-width: 560px) {
-      .hero-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .hero-row > .hero-tile,
-      .hero-row > .hero-tile.hive-metric-compact { grid-column: span 2; }
-    }
-    @container (max-width: 340px) {
+    @container (max-width: 520px) {
       .hero-row { grid-template-columns: 1fr; }
       .hero-row > .hero-tile,
       .hero-row > .hero-tile.hive-metric-compact { grid-column: 1; }
