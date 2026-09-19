@@ -190,7 +190,7 @@ class MeshCoreDataUpdateCoordinator(DataUpdateCoordinator):
         # Create a central device_info dict that all entities can reference
         self.device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": f"MeshCore {self.name or 'Node'} ({self.pubkey[:6] if self.pubkey else ''})",
+            "name": self.name or "HiveFW",
             "manufacturer": "HiveFW",
             "model": "Mesh Radio",
             "sw_version": "Unknown",
