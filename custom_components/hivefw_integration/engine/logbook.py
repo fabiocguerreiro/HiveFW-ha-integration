@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Logbook integration for MeshCore."""
+"""Logbook integration for HiveFW."""
 import asyncio
 import logging
 from typing import  Callable
@@ -10,6 +10,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    PUBLIC_EVENT_PREFIX,
     ENTITY_DOMAIN_BINARY_SENSOR,
     DEFAULT_DEVICE_NAME,
     CONF_ADAPTIVE_POLL_WAIT,
@@ -23,9 +24,9 @@ from .utils import (
 _LOGGER = logging.getLogger(__name__)
 
 # Single event type for all messages
-EVENT_MESHCORE_MESSAGE = "meshcore_message"
+EVENT_MESHCORE_MESSAGE = f"{PUBLIC_EVENT_PREFIX}_message"
 # Lightweight event for progressive delivery sensor updates (not logged)
-EVENT_MESHCORE_DELIVERY_UPDATE = "meshcore_delivery_update"
+EVENT_MESHCORE_DELIVERY_UPDATE = f"{PUBLIC_EVENT_PREFIX}_delivery_update"
 
 
 @callback
