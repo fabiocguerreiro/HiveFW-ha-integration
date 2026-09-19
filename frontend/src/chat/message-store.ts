@@ -23,7 +23,7 @@ const ERROR_POLL_INTERVAL_MS = 60_000;
  * updates via WebSocket events, and optimistic rendering.
  *
  * Replaces the previous logbook-based implementation. Messages are now
- * fetched as structured JSON from meshcore/get_stored_messages, eliminating
+ * fetched as structured JSON from hivefw_integration/get_stored_messages, eliminating
  * text parsing, delivery caches, localStorage caching, and carry-forward
  * merge logic.
  */
@@ -35,7 +35,7 @@ export class MessageStore {
   private _config: PanelConfig;
   private _hass: HomeAssistant | null = null;
   private _pollTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Real-time event subscriptions (meshcore_message, meshcore_delivery_update) */
+  /** Real-time event subscriptions (hivefw_message, hivefw_delivery_update) */
   private _realtimeSubscriptions: Array<() => void> = [];
   private _retryCount = 0;
   private _onChange: (() => void) | null = null;
@@ -626,25 +626,25 @@ export class MessageStore {
     const unsubs: Array<() => void> = [];
 
     try {
-      // meshcore_message — incoming & outgoing messages
+      // hivefw_message — incoming & outgoing messages
       const unsubMsg = await this._hass.connection.subscribeEvents(
         (event: HassEvent) => {
           if (event.data.entity_id === entityId) {
             this._handleRealtimeMessage(event.data);
           }
         },
-        'meshcore_message',
+        'hivefw_message',
       );
       unsubs.push(unsubMsg);
 
-      // meshcore_delivery_update — delivery status updates
+      // hivefw_delivery_update — delivery status updates
       const unsubDelivery = await this._hass.connection.subscribeEvents(
         (event: HassEvent) => {
           if (event.data.entity_id === entityId) {
             this._handleDeliveryUpdate(event.data);
           }
         },
-        'meshcore_delivery_update',
+        'hivefw_delivery_update',
       );
       unsubs.push(unsubDelivery);
 
@@ -656,7 +656,7 @@ export class MessageStore {
   }
 
   /**
-   * Handle incoming meshcore_message event.
+   * Handle incoming hivefw_message event.
    * Renders the message immediately from the event payload for near-instant
    * display, then triggers a debounced store fetch for confirmation.
    */
@@ -833,7 +833,7 @@ export class MessageStore {
   }
 
   /**
-   * Handle meshcore_delivery_update event (delivery status for messages).
+   * Handle hivefw_delivery_update event (delivery status for messages).
    * Updates in-memory messages directly for instant UI feedback.
    * The store is updated by the backend independently.
    */
