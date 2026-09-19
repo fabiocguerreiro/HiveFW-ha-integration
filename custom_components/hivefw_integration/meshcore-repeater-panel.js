@@ -1782,10 +1782,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const active7d=contacts.filter((contact)=>activeAt(contact)>0&&nowSec-activeAt(contact)<=7*86400).length;
     const gps=contacts.filter((contact)=>this.__nodeCoords(contact)).length;
     const favorites=contacts.filter((contact)=>this.__nodeMeta(contact).favorite).length;
+    const firstSeen=this.__touchFirstSeen(contacts);
     if(contacts.length){
       hero.appendChild(makeTile(
         "Atividade da rede",active24+" / "+contacts.length,
-        "· 24h · "+active7d+" em 7d · "+gps+" GPS · "+favorites+" ★",
+        "· 24h · "+active7d+" em 7d · +"+firstSeen.new24+" novos 24h · +"+firstSeen.new7d+" em 7d · "+gps+" GPS · "+favorites+" ★",
         Math.min(100,contacts.length?active24/contacts.length*100:0),0,100,"info","network-activity"
       ));
     }
@@ -2787,6 +2788,36 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
     this.__nodesInitialViewport=null;
+  }
+
+  __firstSeenStorageKey() {
+    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
+    return "hivefw.first_seen.v1."+entry;
+  }
+
+  __touchFirstSeen(contacts) {
+    if(!Array.isArray(contacts))return {new24:0,new7d:0};
+    let state;
+    try{state=JSON.parse(localStorage.getItem(this.__firstSeenStorageKey())||"null");}catch{state=null;}
+    const initialized=!!state?.initialized;
+    if(!state||typeof state!=="object")state={initialized:false,nodes:{}};
+    if(!state.nodes||typeof state.nodes!=="object")state.nodes={};
+    const now=Date.now();
+    let changed=false;
+    for(const contact of contacts){
+      const key=String(contact?.public_key||"").trim().toLowerCase();
+      if(!/^[0-9a-f]{64}$/.test(key)||Object.prototype.hasOwnProperty.call(state.nodes,key))continue;
+      // First run is a baseline, not a claim that every old contact is new.
+      state.nodes[key]=initialized?now:0;
+      changed=true;
+    }
+    if(!state.initialized){state.initialized=true;changed=true;}
+    if(changed){try{localStorage.setItem(this.__firstSeenStorageKey(),JSON.stringify(state));}catch{}}
+    const stamps=Object.values(state.nodes).map(Number).filter((value)=>Number.isFinite(value)&&value>0);
+    return {
+      new24:stamps.filter((value)=>now-value<=24*60*60*1000).length,
+      new7d:stamps.filter((value)=>now-value<=7*24*60*60*1000).length,
+    };
   }
 
   __nodeMetaStorageKey() {
