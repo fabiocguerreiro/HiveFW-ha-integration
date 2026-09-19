@@ -21,7 +21,7 @@ export class MeshCorePanel extends LitElement {
 
   @state() private _config: PanelConfig | null = null;
   @state() private _activeTab: 'chat' | 'nodes' | 'neighbors' | 'settings' = 'settings';
-  // managedDevices removed — devices-page.ts fetches its own data
+  // Managed-device administration is consolidated under Dispositivo.
   @state() private _devices: MeshCoreDevice[] = [];
   @state() private _contacts: Contact[] = [];
   @state() private _channels: Channel[] = [];
