@@ -958,7 +958,7 @@ export class NodesPage extends LitElement {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'meshcore_discovered_contacts.json';
+    link.download = 'hivefw_discovered_contacts.json';
     document.body.appendChild(link);
     link.click();
     link.remove();
