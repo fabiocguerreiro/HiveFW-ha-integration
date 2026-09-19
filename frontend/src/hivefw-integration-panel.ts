@@ -720,9 +720,8 @@ export class MeshCorePanel extends LitElement {
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
                 </button>`
               : html``}
-            <div class="panel-title" aria-label="HiveFW">
-              <span class="hivefw-wordmark" aria-hidden="true"></span>
-              <span class="panel-product-name">– ${device?.name || 'HiveFW'}</span>
+            <div class="panel-title" aria-label=${device?.name || 'HiveFW'}>
+              <span class="panel-product-name">${device?.name || 'HiveFW'}</span>
             </div>
           </div>
           <div class="header-right">
@@ -743,6 +742,7 @@ export class MeshCorePanel extends LitElement {
                     <span class="battery-pct">${this._getBatteryLevel(device)}%</span>
                   </span>`
               : html``}
+            <span class="hivefw-header-brand-white" aria-label="HiveFW" title="HiveFW"></span>
           </div>
         </div>
 
