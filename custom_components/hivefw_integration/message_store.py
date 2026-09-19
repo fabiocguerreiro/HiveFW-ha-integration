@@ -556,6 +556,7 @@ class MessageStore:
                             "tx": 0,
                             "messages": 0,
                             "last_timestamp": "",
+                            "daily": {},
                         },
                     )
                     peer["messages"] += 1
@@ -566,6 +567,16 @@ class MessageStore:
                     timestamp = str(message.get("timestamp") or "")
                     if timestamp > str(peer.get("last_timestamp") or ""):
                         peer["last_timestamp"] = timestamp
+                    day = timestamp[:10] if len(timestamp) >= 10 else ""
+                    if day:
+                        bucket = peer["daily"].setdefault(
+                            day, {"rx": 0, "tx": 0, "messages": 0}
+                        )
+                        bucket["messages"] += 1
+                        if message.get("outgoing", False):
+                            bucket["tx"] += 1
+                        else:
+                            bucket["rx"] += 1
 
                 observations = message.get("rx_log_data")
                 if not isinstance(observations, list):
@@ -637,6 +648,12 @@ class MessageStore:
                         if snr is not None:
                             edge["snr_sum"] += snr
                             edge["snr_count"] += 1
+
+        for peer in peers.values():
+            daily = peer.get("daily", {})
+            if isinstance(daily, dict) and len(daily) > 60:
+                keep = sorted(daily)[-60:]
+                peer["daily"] = {day: daily[day] for day in keep}
 
         for link in links.values():
             link["avg_rssi"] = (
