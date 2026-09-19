@@ -28,7 +28,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from . import MeshCoreChatRuntimeData
+from . import HiveFWRuntimeData
 from .const import DOMAIN, MESHCORE_DOMAIN
 
 
@@ -54,7 +54,7 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostic data for a hivefw_integration config entry."""
     runtime = (
         entry.runtime_data
-        if isinstance(entry.runtime_data, MeshCoreChatRuntimeData)
+        if isinstance(entry.runtime_data, HiveFWRuntimeData)
         else None
     )
 
