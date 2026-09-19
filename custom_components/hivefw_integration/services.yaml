@@ -117,7 +117,7 @@ execute_command:
       name: Record to CLI Console
       description: >-
         Record the command and its response to the CLI Console transcript and fire the
-        hivefw_integration_cli_response event, so the output is visible in the UI. Requires the
+        hivefw_cli_response event, so the output is visible in the UI. Requires the
         CLI Console to be enabled in Global Settings. Defaults to false.
       required: false
       example: true
@@ -143,7 +143,7 @@ execute_command_ui:
       name: Record to CLI Console
       description: >-
         Record the command and its response to the CLI Console transcript and fire the
-        hivefw_integration_cli_response event, so the output is visible in the UI. Requires the
+        hivefw_cli_response event, so the output is visible in the UI. Requires the
         CLI Console to be enabled in Global Settings. Defaults to false.
       required: false
       example: true
