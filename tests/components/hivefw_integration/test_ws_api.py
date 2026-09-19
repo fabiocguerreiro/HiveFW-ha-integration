@@ -3951,3 +3951,37 @@ async def test_ws_console_clear_clears_selected_history(
     coordinator.clear_cli_console.assert_called_once_with()
     assert conn.errors == []
     assert conn.results == [(1, {"success": True})]
+
+
+
+async def test_ws_get_trace_history_returns_newest_first(
+    hass: HomeAssistant,
+) -> None:
+    """Trace history is returned newest-first from HiveFW runtime state."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="HiveFW",
+        entry_id="01TRACE_HISTORY",
+        data={},
+        options={},
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = HiveFWRuntimeData(
+        store=MagicMock(),
+        trace_history=[
+            {"timestamp": "2026-09-19T10:00:00+00:00", "target_prefix": "aaaa"},
+            {"timestamp": "2026-09-19T11:00:00+00:00", "target_prefix": "bbbb"},
+        ],
+    )
+
+    conn = _Connection()
+    await _call_ws(
+        ws_api.ws_get_trace_history,
+        hass,
+        conn,
+        {"id": 1, "entry_id": entry.entry_id, "limit": 10},
+    )
+
+    assert not conn.errors
+    traces = conn.results[0][1]["traces"]
+    assert [trace["target_prefix"] for trace in traces] == ["bbbb", "aaaa"]
