@@ -22,7 +22,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
-from . import MeshCoreChatRuntimeData, _sync_engine_repair_issue
+from . import HiveFWRuntimeData, _sync_engine_repair_issue
 from .const import (
     CONF_FLOOD_SCOPES_UPSTREAM,
     CONF_NAME_UPSTREAM,
@@ -494,7 +494,7 @@ def _get_store(
     if entry_id is not None:
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry is None or not isinstance(
-            getattr(entry, "runtime_data", None), MeshCoreChatRuntimeData
+            getattr(entry, "runtime_data", None), HiveFWRuntimeData
         ):
             _LOGGER.warning(
                 "ws_api _get_store received entry_id %r that is not a chat companion entry",
@@ -506,7 +506,7 @@ def _get_store(
     # Fallback: first companion entry with a store.
     for entry in hass.config_entries.async_entries(DOMAIN):
         if isinstance(
-            getattr(entry, "runtime_data", None), MeshCoreChatRuntimeData
+            getattr(entry, "runtime_data", None), HiveFWRuntimeData
         ):
             return entry.runtime_data.store
     return None
