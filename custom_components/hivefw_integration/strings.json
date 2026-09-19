@@ -56,7 +56,7 @@
     "invalid_request": {
       "message": "Invalid request parameters"
     },
-    "no_meshcore_coordinator": {
+    "no_hivefw_coordinator": {
       "message": "No active HiveFW radio coordinator"
     },
     "invalid_key_length": {
