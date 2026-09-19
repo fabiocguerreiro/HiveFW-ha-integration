@@ -486,7 +486,6 @@ export class NodesPage extends LitElement {
     this._mediaQuery.addEventListener('change', this._onMediaChange);
     this._loadCounts();
     this._loadPage(true);
-    void this._ensureMapComponent();
   }
 
   disconnectedCallback() {
@@ -593,9 +592,6 @@ export class NodesPage extends LitElement {
           </div>
         </section>
 
-        <section class="nodes-map-pane">
-          ${this._renderMapPane()}
-        </section>
       </div>
 
       <meshcore-node-detail-dialog
