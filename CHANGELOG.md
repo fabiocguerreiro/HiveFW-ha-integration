@@ -26,6 +26,7 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ### Existing interface integration
 - All new metric cards participate in **Editar Menu**, so users can reorder or hide them alongside existing metrics.
+- Metric cards and 48-hour history mini-charts now open Home Assistant **More Info** when a real backing entity exists; aggregate cards deep-link to their primary/alerting entity and purely informational cards remain non-clickable when no matching entity exists.
 - New node metadata and diagnostic preferences are stored locally per HiveFW entry and do not alter MeshCore contact flags or firmware state.
 
 
