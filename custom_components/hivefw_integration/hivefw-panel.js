@@ -3043,13 +3043,17 @@ class HiveFWPanel extends BasePanel {
     const target=this.__traceTargetContact(trace);
     const local=this.__localRepeaterMapContact();
     const points=[];
+    const routeNodes=[];
     const resolved=[];
     const unresolved=[];
     const push=(contact,label,hash,snr)=>{
       const coords=this.__nodeCoords(contact);
       if(!coords)return;
       const previous=points[points.length-1];
-      if(!previous||previous[0]!==coords[0]||previous[1]!==coords[1])points.push(coords);
+      if(!previous||previous[0]!==coords[0]||previous[1]!==coords[1]){
+        points.push(coords);
+        routeNodes.push({label,coords});
+      }
       resolved.push({contact,label,hash,snr,coords});
     };
     if(target&&this.__nodeCoords(target))push(target,String(target.adv_name||target.pubkey_prefix||"Destino"),null,null);
@@ -3060,7 +3064,28 @@ class HiveFWPanel extends BasePanel {
       else unresolved.push(String(hop.hash));
     }
     if(local&&this.__nodeCoords(local))push(local,String(local.adv_name||"Local"),null,trace.result.final_snr);
-    return {trace,points,resolved,unresolved};
+
+    // Distances are derived only from resolved GPS coordinates. Unknown or
+    // ambiguous hashes remain unresolved and never receive an inferred point.
+    const toRad=(deg)=>deg*Math.PI/180;
+    const distanceKm=(a,b)=>{
+      const R=6371.0088;
+      const dLat=toRad(b[0]-a[0]);
+      const dLon=toRad(b[1]-a[1]);
+      const lat1=toRad(a[0]);
+      const lat2=toRad(b[0]);
+      const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+    };
+    const segments=[];
+    let totalDistanceKm=0;
+    for(let i=1;i<routeNodes.length;i++){
+      const km=distanceKm(routeNodes[i-1].coords,routeNodes[i].coords);
+      if(!Number.isFinite(km))continue;
+      totalDistanceKm+=km;
+      segments.push({from:routeNodes[i-1].label,to:routeNodes[i].label,km});
+    }
+    return {trace,points,resolved,unresolved,segments,totalDistanceKm};
   }
 
   __drawLastTraceRoute() {
@@ -3100,11 +3125,24 @@ class HiveFWPanel extends BasePanel {
     top.append(label,history,clear);
     const detail=document.createElement("div");
     const parts=[data.trace.result.response_time||((data.trace.result.round_trip_ms||0)+"ms"),String(data.trace.result.hops||0)+" hops"];
+    if(data.segments.length){
+      const total=data.totalDistanceKm;
+      parts.push("Distância "+(total>=10?total.toFixed(1):total.toFixed(2))+" km");
+    }
     if(Number.isFinite(Number(data.trace.result.final_snr)))parts.push("SNR "+Number(data.trace.result.final_snr).toFixed(1)+" dB");
     if(data.unresolved.length)parts.push(data.unresolved.length+" hash não resolvido"+(data.unresolved.length===1?"":"s"));
     detail.textContent=parts.join(" · ");
     detail.style.cssText="margin-top:3px;color:var(--secondary-text-color,#666);";
     summary.append(top,detail);
+    if(data.segments.length){
+      const segmentLine=document.createElement("div");
+      segmentLine.textContent=data.segments.map((segment)=>{
+        const km=segment.km;
+        return segment.from+" → "+segment.to+" "+(km>=10?km.toFixed(1):km.toFixed(2))+" km";
+      }).join(" · ");
+      segmentLine.style.cssText="margin-top:3px;font-size:9px;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
+      summary.appendChild(segmentLine);
+    }
     if(data.unresolved.length){
       const hashes=document.createElement("div");
       hashes.textContent="Sem GPS/ambíguos: "+data.unresolved.join(", ");
