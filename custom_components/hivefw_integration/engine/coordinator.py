@@ -191,7 +191,7 @@ class MeshCoreDataUpdateCoordinator(DataUpdateCoordinator):
         self.device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": f"MeshCore {self.name or 'Node'} ({self.pubkey[:6] if self.pubkey else ''})",
-            "manufacturer": "MeshCore",
+            "manufacturer": "HiveFW",
             "model": "Mesh Radio",
             "sw_version": "Unknown",
         }
