@@ -3255,6 +3255,7 @@ class HiveFWPanel extends BasePanel {
       linkVolume,
       avgRssi:rssiN?weightedRssi/rssiN:null,
       avgSnr:snrN?weightedSnr/snrN:null,
+      daily:peer?.daily&&typeof peer.daily==="object"?peer.daily:{},
     };
   }
 
@@ -5038,6 +5039,29 @@ class HiveFWPanel extends BasePanel {
       if(Number.isFinite(activity.avgRssi))linkText+=" · RSSI "+activity.avgRssi.toFixed(1)+" dBm";
       if(Number.isFinite(activity.avgSnr))linkText+=" · SNR "+activity.avgSnr.toFixed(1)+" dB";
       rows.push(["Volume link",linkText]);
+    }
+    const daily=activity.daily||{};
+    const today=new Date();
+    const since=(days)=>{
+      const cutoff=new Date(today.getTime()-(days-1)*86400000);
+      cutoff.setHours(0,0,0,0);
+      let rx=0,tx=0,messages=0,activeDays=0;
+      for(const [day,value] of Object.entries(daily)){
+        const dt=new Date(day+"T00:00:00");
+        if(Number.isNaN(dt.getTime())||dt<cutoff)continue;
+        const count=Number(value?.messages)||0;
+        if(count)activeDays++;
+        rx+=Number(value?.rx)||0;
+        tx+=Number(value?.tx)||0;
+        messages+=count;
+      }
+      return {rx,tx,messages,activeDays};
+    };
+    const trend7=since(7);
+    const trend30=since(30);
+    if(trend30.messages){
+      rows.push(["Tendência 7d",trend7.messages+" msgs · "+trend7.activeDays+" dias ativos"]);
+      rows.push(["Tendência 30d",trend30.messages+" msgs · RX "+trend30.rx+" · TX "+trend30.tx+" · "+trend30.activeDays+" dias ativos"]);
     }
 
     const lastAdvert=Number(contact.last_advert||0);
