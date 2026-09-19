@@ -27,6 +27,7 @@ from .const import (
     EVENT_MESHCORE_DELIVERY_UPDATE,
     EVENT_MESHCORE_DISCONNECTED,
     EVENT_MESHCORE_MESSAGE,
+    EVENT_HEALTH_TRANSITION,
     MESHCORE_DOMAIN,
 )
 from .channel_scopes import ChannelScopeStore
@@ -243,7 +244,7 @@ async def _async_evaluate_health(
         "cleared": cleared,
         "thresholds": settings,
     }
-    hass.bus.async_fire("hivefw_health_transition", event_data)
+    hass.bus.async_fire(EVENT_HEALTH_TRANSITION, event_data)
 
     if settings.get("persistent_notifications") and entered:
         persistent_notification.async_create(
