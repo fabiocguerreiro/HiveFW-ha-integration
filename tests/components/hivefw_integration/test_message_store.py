@@ -1195,3 +1195,8 @@ async def test_get_peer_activity_aggregates_messages_and_links(
     assert activity["links"]["aa"]["avg_rssi"] == -101.0
     assert activity["links"]["aa"]["avg_snr"] == 4.5
     assert activity["links"]["bb"]["observations"] == 1
+    assert activity["edges"]["aa|bb"]["a"] == "aa"
+    assert activity["edges"]["aa|bb"]["b"] == "bb"
+    assert activity["edges"]["aa|bb"]["observations"] == 1
+    assert activity["edges"]["aa|bb"]["avg_rssi"] == -101.0
+    assert activity["edges"]["aa|bb"]["avg_snr"] == 4.5
