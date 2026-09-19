@@ -49,6 +49,7 @@ export class NodesPage extends LitElement {
   @state() private _primaryFilter: PrimaryCategory = 'all';
   @state() private _typeFilter: NodeType | null = null;
   @state() private _searchQuery = '';
+  @state() private _activityFilter: 'all' | 'active24h' | 'favorites' | 'gps' | 'stale' = 'all';
 
   // ─── Results state ──────────────────────────────────────────────────
   @state() private _displayedContacts: Contact[] = [];
@@ -540,11 +541,21 @@ export class NodesPage extends LitElement {
                 @change=${this._onImportFile}>
             </div>
 
-            ${this._primaryFilter !== 'all' ? html`
-              <div class="l2-bar">
-                ${this._renderL2Buttons()}
-              </div>
-            ` : nothing}
+            <div class="l2-bar">
+              <button class=${`l2-btn ${this._activityFilter === 'active24h' ? 'active' : ''}`}
+                @click=${() => this._setActivityFilter('active24h')}>24h</button>
+              <button class=${`l2-btn repeaters ${this._typeFilter === 'repeaters' ? 'active' : ''}`}
+                @click=${() => this._setTypeFilter('repeaters')}>Repeaters</button>
+              <button class=${`l2-btn clients ${this._typeFilter === 'clients' ? 'active' : ''}`}
+                @click=${() => this._setTypeFilter('clients')}>Clients</button>
+              <button class=${`l2-btn ${this._activityFilter === 'favorites' ? 'active' : ''}`}
+                @click=${() => this._setActivityFilter('favorites')}>★ Favoritos</button>
+              <button class=${`l2-btn ${this._activityFilter === 'gps' ? 'active' : ''}`}
+                @click=${() => this._setActivityFilter('gps')}>GPS</button>
+              <button class=${`l2-btn ${this._activityFilter === 'stale' ? 'active' : ''}`}
+                @click=${() => this._setActivityFilter('stale')}>Stale</button>
+              ${this._primaryFilter !== 'all' ? this._renderL2Buttons() : nothing}
+            </div>
 
             <div class="header-actions">
               <div class="search-bar" style="flex: 1;">
@@ -796,6 +807,15 @@ export class NodesPage extends LitElement {
     this._loadPage(true);
   }
 
+  private _setActivityFilter(
+    activity: 'active24h' | 'favorites' | 'gps' | 'stale',
+  ) {
+    this._activityFilter = this._activityFilter === activity ? 'all' : activity;
+    this._displayedContacts = [];
+    this._totalCount = 0;
+    this._loadPage(true);
+  }
+
   private _setTypeFilter(type: NodeType) {
     if (this._typeFilter === type) {
       // Toggle off
@@ -819,7 +839,7 @@ export class NodesPage extends LitElement {
   private _getSearchPlaceholder(): string {
     const cat = this._primaryFilter;
     const type = this._typeFilter ? TYPE_LABELS[this._typeFilter].toLowerCase() : 'nodes';
-    if (cat === 'all') return 'Search all nodes...';
+    if (cat === 'all') return 'Search name, public key or tag...';
     return `Search ${cat} ${type}...`;
   }
 
@@ -837,6 +857,7 @@ export class NodesPage extends LitElement {
       const result = await getContactsPaginated(this.hass, this._primaryFilter, {
         nodeType,
         search,
+        activity: this._activityFilter,
         limit: PAGE_SIZE,
         offset,
         entryId: this.config?.entry_id,
