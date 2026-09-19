@@ -119,7 +119,15 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: MeshCoreChatConfigEntry
 ) -> bool:
     """Set up the unified HiveFW radio engine and UI from one config entry."""
-    # The embedded MeshCore engine owns the physical TCP/BLE/USB connection,
+    # Register the HiveFW sidebar as soon as this entry starts. The panel
+    # remains available during temporary radio outages instead of disappearing.
+    bucket = hass.data.setdefault(DOMAIN, {})
+    if not bucket.get("_panel_registered"):
+        await async_register_panel(hass)
+        bucket["_panel_registered"] = True
+        _LOGGER.debug("HiveFW panel registered")
+
+    # The embedded radio engine owns the physical TCP/BLE/USB connection,
     # creates HA entities/services and starts telemetry before the HiveFW
     # panel/store layer subscribes to its events.
     if not await async_setup_engine_entry(hass, entry):
