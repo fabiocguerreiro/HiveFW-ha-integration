@@ -8,7 +8,7 @@ registered by ``async_setup_entry`` and the small support helpers
 
 Tests follow the 4A/4B direct-instantiation pattern: a
 ``MockConfigEntry`` is registered against ``hass`` with its
-``runtime_data`` populated by hand to a ``MeshCoreChatRuntimeData``
+``runtime_data`` populated by hand to a ``HiveFWRuntimeData``
 holding a mocked ``MessageStore``. The handler factory functions are
 called directly to obtain the closures, which are then invoked with a
 hand-built ``Event`` object. ``async_setup_entry`` itself is not
@@ -30,7 +30,7 @@ from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.hivefw_integration import (
-    MeshCoreChatRuntimeData,
+    HiveFWRuntimeData,
     _async_options_updated,
     _make_connection_state_handler,
     _make_delivery_update_handler,
@@ -82,7 +82,7 @@ def config_entry(
     )
     entry.add_to_hass(hass)
     # runtime_data is the post-2024.6 Bronze pattern (Phase 2 migration).
-    entry.runtime_data = MeshCoreChatRuntimeData(store=mock_store)
+    entry.runtime_data = HiveFWRuntimeData(store=mock_store)
     return entry
 
 
