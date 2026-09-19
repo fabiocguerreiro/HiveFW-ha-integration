@@ -46,6 +46,7 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapLoading = false;
     this.__nodesMapLoadedEntry = null;
     this.__nodesMapMarkerElements = new Map();
+    this.__nodesLeafletMarkers = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
     this.__nodesPopupId = "";
@@ -55,7 +56,6 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapFrame = 0;
     this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
-    this.__mapTileAccess = null;
 
     this.__diagHistory = null;
     this.__diagHistoryKey = "";
@@ -4943,9 +4943,10 @@ class HiveFWPanel extends BasePanel {
   }
 
   __mapLocations(contacts) {
+    const fallback=contacts.filter((c)=>!c?.map_entity_id || !this.hass?.states?.[c.map_entity_id]);
     const active=new Set();
     const selectedId=this.__nodesMapFocusId||"";
-    const locations=contacts.map((c)=>{
+    const locations=fallback.map((c)=>{
       const id=this.__nodeId(c);
       const coords=this.__nodeCoords(c);
       active.add(id);
@@ -4963,6 +4964,58 @@ class HiveFWPanel extends BasePanel {
       if(!active.has(id))this.__nodesMapMarkerElements.delete(id);
     }
     return locations;
+  }
+
+  async __waitForLegacyLeaflet(map) {
+    if(!map || !("layers" in map))return false;
+    for(let i=0;i<40;i++){
+      if(map.leafletMap && map.Leaflet)return true;
+      await new Promise((resolve)=>setTimeout(resolve,75));
+      if(!map.isConnected)return false;
+    }
+    return !!(map.leafletMap && map.Leaflet);
+  }
+
+  __legacyLeafletLayers(map,contacts,page) {
+    const L=map?.Leaflet;
+    if(!L)return [];
+    this.__nodesLeafletMarkers.clear();
+    return contacts.map((contact)=>{
+      const coords=this.__nodeCoords(contact);
+      if(!coords)return null;
+      const isLocal=!!contact.__hivefw_local;
+      const id=this.__nodeId(contact);
+      const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
+      const age=String(contact?.age_bucket|| (isLocal?"lt1h":"stale"));
+      const ageColors={
+        lt1h:"#2e7d32",
+        lt6h:"#66a832",
+        lt24h:"#f9a825",
+        lt7d:"#ef6c00",
+        stale:"#757575",
+      };
+      const markerColor=ageColors[age]||ageColors.stale;
+      const markerIcon=L.divIcon?.({
+        className:"hivefw-node-age-marker",
+        html:'<span style="display:block;width:14px;height:14px;border-radius:50%;background:'+markerColor+';border:'+(isLocal?'3px solid var(--primary-color,#03a9f4)':'2px solid white')+';box-shadow:0 1px 4px rgba(0,0,0,.5)"></span>',
+        iconSize:[18,18],
+        iconAnchor:[9,9],
+      });
+      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0,...(markerIcon?{icon:markerIcon}:{})});
+      const meta=this.__nodeMeta(contact);
+      const tagText=meta.tags.length?" · "+meta.tags.map((tag)=>"#"+tag).join(" "):"";
+      const tooltipName=(meta.favorite?"★ ":"")+name+(isLocal?" · local":"")+tagText;
+      marker.bindTooltip?.(tooltipName,{
+        direction:"top",
+        offset:[0,-12],
+        permanent:isLocal,
+      });
+      marker.on?.("click",()=>{
+        this.__focusNodeOnMap(contact,true);
+      });
+      if(id)this.__nodesLeafletMarkers.set(id,marker);
+      return marker;
+    }).filter(Boolean);
   }
 
   __activityMapLocations() {
@@ -5662,73 +5715,76 @@ class HiveFWPanel extends BasePanel {
 
   __closePersistentNodePopup() {
     const popup=this.__nodesPersistentPopup;
-    if(popup?.isConnected)popup.remove();
+    const map=this.__nodesMapElement?.leafletMap;
+    if(popup && map){
+      try{ map.removeLayer(popup); }catch{}
+    }
     this.__nodesPersistentPopup=null;
     this.__nodesPopupId="";
   }
 
   __openPersistentNodePopup(contact) {
-    const pane=this.__nodesMapPane;
+    const mapEl=this.__nodesMapElement;
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
     const coords=this.__nodeCoords(contact);
-    if(!pane||!coords)return false;
+    if(!map||!L||!coords)return false;
 
     this.__closePersistentNodePopup();
 
-    const popup=document.createElement("section");
-    popup.className="hivefw-node-popup-card";
-    popup.style.cssText="position:absolute;right:12px;top:48px;z-index:48;width:min(390px,calc(100% - 24px));max-height:calc(100% - 62px);overflow:auto;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:11px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 5px 20px rgba(0,0,0,.24);";
+    const id=this.__nodeId(contact);
+    const popup=L.popup({
+      autoPan:true,
+      autoClose:false,
+      closeOnClick:false,
+      closeButton:true,
+      minWidth:320,
+      maxWidth:440,
+      className:"hivefw-node-popup",
+      offset:[0,-10],
+    })
+      .setLatLng(coords)
+      .setContent(this.__nodeMapPopup(contact));
 
-    const close=document.createElement("button");
-    close.type="button";
-    close.textContent="✕";
-    close.title="Fechar";
-    close.style.cssText="position:absolute;right:7px;top:7px;z-index:2;border:0;background:var(--card-background-color,#fff);color:var(--secondary-text-color,#666);font-size:16px;cursor:pointer;border-radius:50%;width:28px;height:28px;";
-    close.addEventListener("click",(event)=>{
-      event.preventDefault();
-      event.stopPropagation();
-      this.__closePersistentNodePopup();
+    popup.on?.("remove",()=>{
+      if(this.__nodesPersistentPopup===popup){
+        this.__nodesPersistentPopup=null;
+        this.__nodesPopupId="";
+      }
     });
 
-    const body=document.createElement("div");
-    body.style.cssText="padding:12px 38px 12px 12px;";
-    body.appendChild(this.__nodeMapPopup(contact));
-    popup.append(close,body);
-    pane.appendChild(popup);
+    popup.addTo(map);
     this.__nodesPersistentPopup=popup;
-    this.__nodesPopupId=this.__nodeId(contact);
+    this.__nodesPopupId=id;
     return true;
   }
 
   __resetNodesMapView() {
-    const map=this.__nodesMapElement;
+    const map=this.__nodesMapElement?.leafletMap;
     const saved=this.__nodesInitialViewport;
     if(!map||!saved)return false;
     this.__closePersistentNodePopup();
-    if(typeof map.panTo==="function"){
-      map.zoom=saved.zoom;
-      map.panTo([saved.lat,saved.lng]);
-      return true;
-    }
-    map.setView?.([saved.lat,saved.lng],saved.zoom);
+    map.setView([saved.lat,saved.lng],saved.zoom,{animate:true});
     return true;
   }
 
   async __applyInitialNodesMapView(localRepeater) {
-    const map=this.__nodesMapElement;
+    const mapEl=this.__nodesMapElement;
+    if(!mapEl||!localRepeater)return false;
+    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
+
     const coords=this.__nodeCoords(localRepeater);
-    if(!map||!coords)return false;
-    if(typeof map.panTo==="function"){
-      map.zoom=9;
-      map.panTo(coords);
-      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
-      return true;
+    if(!coords)return false;
+
+    const bounds=mapEl.Leaflet.circle(coords,{radius:100000}).getBounds();
+    mapEl.leafletMap.fitBounds(bounds,{animate:false});
+
+    const center=mapEl.leafletMap.getCenter?.();
+    const zoom=mapEl.leafletMap.getZoom?.();
+    if(center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)){
+      this.__nodesInitialViewport={lat:center.lat,lng:center.lng,zoom};
     }
-    if(typeof map.setView==="function"){
-      map.setView(coords,9);
-      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
-      return true;
-    }
-    return false;
+    return true;
   }
 
   __removeActivityHeatmapLayer() {
@@ -5981,27 +6037,6 @@ class HiveFWPanel extends BasePanel {
     this.__topologyOverlay=overlay;
   }
 
-  async __ensureMapTileAccess() {
-    if(!this.hass?.connection)return null;
-    const now=Date.now();
-    if(this.__mapTileAccess?.token && now-(this.__mapTileAccess.at||0)<15*60*1000){
-      return this.__mapTileAccess.token;
-    }
-    try{
-      const result=await this.hass.connection.sendMessagePromise({
-        type:"map_tiles/access_token",
-      });
-      const token=String(result?.token||"").trim();
-      if(token){
-        this.__mapTileAccess={token,at:now};
-        return token;
-      }
-    }catch(error){
-      console.warn("HiveFW map tile token unavailable",error);
-    }
-    return null;
-  }
-
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
@@ -6052,16 +6087,6 @@ class HiveFWPanel extends BasePanel {
     }
 
     if(!this.__nodesMapElement?.isConnected){
-      const tileToken=await this.__ensureMapTileAccess();
-      if(!tileToken){
-        pane.replaceChildren();
-        const note=document.createElement("div");
-        note.className="hive-map-note";
-        note.textContent="Mapa indisponível: o Home Assistant não devolveu o token de cartografia.";
-        pane.appendChild(note);
-        return;
-      }
-
       pane.replaceChildren();
 
       const count=document.createElement("div");
@@ -6069,64 +6094,10 @@ class HiveFWPanel extends BasePanel {
       pane.appendChild(count);
 
       const map=document.createElement("ha-map");
-      // Force Home Assistant's light raster Leaflet engine. MapLibre/WebGL is
-      // unnecessarily heavy for a contacts map and was the source of blank
-      // territory in this custom-panel context.
-      map._forceLeaflet=true;
-      map.dataset.hiveTileTokenReady="1";
-      if(this.hass){
-        // ha-map normally receives these through HA context providers. A custom
-        // panel does not reliably provide that context, so inject the same
-        // shapes explicitly before the element connects.
-        map._states=this.hass.states||{};
-        map._config={
-          auth:this.hass.auth,
-          config:this.hass.config,
-          user:this.hass.user,
-          userData:this.hass.userData,
-          systemData:this.hass.systemData,
-        };
-        map._connection={
-          connection:this.hass.connection,
-          connected:this.hass.connected,
-          debugConnection:this.hass.debugConnection,
-          hassUrl:this.hass.hassUrl,
-        };
-        map._ui={
-          themes:this.hass.themes,
-          selectedTheme:this.hass.selectedTheme,
-          panels:this.hass.panels,
-          panelUrl:this.hass.panelUrl,
-          dockedSidebar:this.hass.dockedSidebar,
-          kioskMode:this.hass.kioskMode,
-          enableShortcuts:this.hass.enableShortcuts,
-          vibrate:this.hass.vibrate,
-          suspendWhenHidden:this.hass.suspendWhenHidden,
-        };
-        map._i18n={
-          localize:this.hass.localize,
-          locale:this.hass.locale,
-          loadBackendTranslation:this.hass.loadBackendTranslation,
-          loadFragmentTranslation:this.hass.loadFragmentTranslation,
-          language:this.hass.language,
-          selectedLanguage:this.hass.selectedLanguage,
-          translationMetadata:this.hass.translationMetadata,
-        };
-        map._formatters={
-          formatEntityState:this.hass.formatEntityState,
-          formatEntityStateToParts:this.hass.formatEntityStateToParts,
-          formatEntityAttributeValue:this.hass.formatEntityAttributeValue,
-          formatEntityAttributeValueToParts:this.hass.formatEntityAttributeValueToParts,
-          formatEntityAttributeName:this.hass.formatEntityAttributeName,
-          formatEntityName:this.hass.formatEntityName,
-        };
-      }
       map.autoFit=false;
-      map.clusterMarkers=false;
+      map.clusterMarkers=true;
       map.scaleRuler=true;
-      map.zoom=9;
-      map.themeMode="auto";
-      map.style.cssText="display:block;width:100%;height:100%;min-height:0;";
+      map.themeMode="light";
       map.addEventListener("editable-location-clicked",(e)=>{
         const id=e.detail?.id;
         const contact=this.__validMapContacts().find((c)=>this.__nodeId(c)===id);
@@ -6152,20 +6123,43 @@ class HiveFWPanel extends BasePanel {
       const center=document.createElement("button");
       center.type="button";
       center.textContent="CENTRAR";
-      center.title="Centrar no Repeater local";
+      center.title="Centrar no repetidor local";
       center.addEventListener("click",(event)=>{
         event.preventDefault();
         event.stopPropagation();
-        this.__centerNodesMap();
+
+        const local=this.__localRepeaterMapContact();
+        if(!local)return;
+
+        const id=this.__nodeId(local);
+        const marker=this.__nodesLeafletMarkers.get(id);
+
+        // This is intentionally the same operation as clicking the actual
+        // local contact marker. Because "local" is now the real discovered
+        // contact, its marker id/coordinates are the same ones shown on map.
+        if(marker?.fire){
+          marker.fire("click");
+          return;
+        }
+        this.__focusNodeOnMap(local,true);
       });
       count.append(label,center);
     }
 
-    const mapChanged=this.__nodesMapSignature!==signature;
-    if(mapChanged){
+    // Home Assistant 2026.9's ha-map has no editableLocations API yet.
+    // It does expose Leaflet layers, so use real Leaflet markers there.
+    // Newer HA builds are feature-detected and use editableLocations/entities.
+    if(this.__nodesMapSignature!==signature){
       const map=this.__nodesMapElement;
-      map.entities=[];
-      if("editableLocations" in map)this.__applyPublicMapLocations(mapContacts);
+      if("layers" in map && await this.__waitForLegacyLeaflet(map)){
+        map.entities=[];
+        map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
+      }else{
+        map.entities=this.__mapEntities(mapContacts);
+        if("editableLocations" in map){
+          map.editableLocations=this.__mapLocations(mapContacts);
+        }
+      }
       this.__nodesMapSignature=signature;
     }
 
@@ -6174,8 +6168,7 @@ class HiveFWPanel extends BasePanel {
         this.__nodesMapInitialViewEntry=entryId;
       }
     }
-    if(mapChanged || !this.__traceRouteLayer)this.__drawLastTraceRoute();
-    if(this.__activityHeatmapVisible && !this.__activityHeatmapLayer)this.__drawActivityHeatmap();
+    this.__drawLastTraceRoute();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
@@ -6191,14 +6184,20 @@ class HiveFWPanel extends BasePanel {
 
     const contacts=this.__validMapContacts();
     const map=this.__nodesMapElement;
-    this.__applyPublicMapLocations(contacts);
-    if(typeof map.panTo==="function"){
-      map.zoom=12;
-      map.panTo(coords);
-    }else{
+    if(map.leafletMap){
+      map.leafletMap.setView(coords,12,{animate:true});
+      if(openPopup){
+        const marker=this.__nodesLeafletMarkers.get(id);
+        marker?.setZIndexOffset?.(2000);
+        window.setTimeout(()=>{
+          this.__openPersistentNodePopup(contact);
+        },180);
+      }
+    }else if(!("layers" in map)){
+      map.entities=this.__mapEntities(contacts);
+      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
       map.setView?.(coords,12);
     }
-    if(openPopup)window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
   }
 
     __settingsSelect(label, options, value) {
