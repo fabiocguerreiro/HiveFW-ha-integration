@@ -2,7 +2,7 @@
 
 The unread-tracking logic originated in earlier development and has since
 been consolidated here. The bus event name is kept on the upstream
-`meshcore_*` namespace so the panel can subscribe to the same event
+`hivefw_*` namespace so the panel can subscribe to the same event
 whether it's running against the upstream integration or the companion.
 The tracker instance itself lives in the companion's domain bucket:
 ``hass.data["hivefw_integration"]["unread_tracker"]``.
@@ -35,9 +35,9 @@ from homeassistant.helpers.storage import Store
 _LOGGER = logging.getLogger(__name__)
 
 # Bus event fired whenever a conversation's unread count changes. Kept on
-# the `meshcore_*` namespace so existing frontend listeners written for
+# the `hivefw_*` namespace so existing frontend listeners written for
 # the upstream integration work unchanged.
-EVENT_UNREAD_UPDATED = "meshcore_unread_updated"
+EVENT_UNREAD_UPDATED = "hivefw_unread_updated"
 
 # Storage key for the persistent last-read cursor map. ``{entry_id}`` is
 # the chat companion's config-entry id; the singleton pattern in
