@@ -2774,9 +2774,15 @@ class HiveFWPanel extends BasePanel {
     let weightedSnr=0;
     let rssiN=0;
     let snrN=0;
+    const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:(Array.isArray(this._contacts)?this._contacts:[]);
     for(const [hash,value] of Object.entries(links)){
-      const resolved=this.__resolveTraceHash(hash);
-      if(!resolved||this.__nodeId(resolved)!==this.__nodeId(contact))continue;
+      const wanted=String(hash||"").trim().toLowerCase();
+      const matches=source.filter((candidate)=>{
+        const ckey=String(candidate?.public_key||"").toLowerCase();
+        const cp=String(candidate?.pubkey_prefix||ckey.slice(0,12)).toLowerCase();
+        return wanted&&(ckey.startsWith(wanted)||cp.startsWith(wanted));
+      });
+      if(matches.length!==1||this.__nodeId(matches[0])!==this.__nodeId(contact))continue;
       const count=Number(value?.observations)||0;
       linkVolume+=count;
       if(Number.isFinite(Number(value?.avg_rssi))){weightedRssi+=Number(value.avg_rssi)*count;rssiN+=count;}
@@ -2887,7 +2893,6 @@ class HiveFWPanel extends BasePanel {
     if(!observations.length)return;
     const best=observations[observations.length-1]||{};
     const nodes=Array.isArray(best.path_nodes)?best.path_nodes.map(String).filter(Boolean):[];
-    if(!nodes.length&&Number(best.hop_count||0)<=0)return;
     const path=nodes.map((hash)=>({hash,snr:null}));
     this.__lastTrace={
       timestamp:message?.timestamp instanceof Date?message.timestamp.toISOString():new Date().toISOString(),
@@ -4579,7 +4584,17 @@ class HiveFWPanel extends BasePanel {
         }
         this.__focusNodeOnMap(local,true);
       });
-      count.append(label,center);
+      const routes=document.createElement("button");
+      routes.type="button";
+      routes.textContent="ROTAS";
+      routes.title="Abrir histórico de Trace";
+      routes.style.marginLeft="8px";
+      routes.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        void this.__toggleTraceHistory();
+      });
+      count.append(label,center,routes);
     }
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
