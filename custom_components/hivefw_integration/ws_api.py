@@ -22,7 +22,12 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
-from . import HiveFWRuntimeData, _sync_engine_repair_issue
+from . import (
+    DEFAULT_OBSERVABILITY_SETTINGS,
+    HiveFWRuntimeData,
+    _observability_settings,
+    _sync_engine_repair_issue,
+)
 from .const import (
     CONF_FLOOD_SCOPES_UPSTREAM,
     CONF_NAME_UPSTREAM,
@@ -536,6 +541,8 @@ async def _save_runtime_aux(runtime: HiveFWRuntimeData) -> None:
         {
             "nodes": runtime.node_meta,
             "traces": runtime.trace_history[-100:],
+            "observability": runtime.observability_settings,
+            "health_state": runtime.health_state,
         }
     )
 
@@ -676,6 +683,8 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_trace_history)
     websocket_api.async_register_command(hass, ws_clear_trace_history)
     websocket_api.async_register_command(hass, ws_get_peer_activity)
+    websocket_api.async_register_command(hass, ws_get_observability_settings)
+    websocket_api.async_register_command(hass, ws_set_observability_settings)
 
     # Paginated contacts & counts
     websocket_api.async_register_command(hass, ws_get_contacts_paginated)
@@ -1082,6 +1091,74 @@ async def ws_get_peer_activity(hass, connection, msg):
         return
     result = await runtime.store.get_peer_activity()
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/get_observability_settings",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_get_observability_settings(hass, connection, msg):
+    """Return persisted health thresholds and current alert state."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_error(msg["id"], "not_found", "HiveFW runtime not found")
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "settings": _observability_settings(runtime),
+            "health_state": runtime.health_state,
+            "defaults": DEFAULT_OBSERVABILITY_SETTINGS,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/set_observability_settings",
+        vol.Optional("entry_id"): str,
+        vol.Required("settings"): dict,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_observability_settings(hass, connection, msg):
+    """Persist bounded health thresholds without reloading the integration."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_error(msg["id"], "not_found", "HiveFW runtime not found")
+        return
+
+    raw = msg.get("settings") or {}
+    next_settings = {
+        "noise_floor_warn": max(-140.0, min(-40.0, float(
+            raw.get("noise_floor_warn", DEFAULT_OBSERVABILITY_SETTINGS["noise_floor_warn"])
+        ))),
+        "tx_queue_warn": max(0.0, min(1000.0, float(
+            raw.get("tx_queue_warn", DEFAULT_OBSERVABILITY_SETTINGS["tx_queue_warn"])
+        ))),
+        "recv_errors_rate_warn": max(0.0, min(1000.0, float(
+            raw.get("recv_errors_rate_warn", DEFAULT_OBSERVABILITY_SETTINGS["recv_errors_rate_warn"])
+        ))),
+        "reliability_warn": max(0.0, min(100.0, float(
+            raw.get("reliability_warn", DEFAULT_OBSERVABILITY_SETTINGS["reliability_warn"])
+        ))),
+        "reliability_min_requests": max(1, min(100000, int(
+            raw.get("reliability_min_requests", DEFAULT_OBSERVABILITY_SETTINGS["reliability_min_requests"])
+        ))),
+        "persistent_notifications": bool(
+            raw.get("persistent_notifications", DEFAULT_OBSERVABILITY_SETTINGS["persistent_notifications"])
+        ),
+    }
+    runtime.observability_settings = next_settings
+    await _save_runtime_aux(runtime)
+    connection.send_result(
+        msg["id"],
+        {"settings": _observability_settings(runtime), "saved": True},
+    )
 
 
 # ─── meshcore/get_contacts_paginated ─────────────────────────────────
