@@ -4,6 +4,15 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.15] - 2026-09-19
+
+- Reworked the map's local repeater identity: the connected HiveFW device is dynamically matched to the real discovered contact by full public key, pubkey prefix, then normalized exact name.
+- The local map marker now inherits the discovered contact's GPS, path, hops, flags, timestamps and other contact data; SELF_INFO location is only a fallback.
+- Removed duplicate local/discovered pins by reusing the real contact identity for the local marker.
+- Map marker signatures now include the displayed name and local state, so switching devices or renaming the connected repeater refreshes the local marker dynamically.
+- **CENTRAR** now clicks/focuses that real local contact marker rather than a synthetic local marker.
+- Removed the redundant standalone **Sensors** heading from the Companion metric area while keeping its metric rows intact.
+
 ## [0.10.14] - 2026-09-19
 
 - Changed **CENTRAR** to invoke the exact same handler as clicking the local HiveFW repeater marker, with direct focus fallback when the Leaflet marker is not available.

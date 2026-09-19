@@ -1364,6 +1364,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const label=(row.querySelector(".si-label")?.textContent||"").trim().toLowerCase();
       row.style.display = label.includes("temperature") ? "none" : "";
     }
+    for(const label of nroot.querySelectorAll(".subsection-label")){
+      if((label.textContent||"").trim().toLowerCase().startsWith("sensors")){
+        label.style.display="none";
+      }
+    }
     for(const group of nroot.querySelectorAll(".group-label")){
       const name=(group.textContent||"").trim();
       if(name==="Radio · live"||name==="Radio · configuration"||name==="Identity"){
@@ -2189,27 +2194,110 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return source.filter((c)=>this.__nodeCoords(c)!==null);
   }
 
+  __normalizeNodeName(value) {
+    return String(value||"")
+      .normalize("NFKC")
+      .trim()
+      .replace(/\s+/g," ")
+      .toLocaleLowerCase();
+  }
+
   __localRepeaterMapContact() {
-    const status=this.__repeaterStatus;
+    const status=this.__repeaterStatus||{};
+    const device=this._selectedDevice||{};
+    const source=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+
+    const fullKey=String(device.pubkey||"").trim().toLowerCase();
+    const prefixes=[
+      String(device.pubkey_prefix||"").trim().toLowerCase(),
+      fullKey.slice(0,12),
+    ].filter(Boolean);
+
+    let matched=null;
+
+    // Strongest identity: the connected Companion public key.
+    if(fullKey){
+      matched=source.find((contact)=>
+        String(contact?.public_key||"").trim().toLowerCase()===fullKey
+      )||null;
+    }
+
+    // Next best: stable pubkey prefix.
+    if(!matched && prefixes.length){
+      matched=source.find((contact)=>{
+        const key=String(contact?.public_key||"").trim().toLowerCase();
+        const prefix=String(contact?.pubkey_prefix||key.slice(0,12)).trim().toLowerCase();
+        return prefixes.some((wanted)=>
+          prefix===wanted || key.startsWith(wanted) || wanted.startsWith(prefix)
+        );
+      })||null;
+    }
+
+    // Fallback requested for HiveFW: cross the currently connected radio
+    // name with the discovered-contact advert name. If duplicate names ever
+    // exist, keep the most recently updated contact.
+    if(!matched){
+      const names=[
+        device.name,
+        status.name,
+        this._config?.node_name,
+        this._config?.name,
+      ].map((name)=>this.__normalizeNodeName(name)).filter(Boolean);
+      if(names.length){
+        matched=source
+          .filter((contact)=>{
+            const contactName=this.__normalizeNodeName(contact?.adv_name ?? contact?.name);
+            return contactName && names.includes(contactName);
+          })
+          .sort((a,b)=>Number(b?.lastmod||0)-Number(a?.lastmod||0))[0]||null;
+      }
+    }
+
+    const currentName=String(
+      device.name || status.name || this._config?.node_name || this._config?.name || matched?.adv_name || "HiveFW"
+    ).trim();
+
     const location=status?.location||{};
-    const lat=Number(location.latitude);
-    const lon=Number(location.longitude);
-    if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
-    if(lat < -90 || lat > 90 || lon < -180 || lon > 180)return null;
-    if(lat===0&&lon===0)return null;
-    const name=this._selectedDevice?.name
-      || status?.name
-      || this._config?.name
-      || "HiveFW";
+    const fallbackLat=Number(location.latitude);
+    const fallbackLon=Number(location.longitude);
+    const fallbackCoordsValid=
+      Number.isFinite(fallbackLat) && Number.isFinite(fallbackLon) &&
+      fallbackLat>=-90 && fallbackLat<=90 &&
+      fallbackLon>=-180 && fallbackLon<=180 &&
+      !(fallbackLat===0&&fallbackLon===0);
+
+    if(matched){
+      const merged={...matched,__hivefw_local:true,__hivefw_local_match:true};
+      // The map label always follows the currently connected device name,
+      // even before a fresh advert updates the discovered-contact name.
+      if(currentName)merged.adv_name=currentName;
+
+      // Preserve the real contact GPS first; use SELF_INFO location only
+      // when that contact currently has no valid advertised coordinates.
+      if(!this.__nodeCoords(merged) && fallbackCoordsValid){
+        merged.adv_lat=fallbackLat;
+        merged.adv_lon=fallbackLon;
+        merged.latitude=fallbackLat;
+        merged.longitude=fallbackLon;
+      }
+      return merged;
+    }
+
+    // Last-resort compatibility for a local node not yet present in
+    // discoveries. This disappears automatically once a real contact matches.
+    if(!fallbackCoordsValid)return null;
     return {
       public_key:"__hivefw_local__",
       pubkey_prefix:"LOCAL",
-      adv_name:name,
-      adv_lat:lat,
-      adv_lon:lon,
-      latitude:lat,
-      longitude:lon,
+      adv_name:currentName||"HiveFW",
+      adv_lat:fallbackLat,
+      adv_lon:fallbackLon,
+      latitude:fallbackLat,
+      longitude:fallbackLon,
       __hivefw_local:true,
+      __hivefw_local_match:false,
     };
   }
 
@@ -2581,7 +2669,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
     const contacts=this.__validMapContacts();
     const localRepeater=this.__localRepeaterMapContact();
-    const mapContacts=localRepeater?[localRepeater,...contacts]:contacts;
+    const localId=localRepeater?this.__nodeId(localRepeater):"";
+    const mapContacts=localRepeater
+      ? [localRepeater,...contacts.filter((contact)=>this.__nodeId(contact)!==localId)]
+      : contacts;
 
     if(!ready){
       if(!this.__nodesMapElement?.isConnected){
@@ -2631,7 +2722,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const signature=mapContacts.map((c)=>{
       const p=this.__nodeCoords(c);
-      return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}`;
+      return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}:${String(c?.adv_name||"")}:${c?.__hivefw_local?1:0}`;
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
@@ -2650,17 +2741,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
         const local=this.__localRepeaterMapContact();
         if(!local)return;
 
-        const localId=this.__nodeId(local);
-        const marker=this.__nodesLeafletMarkers.get(localId);
+        const id=this.__nodeId(local);
+        const marker=this.__nodesLeafletMarkers.get(id);
 
-        // Use exactly the same path as a real click on our local repeater pin.
-        // Leaflet's fire("click") invokes the marker handler installed in
-        // __legacyLeafletLayers; the fallback covers newer HA map APIs.
+        // This is intentionally the same operation as clicking the actual
+        // local contact marker. Because "local" is now the real discovered
+        // contact, its marker id/coordinates are the same ones shown on map.
         if(marker?.fire){
           marker.fire("click");
-        }else{
-          this.__focusNodeOnMap(local,true);
+          return;
         }
+        this.__focusNodeOnMap(local,true);
       });
       count.append(label,center);
     }

@@ -421,11 +421,14 @@ export class NodeSummary extends LitElement {
 
       ${groups.length > 0
         ? html`
-          <div class="subsection-label">
-            Sensors${this.hiddenCount > 0
-              ? html`<span class="hidden-suffix">(${this.hiddenCount} hidden)</span>`
-              : nothing}
-          </div>
+          ${this.device.type !== 'companion'
+            ? html`
+              <div class="subsection-label">
+                Sensors${this.hiddenCount > 0
+                  ? html`<span class="hidden-suffix">(${this.hiddenCount} hidden)</span>`
+                  : nothing}
+              </div>`
+            : nothing}
 
           <div class="sensor-grid">
             ${groups.map((g) => this._renderGroup(g))}
