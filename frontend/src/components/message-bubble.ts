@@ -338,10 +338,32 @@ export class MessageBubble extends LitElement {
           : msg.floodScope
         : '';
 
+    const rxObservation =
+      !msg.isOutgoing && !msg.isSystem && msg.rxLogData?.length
+        ? msg.rxLogData[msg.rxLogData.length - 1]
+        : undefined;
+    const pathNodes = rxObservation?.path_nodes as string[] | undefined;
+    const rawHops = Number(rxObservation?.hop_count);
+    const hops = Number.isFinite(rawHops)
+      ? rawHops
+      : pathNodes?.length ?? 0;
+    const rssi = Number(rxObservation?.rssi);
+    const snr = Number(rxObservation?.snr);
+    const rxMeta = rxObservation
+      ? [
+          `${hops} hop${hops === 1 ? '' : 's'}`,
+          Number.isFinite(rssi) ? `RSSI ${Math.round(rssi)} dBm` : '',
+          Number.isFinite(snr) ? `SNR ${snr.toFixed(1)} dB` : '',
+        ].filter(Boolean)
+      : [];
+
     return html`
       <div class=${this._classMap(bubbleClasses)} data-msg-id=${msg.id} @click=${(e: Event) => { e.stopPropagation(); this._selectedMessage = msg; }}>
         <div class="message-text">${this._renderTextWithMentions(msg.text, msg.mentions)}</div>
         <div class="timestamp">${statusLabel ? html`<span class="delivery-status">${statusLabel}</span> · ` : ''}${ts}${scopeLabel ? html` · <span class="flood-scope">${scopeLabel}</span>` : ''}</div>
+        ${rxMeta.length
+          ? html`<div class="route-info-inline">${rxMeta.join(' · ')}</div>`
+          : html``}
       </div>
     `;
   }
