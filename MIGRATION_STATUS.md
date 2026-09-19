@@ -1,3 +1,30 @@
+## HiveFW standalone identity migration — COMPLETE
+
+The standalone migration is complete on `main`:
+
+- One HiveFW config flow owns TCP/Wi-Fi, BLE or USB radio setup.
+- The HiveFW sidebar panel is registered by the same integration entry.
+- Missing `connection_type` no longer raises a raw `KeyError`; incomplete legacy entries surface as a HiveFW radio configuration/setup problem.
+- Public Home Assistant entity IDs use `*.hivefw_*`.
+- Services use the `hivefw_integration.*` domain.
+- Public bus events use the `hivefw_*` namespace.
+- The frontend, committed production bundle and HiveFW panel wrapper use the same identity.
+- The old `meshcore-repeater-panel.js` wrapper is removed in favor of `hivefw-panel.js`.
+- Contact exports are named `hivefw_discovered_contacts.json`.
+- Device manufacturer/default display identity is HiveFW.
+- The radio connection events are `hivefw_connected` / `hivefw_disconnected`.
+- The `radio_engine_unavailable` Repairs issue now resolves to the matching HiveFW repair flow.
+- Both engine-level and WebSocket-level entity helpers generate the same `hivefw` entity prefix.
+- Frontend/backend tests were updated and regression tests were added for HiveFW entity identity and Repairs routing.
+- GitHub validation workflow repository guards were updated to `fabiocguerreiro/HiveFW-ha-integration`.
+
+References to `meshcore` that remain in source are protocol/SDK implementation details, third-party attribution, or explicit compatibility references to the MeshCore app/protocol; they are not Home Assistant public identity.
+
+### Validation note
+
+GitHub currently reports no Actions workflow runs for this repository. The workflow guards now target the HiveFW repository correctly, so repository-level GitHub Actions enablement/permissions should be checked separately if CI is expected to run.
+
+
 # HiveFW Standalone Migration Status
 
 **Rule:** after every functional commit, update this file in a follow-up progress commit or as part of the next atomic commit. If work is interrupted, resume from **NEXT STEP** below; do not restart completed work.
