@@ -3001,11 +3001,16 @@ class HiveFWPanel extends BasePanel {
     const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:(Array.isArray(this._contacts)?this._contacts:[]);
     const key=String(trace.target.public_key||"").toLowerCase();
     const prefix=String(trace.target.pubkey_prefix||"").toLowerCase();
-    const found=source.find((contact)=>{
+    let found=source.find((contact)=>{
       const ckey=String(contact?.public_key||"").toLowerCase();
       const cp=String(contact?.pubkey_prefix||ckey.slice(0,12)).toLowerCase();
       return (key&&ckey===key)||(prefix&&cp===prefix);
     });
+    if(!found&&trace.target.adv_name){
+      const wanted=this.__normalizeNodeName(trace.target.adv_name);
+      const matches=source.filter((contact)=>this.__normalizeNodeName(contact?.adv_name)===wanted);
+      if(matches.length===1)found=matches[0];
+    }
     return found||trace.target;
   }
 
@@ -3059,12 +3064,17 @@ class HiveFWPanel extends BasePanel {
     top.style.cssText="display:flex;align-items:center;gap:8px;";
     const label=document.createElement("strong");
     label.style.flex="1";
-    label.textContent="Último Trace · "+String(data.trace.target?.adv_name||data.trace.target?.pubkey_prefix||"Nó");
+    const sourceLabel=data.trace.source==="message"?"Rota da mensagem":data.trace.source==="history"?"Trace histórico":"Último Trace";
+    label.textContent=sourceLabel+" · "+String(data.trace.target?.adv_name||data.trace.target?.pubkey_prefix||"Nó");
+    const history=document.createElement("button");
+    history.type="button";history.textContent="Histórico";
+    history.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
+    history.addEventListener("click",()=>void this.__toggleTraceHistory());
     const clear=document.createElement("button");
     clear.type="button";clear.textContent="Limpar";
     clear.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
     clear.addEventListener("click",()=>this.__clearLastTrace());
-    top.append(label,clear);
+    top.append(label,history,clear);
     const detail=document.createElement("div");
     const parts=[data.trace.result.response_time||((data.trace.result.round_trip_ms||0)+"ms"),String(data.trace.result.hops||0)+" hops"];
     if(Number.isFinite(Number(data.trace.result.final_snr)))parts.push("SNR "+Number(data.trace.result.final_snr).toFixed(1)+" dB");
@@ -3671,6 +3681,21 @@ class HiveFWPanel extends BasePanel {
       parts.push(...meta.tags.slice(0,2).map((tag)=>"#"+tag));
       badge.textContent=parts.length?" "+parts.join(" "):"";
       badge.hidden=!parts.length;
+
+      const activity=this.__peerActivityFor(card.contact);
+      let activityBadge=root.querySelector(".hive-node-activity-inline");
+      if(!activityBadge){
+        activityBadge=document.createElement("span");
+        activityBadge.className="hive-node-activity-inline";
+        activityBadge.style.cssText="display:block;margin-top:3px;font:9px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--secondary-text-color,#777);";
+        const info=root.querySelector(".contact-info");
+        info?.appendChild(activityBadge);
+      }
+      const activityParts=[];
+      if(activity.rx||activity.tx)activityParts.push("RX "+activity.rx+" · TX "+activity.tx);
+      if(activity.linkVolume)activityParts.push("link "+activity.linkVolume);
+      activityBadge.textContent=activityParts.join(" · ");
+      activityBadge.hidden=!activityParts.length;
     }
   }
 
@@ -3902,7 +3927,7 @@ class HiveFWPanel extends BasePanel {
     this.__traceMonitorBusy=true;
     this.__renderTraceMonitorOverlay();
     try{
-      const msg={type:"hivefw_integration/trace",pubkey_prefix:prefix};
+      const msg={type:"hivefw_integration/trace",pubkey_prefix:prefix,source:"monitor"};
       const entryId=this.__entryId();
       if(entryId)msg.entry_id=entryId;
       const result=await this.hass.callWS(msg);
@@ -4165,6 +4190,17 @@ class HiveFWPanel extends BasePanel {
     const snr=Number(contact.last_snr ?? contact.snr);
     if(Number.isFinite(rssi))rows.push(["RSSI",`${rssi} dBm`]);
     if(Number.isFinite(snr))rows.push(["SNR",`${snr} dB`]);
+
+    const activity=this.__peerActivityFor(contact);
+    if(activity.rx||activity.tx){
+      rows.push(["Mensagens",`RX ${activity.rx} · TX ${activity.tx}`]);
+    }
+    if(activity.linkVolume){
+      let linkText=String(activity.linkVolume)+" observações";
+      if(Number.isFinite(activity.avgRssi))linkText+=" · RSSI "+activity.avgRssi.toFixed(1)+" dBm";
+      if(Number.isFinite(activity.avgSnr))linkText+=" · SNR "+activity.avgSnr.toFixed(1)+" dB";
+      rows.push(["Volume link",linkText]);
+    }
 
     const lastAdvert=Number(contact.last_advert||0);
     if(lastAdvert>0){
