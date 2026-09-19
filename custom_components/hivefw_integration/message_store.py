@@ -2,7 +2,7 @@
 
 Lifted from the upstream `meshcore` coordinator and decoupled — this
 class owns its own state and storage, and has no
-reference to a coordinator. The companion integration owns one instance
+reference to a coordinator. The HiveFW integration owns one instance
 per config entry and stores it under
 ``hass.data["hivefw_integration"][entry_id]["store"]``.
 
