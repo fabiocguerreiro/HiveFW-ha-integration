@@ -12,6 +12,19 @@ de mensagens e interface lateral. **Não é necessário instalar a integração 
 `meshcore-ha` em separado.** O protocolo/SDK MeshCore continua a ser usado internamente,
 mas a superfície pública no Home Assistant pertence ao HiveFW.
 
+## HiveFW 1.1.1
+
+Correções de interface e mapa:
+
+- barra de controlos de **Nós** a toda a largura;
+- lista inferior reduzida a uma única coluna e mapa a ocupar o restante espaço;
+- `CENTRAR · ROTAS · ATIVIDADE · TOPOLOGIA` alinhados à direita na barra superior;
+- mapa compatível com a API pública atual do `ha-map`, preservando a camada de território;
+- fallback Leaflet usa o proxy de tiles do próprio Home Assistant;
+- menos redraws do mapa e overlays;
+- header mostra o Path Hash real da public key entre o nome do rádio e o logo HiveFW,
+  respeitando o modo de 1/2/3 bytes.
+
 ## HiveFW 1.1.0
 
 A versão 1.1.0 consolida a integração como painel de operação completo do
