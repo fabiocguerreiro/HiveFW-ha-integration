@@ -1543,6 +1543,126 @@ class MeshCoreRepeaterPanel extends BasePanel {
       ));
     }
 
+    // Aggregated operational diagnostics. All inputs are already local in
+    // Home Assistant / Companion status; rendering these cards adds no RF.
+    const metric=(key)=>this.__readMetricState(summary,key);
+    const finite=(...values)=>values.find((value)=>Number.isFinite(value));
+
+    const noiseMetric=metric("noise_floor");
+    const rssiMetric=metric("last_rssi");
+    const snrMetric=metric("last_snr");
+    const noiseValue=finite(Number(status.stats?.radio?.noise_floor),noiseMetric.value);
+    const rssiValue=finite(Number(status.stats?.radio?.last_rssi),rssiMetric.value);
+    const snrValue=finite(Number(status.stats?.radio?.last_snr),snrMetric.value);
+    if(Number.isFinite(noiseValue)||Number.isFinite(rssiValue)||Number.isFinite(snrValue)){
+      const rfBand=Number.isFinite(noiseValue)
+        ? (noiseValue>-105?"bad":noiseValue>-115?"warn":"good")
+        : (Number.isFinite(snrValue)&&snrValue<-10?"warn":"good");
+      const primary=Number.isFinite(noiseValue)
+        ? Math.round(noiseValue)+" dBm"
+        : Number.isFinite(rssiValue)
+          ? Math.round(rssiValue)+" dBm"
+          : snrValue.toFixed(1)+" dB";
+      const details=[
+        Number.isFinite(rssiValue)?"RSSI "+Math.round(rssiValue):null,
+        Number.isFinite(snrValue)?"SNR "+snrValue.toFixed(1):null,
+      ].filter(Boolean).join(" · ");
+      hero.appendChild(makeTile("RF Health",primary,details?"· "+details:"",100,0,100,rfBand,"rf-health"));
+    }
+
+    const successMetric=metric("request_successes");
+    const failMetric=metric("request_failures");
+    if(Number.isFinite(successMetric.value)||Number.isFinite(failMetric.value)){
+      const successes=Number.isFinite(successMetric.value)?successMetric.value:0;
+      const failures=Number.isFinite(failMetric.value)?failMetric.value:0;
+      const attempts=successes+failures;
+      const pct=attempts>0?successes/attempts*100:NaN;
+      const band=attempts<20?"info":pct>=90?"good":pct>=70?"warn":"bad";
+      hero.appendChild(makeTile(
+        "Fiabilidade",
+        Number.isFinite(pct)?pct.toFixed(0)+"%":"—",
+        "· "+Math.round(successes)+" OK / "+Math.round(failures)+" falhas",
+        Number.isFinite(pct)?pct:0,0,100,band,"reliability"
+      ));
+    }
+
+    const packetStats=status.stats?.packets||{};
+    const errorsMetric=metric("recv_errors");
+    const directDupsMetric=metric("direct_dups");
+    const floodDupsMetric=metric("flood_dups");
+    const fullMetric=metric("full_evts");
+    const errors=finite(Number(packetStats.recv_errors),errorsMetric.value);
+    const directDups=finite(Number(packetStats.direct_dups),directDupsMetric.value);
+    const floodDups=finite(Number(packetStats.flood_dups),floodDupsMetric.value);
+    const fullEvents=finite(Number(packetStats.full_evts),fullMetric.value);
+    if([errors,directDups,floodDups,fullEvents].some(Number.isFinite)){
+      const e=Number.isFinite(errors)?errors:0;
+      const d=(Number.isFinite(directDups)?directDups:0)+(Number.isFinite(floodDups)?floodDups:0);
+      const f=Number.isFinite(fullEvents)?fullEvents:0;
+      hero.appendChild(makeTile(
+        "Integridade",
+        Math.round(e)+" erros",
+        "· "+Math.round(d)+" dup · "+Math.round(f)+" full",
+        Math.min(e+f,100),0,100,e>0||f>0?"warn":"info","integrity"
+      ));
+    }
+
+    const rxRate=metric("nb_recv_rate");
+    const txRate=metric("nb_sent_rate");
+    const recvErrorRate=metric("recv_errors_rate");
+    const rxDirectRate=metric("recv_direct_rate");
+    const rxFloodRate=metric("recv_flood_rate");
+    const txDirectRate=metric("sent_direct_rate");
+    const txFloodRate=metric("sent_flood_rate");
+    if(Number.isFinite(rxRate.value)||Number.isFinite(txRate.value)){
+      const rx=Number.isFinite(rxRate.value)?rxRate.value:0;
+      const tx=Number.isFinite(txRate.value)?txRate.value:0;
+      const detailParts=[
+        Number.isFinite(rxDirectRate.value)?"RD "+rxDirectRate.value.toFixed(1):null,
+        Number.isFinite(rxFloodRate.value)?"RF "+rxFloodRate.value.toFixed(1):null,
+        Number.isFinite(txDirectRate.value)?"TD "+txDirectRate.value.toFixed(1):null,
+        Number.isFinite(txFloodRate.value)?"TF "+txFloodRate.value.toFixed(1):null,
+      ].filter(Boolean);
+      const secondary="· RX "+rx.toFixed(1)+" · TX "+tx.toFixed(1)+(detailParts.length?" · "+detailParts.join(" · "):"");
+      hero.appendChild(makeTile(
+        "Tráfego atual",(rx+tx).toFixed(1)+" msg/min",secondary,
+        Math.min(rx+tx,50),0,50,"info","traffic-now"
+      ));
+    }
+
+    const contacts=Array.isArray(this._contacts)?this._contacts:[];
+    const nowSec=Date.now()/1000;
+    const activeAt=(contact)=>Math.max(Number(contact?.lastmod||0),Number(contact?.last_advert||0));
+    const active24=contacts.filter((contact)=>activeAt(contact)>0&&nowSec-activeAt(contact)<=86400).length;
+    const active7d=contacts.filter((contact)=>activeAt(contact)>0&&nowSec-activeAt(contact)<=7*86400).length;
+    const gps=contacts.filter((contact)=>this.__nodeCoords(contact)).length;
+    if(contacts.length){
+      hero.appendChild(makeTile(
+        "Atividade da rede",active24+" / "+contacts.length,
+        "· 24h · "+active7d+" em 7d · "+gps+" GPS",
+        Math.min(100,contacts.length?active24/contacts.length*100:0),0,100,"info","network-activity"
+      ));
+    }
+
+    const alerts=[];
+    if(Number.isFinite(noiseValue)&&noiseValue>-105)alerts.push("noise floor alto");
+    const queueValue=Number(status.stats?.core?.queue_len);
+    if(Number.isFinite(queueValue)&&queueValue>5)alerts.push("TX queue "+Math.round(queueValue));
+    const driftAbs=Math.abs(Number(status.clock?.drift_seconds||0));
+    if(Number.isFinite(driftAbs)&&driftAbs>30)alerts.push("clock drift "+Math.round(driftAbs)+"s");
+    if(Number.isFinite(recvErrorRate.value)&&recvErrorRate.value>0.5)alerts.push("RX errors "+recvErrorRate.value.toFixed(1)+"/min");
+    if(Number.isFinite(successMetric.value)&&Number.isFinite(failMetric.value)){
+      const totalRequests=successMetric.value+failMetric.value;
+      const reliability=totalRequests>0?successMetric.value/totalRequests*100:100;
+      if(totalRequests>=20&&reliability<70)alerts.push("fiabilidade "+reliability.toFixed(0)+"%");
+    }
+    hero.appendChild(makeTile(
+      "Saúde",
+      alerts.length?alerts.length+" alerta"+(alerts.length===1?"":"s"):"OK",
+      alerts.length?"· "+alerts.slice(0,2).join(" · "):"· sem alertas locais",
+      alerts.length?Math.min(alerts.length,5):0,0,5,alerts.length?"warn":"good","health-alerts"
+    ));
+
         for(const row of nroot.querySelectorAll(".sensor-item")){
       const label=(row.querySelector(".si-label")?.textContent||"").trim().toLowerCase();
       row.style.display = label.includes("temperature") ? "none" : "";
@@ -1564,6 +1684,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
       }
     }
 
+    void this.__loadDiagnosticHistory(summary);
+    this.__renderDiagnosticHistory(summary,nroot,hero);
     this.__ensureMetricEditor(summary,nroot,hero);
   }
 
