@@ -141,7 +141,7 @@ export async function getChannels(
  * Send a message to a channel.
  *
  * The optional ``entryId`` is forwarded as
- * ``entry_id`` in the upstream ``meshcore.send_channel_message`` service
+ * ``entry_id`` in the HiveFW ``hivefw_integration.send_channel_message`` service
  * call so the message routes to the selected upstream coordinator. When
  * omitted, the upstream service iterates ``hass.data[meshcore]`` and
  * sends from the FIRST connected coordinator — which on multi-entry
@@ -165,7 +165,7 @@ export async function sendChannelMessage(
     // scope, sends, and resets it afterward (meshcore-dev/meshcore-ha
     // #250), so no scope state lingers on the radio between sends.
     if (scope) data.scope = scope;
-    await hass.callService('meshcore', 'send_channel_message', data);
+    await hass.callService('hivefw_integration', 'send_channel_message', data);
   } catch (error) {
     throw new Error(`Failed to send channel message: ${String(error)}`);
   }
@@ -175,7 +175,7 @@ export async function sendChannelMessage(
  * Send a direct message to a contact by pubkey prefix.
  *
  * See ``sendChannelMessage`` above for the rationale on threading
- * ``entryId`` through to upstream ``meshcore.send_message``.
+ * ``entryId`` through to HiveFW ``hivefw_integration.send_message``.
  */
 export async function sendDirectMessage(
   hass: HomeAssistant,
@@ -189,7 +189,7 @@ export async function sendDirectMessage(
       message,
     };
     if (entryId) data.entry_id = entryId;
-    await hass.callService('meshcore', 'send_message', data);
+    await hass.callService('hivefw_integration', 'send_message', data);
   } catch (error) {
     throw new Error(`Failed to send direct message: ${String(error)}`);
   }
@@ -389,7 +389,7 @@ export async function setChannel(
 }
 
 /**
- * Region-scope allowlist from the upstream meshcore integration's
+ * Region-scope allowlist from the HiveFW integration's
  * Global Settings. `scopes` is empty (and `global` false) when the
  * allowlist is unconfigured or when the installed meshcore predates the
  * scope feature (meshcore-dev/meshcore-ha#250) — the channel dialog shows
@@ -411,7 +411,7 @@ export async function getFloodScopes(
   }
 }
 
-/** Persist the flood-scope allowlist in the selected upstream meshcore entry. */
+/** Persist the flood-scope allowlist in the selected HiveFW entry. */
 export async function setFloodScopes(
   hass: HomeAssistant,
   scopes: string[],
