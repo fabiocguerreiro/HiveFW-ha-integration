@@ -539,6 +539,9 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_set_device_config)
     websocket_api.async_register_command(hass, ws_execute_local)
     websocket_api.async_register_command(hass, ws_execute_remote)
+    websocket_api.async_register_command(hass, ws_console_get)
+    websocket_api.async_register_command(hass, ws_console_execute)
+    websocket_api.async_register_command(hass, ws_console_clear)
     websocket_api.async_register_command(hass, ws_set_channel)
     websocket_api.async_register_command(hass, ws_remove_channel)
 
@@ -1970,6 +1973,115 @@ def _format_event_response(result) -> str:
     if isinstance(payload, dict):
         return json.dumps(payload, default=_json_safe)
     return str(payload)
+
+
+# ─── HiveFW Console ─────────────────────────────────────────────────────
+# Persistent in-memory CLI transcript backed by the coordinator. The console
+# remains useful even when the optional CLI Console sensor entity is disabled.
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/console_get",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_console_get(hass, connection, msg):
+    """Return the current HiveFW CLI transcript."""
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator:
+        connection.send_error(msg["id"], "not_found", "No HiveFW coordinator found")
+        return
+
+    history = list(getattr(coordinator, "cli_console_history", []) or [])
+    safe_history = json.loads(json.dumps(history, default=_json_safe))
+    connection.send_result(msg["id"], {"history": safe_history})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/console_execute",
+        vol.Optional("entry_id"): str,
+        vol.Required("command"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_console_execute(hass, connection, msg):
+    """Execute one free-form HiveFW command and append it to the transcript."""
+    command = (msg.get("command") or "").strip()
+    if not command:
+        connection.send_error(msg["id"], "invalid", "Command cannot be empty")
+        return
+    if command.startswith("_"):
+        connection.send_error(msg["id"], "invalid", "Private command names are not allowed")
+        return
+
+    service_data = {
+        "command": command,
+        "record_to_console": True,
+    }
+    entry_id = msg.get("entry_id")
+    if entry_id:
+        service_data["entry_id"] = entry_id
+
+    try:
+        response = await hass.services.async_call(
+            DOMAIN,
+            "execute_command",
+            service_data,
+            blocking=True,
+            return_response=True,
+        )
+        safe_response = json.loads(json.dumps(response, default=_json_safe))
+        success = not (
+            safe_response is None
+            or (isinstance(safe_response, dict) and "error" in safe_response)
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "success": success,
+                "response": safe_response,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+    except Exception as ex:
+        _ws_send_error_safe(
+            connection,
+            msg["id"],
+            ex,
+            handler=f"ws_console_execute({command!r})",
+        )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/console_clear",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_console_clear(hass, connection, msg):
+    """Clear the HiveFW CLI transcript for one coordinator."""
+    coordinator = _get_coordinator(hass, msg.get("entry_id"))
+    if not coordinator:
+        connection.send_error(msg["id"], "not_found", "No HiveFW coordinator found")
+        return
+
+    try:
+        coordinator.clear_cli_console()
+        connection.send_result(msg["id"], {"success": True})
+    except Exception as ex:
+        _ws_send_error_safe(
+            connection,
+            msg["id"],
+            ex,
+            handler="ws_console_clear",
+        )
 
 
 # ─── meshcore/execute_local ─────────────────────────────────────────────
