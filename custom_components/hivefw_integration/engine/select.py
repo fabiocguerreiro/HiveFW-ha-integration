@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Select platform for MeshCore integration."""
+"""Select platform for HiveFW."""
 from __future__ import annotations
 
 import logging
@@ -29,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up MeshCore select entities from a config entry."""
+    """Set up HiveFW select entities from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     entities = []
@@ -56,7 +56,7 @@ class MeshCoreChannelSelect(CoordinatorEntity, SelectEntity):
 
         # Set unique ID and name
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_channel_select"
-        self._attr_name = "MeshCore Channel"
+        self._attr_name = "HiveFW Channel"
 
         # Get initial channel options
         self._attr_options = self._get_channel_options()
@@ -127,7 +127,7 @@ class MeshCoreContactSelect(CoordinatorEntity, SelectEntity):
         
         # Set unique ID and name
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_contact_select"
-        self._attr_name = "MeshCore Contact"
+        self._attr_name = "HiveFW Contact"
         
         # Initial options
         self._attr_options = self._get_contact_options()
@@ -236,10 +236,10 @@ class MeshCoreRecipientTypeSelect(CoordinatorEntity, SelectEntity):
         
         # Set unique ID and entity ID
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_recipient_type"
-        self.entity_id = "select.meshcore_recipient_type"
+        self.entity_id = "select.hivefw_recipient_type"
         
         # Set name and icon
-        self._attr_name = "MeshCore Recipient Type"
+        self._attr_name = "HiveFW Recipient Type"
         self._attr_icon = "mdi:account-switch"
         
         # Hide from device page
@@ -274,7 +274,7 @@ class MeshCoreDiscoveredContactSelect(CoordinatorEntity, SelectEntity):
         super().__init__(coordinator)
 
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_discovered_contact_select"
-        self._attr_name = "MeshCore Discovered Contact"
+        self._attr_name = "HiveFW Discovered Contact"
         self._attr_icon = "mdi:account-question"
         self._attr_entity_registry_visible_default = False
 
@@ -345,7 +345,7 @@ class MeshCoreAddedContactSelect(CoordinatorEntity, SelectEntity):
         super().__init__(coordinator)
 
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_added_contact_select"
-        self._attr_name = "MeshCore Added Contact"
+        self._attr_name = "HiveFW Added Contact"
         self._attr_icon = "mdi:account-check"
         self._attr_entity_registry_visible_default = False
 
