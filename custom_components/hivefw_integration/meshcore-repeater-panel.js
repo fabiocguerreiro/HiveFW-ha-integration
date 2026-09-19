@@ -1491,7 +1491,9 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const last=nums[nums.length-1];
       const min=Math.min(...nums),max=Math.max(...nums);
       const card=document.createElement("div");
-      card.style.cssText="min-width:0;padding:8px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);";
+      card.style.cssText="min-width:0;padding:8px;border:1px solid transparent;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);cursor:pointer;";
+      card.title="Abrir entidade "+metric.entityId;
+      card.addEventListener("click",()=>summary?._fireMoreInfo?.(metric.entityId));
       const top=document.createElement("div");
       top.style.cssText="display:flex;justify-content:space-between;gap:6px;font-size:10px;";
       const label=document.createElement("span");label.textContent=metric.label;label.style.fontWeight="650";
@@ -1581,6 +1583,20 @@ class MeshCoreRepeaterPanel extends BasePanel {
       String(e.entity_id || "").includes(needle) ||
       String(e.label || "").toLowerCase().includes(needle.toLowerCase())
     );
+    const entityFor = (...needles) => {
+      for (const needle of needles) {
+        const info=findEntity(needle);
+        if(info?.entity_id && this.hass?.states?.[info.entity_id])return info;
+      }
+      return null;
+    };
+    const clickEntityId = (entityId) => entityId && this.hass?.states?.[entityId]
+      ? ()=>summary._fireMoreInfo?.(entityId)
+      : null;
+    const clickEntity = (...needles) => {
+      const info=entityFor(...needles);
+      return info?clickEntityId(info.entity_id):null;
+    };
     const stateFor = (info) => info ? this.hass?.states?.[info.entity_id] : null;
     const num = (info) => {
       const raw = stateFor(info)?.state;
@@ -1612,7 +1628,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if(Number.isFinite(uptimeSecs)){
       const h=Math.max(0,uptimeSecs/3600);
       const d=h>=48?`${Math.floor(h/24)}d ${Math.floor(h%24)}h`:h>=1?`${Math.floor(h)}h ${Math.floor((h%1)*60)}m`:`${Math.floor(h*60)}m`;
-      hero.appendChild(makeTile("Uptime",d,"",Math.min(h,168),0,168,h<1?"bad":h<24?"warn":"good","uptime",null,"compact"));
+      hero.appendChild(makeTile("Uptime",d,"",Math.min(h,168),0,168,h<1?"bad":h<24?"warn":"good","uptime",clickEntity("uptime"),"compact"));
     }
 
     const clock=Number(status.clock?.timestamp);
@@ -1623,10 +1639,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     const noise=Number(status.stats?.radio?.noise_floor);
-    if(Number.isFinite(noise)) hero.appendChild(makeTile("Noise floor",`${Math.round(noise)} dBm`,"",noise,-130,-90,noise>-105?"bad":noise>-115?"warn":"good","noise",null,"compact"));
+    if(Number.isFinite(noise)) hero.appendChild(makeTile("Noise floor",`${Math.round(noise)} dBm`,"",noise,-130,-90,noise>-105?"bad":noise>-115?"warn":"good","noise",clickEntity("noise_floor"),"compact"));
 
     const queue=Number(status.stats?.core?.queue_len);
-    if(Number.isFinite(queue)) hero.appendChild(makeTile("TX queue",String(Math.round(queue)),"queued",Math.min(Math.max(queue,0),30),0,30,queue>10?"bad":queue>5?"warn":"good","queue",null,"compact"));
+    if(Number.isFinite(queue)) hero.appendChild(makeTile("TX queue",String(Math.round(queue)),"queued",Math.min(Math.max(queue,0),30),0,30,queue>10?"bad":queue>5?"warn":"good","queue",clickEntity("tx_queue_len"),"compact"));
 
     const tempInfo=findEntity("temperature");
     const temp=num(tempInfo);
@@ -1651,7 +1667,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const used=Number(status.battery?.used_kb), total=Number(status.battery?.total_kb);
     if(Number.isFinite(used)&&Number.isFinite(total)&&total>0){
       const pct=Math.max(0,Math.min(100,used/total*100));
-      hero.appendChild(makeTile("Storage",`${pct.toFixed(0)}%`,`· ${used} / ${total} KB`,pct,0,100,pct>=90?"bad":pct>=70?"warn":"good","storage"));
+      hero.appendChild(makeTile("Storage",`${pct.toFixed(0)}%`,`· ${used} / ${total} KB`,pct,0,100,pct>=90?"bad":pct>=70?"warn":"good","storage",clickEntity("storage")));
     }
 
     const info=status.device_info||{};
@@ -1686,7 +1702,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         "Repeater frequencies",
         `${values[0]} MHz`,
         values.length>1?`· ${values.slice(1).join(" · ")} MHz`:"",
-        100,0,100,"info","repeat-frequencies"
+        100,0,100,"info","repeat-frequencies",clickEntity("frequency")
       ));
     }
 
@@ -1714,7 +1730,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
         Number.isFinite(rssiValue)?"RSSI "+Math.round(rssiValue):null,
         Number.isFinite(snrValue)?"SNR "+snrValue.toFixed(1):null,
       ].filter(Boolean).join(" · ");
-      hero.appendChild(makeTile("RF Health",primary,details?"· "+details:"",100,0,100,rfBand,"rf-health"));
+      const rfEntityId=noiseMetric.entityId||rssiMetric.entityId||snrMetric.entityId;
+      hero.appendChild(makeTile(
+        "RF Health",primary,details?"· "+details:"",100,0,100,rfBand,"rf-health",
+        clickEntityId(rfEntityId)
+      ));
     }
 
     const airtimeUtil=metric("airtime_utilization");
@@ -1739,9 +1759,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
         Number.isFinite(airtimeUtil.value)?airtimeUtil.value:0,
         Number.isFinite(rxAirtimeUtil.value)?rxAirtimeUtil.value:0
       );
+      const airtimeEntityId=airtimeUtil.entityId||rxAirtimeUtil.entityId||txAirtime.entityId||rxAirtime.entityId;
       hero.appendChild(makeTile(
         "Airtime",primary,secondary,Math.min(maxUtil,100),0,100,
-        maxUtil>=50?"warn":"info","airtime-health"
+        maxUtil>=50?"warn":"info","airtime-health",clickEntityId(airtimeEntityId)
       ));
     }
 
@@ -1757,7 +1778,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
         "Fiabilidade",
         Number.isFinite(pct)?pct.toFixed(0)+"%":"—",
         "· "+Math.round(successes)+" OK / "+Math.round(failures)+" falhas",
-        Number.isFinite(pct)?pct:0,0,100,band,"reliability"
+        Number.isFinite(pct)?pct:0,0,100,band,"reliability",
+        clickEntityId(successMetric.entityId||failMetric.entityId)
       ));
     }
 
@@ -1774,11 +1796,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const e=Number.isFinite(errors)?errors:0;
       const d=(Number.isFinite(directDups)?directDups:0)+(Number.isFinite(floodDups)?floodDups:0);
       const f=Number.isFinite(fullEvents)?fullEvents:0;
+      const integrityEntityId=errorsMetric.entityId||directDupsMetric.entityId||floodDupsMetric.entityId||fullMetric.entityId;
       hero.appendChild(makeTile(
         "Integridade",
         Math.round(e)+" erros",
         "· "+Math.round(d)+" dup · "+Math.round(f)+" full",
-        Math.min(e+f,100),0,100,e>0||f>0?"warn":"info","integrity"
+        Math.min(e+f,100),0,100,e>0||f>0?"warn":"info","integrity",
+        clickEntityId(integrityEntityId)
       ));
     }
 
@@ -1801,7 +1825,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const secondary="· RX "+rx.toFixed(1)+" · TX "+tx.toFixed(1)+(detailParts.length?" · "+detailParts.join(" · "):"");
       hero.appendChild(makeTile(
         "Tráfego atual",(rx+tx).toFixed(1)+" msg/min",secondary,
-        Math.min(rx+tx,50),0,50,"info","traffic-now"
+        Math.min(rx+tx,50),0,50,"info","traffic-now",
+        clickEntityId(rxRate.entityId||txRate.entityId)
       ));
     }
 
@@ -1817,12 +1842,17 @@ class MeshCoreRepeaterPanel extends BasePanel {
       hero.appendChild(makeTile(
         "Atividade da rede",active24+" / "+contacts.length,
         "· 24h · "+active7d+" em 7d · +"+firstSeen.new24+" novos 24h · +"+firstSeen.new7d+" em 7d · "+gps+" GPS · "+favorites+" ★",
-        Math.min(100,contacts.length?active24/contacts.length*100:0),0,100,"info","network-activity"
+        Math.min(100,contacts.length?active24/contacts.length*100:0),0,100,"info","network-activity",
+        clickEntity("discovered_contacts","node_count")
       ));
     }
 
     const alerts=[];
-    if(Number.isFinite(noiseValue)&&noiseValue>-105)alerts.push("noise floor alto");
+    let healthEntityId=null;
+    if(Number.isFinite(noiseValue)&&noiseValue>-105){
+      alerts.push("noise floor alto");
+      healthEntityId=noiseMetric.entityId||healthEntityId;
+    }
 
     // meshcore-ha exposes STATS_CORE radio faults as latching problem
     // binary sensors when Self Diagnostics is enabled. "on" means the
@@ -1834,23 +1864,34 @@ class MeshCoreRepeaterPanel extends BasePanel {
     ]){
       const entityId=this.__findDeviceMetricEntity(summary,key);
       const state=entityId?this.hass?.states?.[entityId]:null;
-      if(state?.state==="on")alerts.push(label);
+      if(state?.state==="on"){alerts.push(label);healthEntityId=healthEntityId||entityId;}
     }
     const queueValue=Number(status.stats?.core?.queue_len);
-    if(Number.isFinite(queueValue)&&queueValue>5)alerts.push("TX queue "+Math.round(queueValue));
+    if(Number.isFinite(queueValue)&&queueValue>5){
+      alerts.push("TX queue "+Math.round(queueValue));
+      healthEntityId=healthEntityId||metric("tx_queue_len").entityId;
+    }
     const driftAbs=Math.abs(Number(status.clock?.drift_seconds||0));
     if(Number.isFinite(driftAbs)&&driftAbs>30)alerts.push("clock drift "+Math.round(driftAbs)+"s");
-    if(Number.isFinite(recvErrorRate.value)&&recvErrorRate.value>0.5)alerts.push("RX errors "+recvErrorRate.value.toFixed(1)+"/min");
+    if(Number.isFinite(recvErrorRate.value)&&recvErrorRate.value>0.5){
+      alerts.push("RX errors "+recvErrorRate.value.toFixed(1)+"/min");
+      healthEntityId=healthEntityId||recvErrorRate.entityId;
+    }
     if(Number.isFinite(successMetric.value)&&Number.isFinite(failMetric.value)){
       const totalRequests=successMetric.value+failMetric.value;
       const reliability=totalRequests>0?successMetric.value/totalRequests*100:100;
-      if(totalRequests>=20&&reliability<70)alerts.push("fiabilidade "+reliability.toFixed(0)+"%");
+      if(totalRequests>=20&&reliability<70){
+        alerts.push("fiabilidade "+reliability.toFixed(0)+"%");
+        healthEntityId=healthEntityId||successMetric.entityId||failMetric.entityId;
+      }
     }
+    if(!healthEntityId)healthEntityId=noiseMetric.entityId||recvErrorRate.entityId||successMetric.entityId||null;
     hero.appendChild(makeTile(
       "Saúde",
       alerts.length?alerts.length+" alerta"+(alerts.length===1?"":"s"):"OK",
       alerts.length?"· "+alerts.slice(0,2).join(" · "):"· sem alertas locais",
-      alerts.length?Math.min(alerts.length,5):0,0,5,alerts.length?"warn":"good","health-alerts"
+      alerts.length?Math.min(alerts.length,5):0,0,5,alerts.length?"warn":"good","health-alerts",
+      clickEntityId(healthEntityId)
     ));
 
         for(const row of nroot.querySelectorAll(".sensor-item")){
