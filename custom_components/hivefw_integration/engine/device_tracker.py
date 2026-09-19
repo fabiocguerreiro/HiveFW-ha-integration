@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Device tracker platform for MeshCore integration."""
+"""Device tracker platform for HiveFW."""
 from __future__ import annotations
 
 import logging
@@ -42,7 +42,7 @@ class DeviceTrackerManager:
     async def setup_gps_listener(self):
         """Set up the GPS telemetry event listener."""
         if not self.coordinator.api.mesh_core:
-            _LOGGER.warning("No MeshCore instance available for GPS device tracker setup")
+            _LOGGER.warning("No HiveFW radio instance available for GPS device tracker setup")
             return
             
         self.coordinator.api.mesh_core.subscribe(
@@ -194,7 +194,7 @@ class MeshCoreGPSTracker(CoordinatorEntity, TrackerEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             name=device_name,
-            manufacturer="MeshCore",
+            manufacturer="HiveFW",
             model=device_model,
             via_device=(DOMAIN, coordinator.config_entry.entry_id) if node_type != "root" else None,
         )
@@ -266,7 +266,7 @@ class MeshCoreGPSTracker(CoordinatorEntity, TrackerEntity):
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up MeshCore device tracker from a config entry."""
+    """Set up HiveFW device tracker from a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
     tracker_manager = DeviceTrackerManager(coordinator, async_add_entities)
     await tracker_manager.setup_gps_listener()
