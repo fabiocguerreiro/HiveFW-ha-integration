@@ -2,12 +2,12 @@
 //
 // Strategy:
 //   1. Exclude connectivity binary_sensors (peer contact discovery entities).
-//   2. Exclude meshcore-specific status/control entity-id patterns.
+//   2. Exclude HiveFW-specific status/control entity-id patterns.
 //   3. Match HA original_device_class for categories that have one.
-//   4. Fall back to entity_id substring for meshcore-specific categories
+//   4. Fall back to entity_id substring for HiveFW-specific categories
 //      (SNR, RSSI, Airtime, Channel Util, Contacts count) that have no
 //      standard HA device_class.
-//   5. Generic fallback: sensor.meshcore_* → label = friendly name, sortOrder 99.
+//   5. Generic fallback: sensor.hivefw_* → label = friendly name, sortOrder 99.
 //
 // Step 1 is the defect-fix rationale for this file: previously, contact
 // binary_sensors were not filtered, and a name-substring match on "temp"
@@ -45,14 +45,14 @@ export interface EntityInfo {
 }
 
 export interface MeshcoreRegistryResult {
-  /** meshcore device identifier → HA device_id */
+  /** HiveFW device identifier → HA device_id */
   meshcoreDeviceMap: Record<string, string>;
   /** HA device_id → classified, sorted entities */
   deviceEntities: Record<string, EntityInfo[]>;
 }
 
 /**
- * Classify a meshcore sensor or binary_sensor entity into a tile EntityInfo,
+ * Classify a HiveFW sensor or binary_sensor entity into a tile EntityInfo,
  * or return null if the entity should not be rendered as a tile.
  */
 export function classifyEntity(entity: any): EntityInfo | null {
@@ -74,7 +74,7 @@ export function classifyEntity(entity: any): EntityInfo | null {
   // bitmask (companion-only). They must be allow-listed BEFORE the blanket
   // meshcore binary_sensor exclusion in Step 1. Latching since boot; rendered
   // as OK/Detected rows (booleanProblem) and grouped under Status.
-  if (eid.startsWith('binary_sensor.meshcore_')
+  if (eid.startsWith('binary_sensor.hivefw_')
       && /_err_(pool_full|cad_timeout|rx_timeout)_/.test(eid)) {
     const label = eid.includes('err_pool_full') ? 'Radio Fault: Packet Pool'
                 : eid.includes('err_cad_timeout') ? 'Radio Fault: CAD Timeout'
@@ -89,10 +89,10 @@ export function classifyEntity(entity: any): EntityInfo | null {
   // future binary_sensor that ships without a device_class; if/when a real
   // tile-worthy binary_sensor is added to the integration, add an explicit
   // allow-case above this line.
-  if (eid.startsWith('binary_sensor.meshcore_') && dc === 'connectivity') return null;
-  if (eid.startsWith('binary_sensor.meshcore_')) return null;
+  if (eid.startsWith('binary_sensor.hivefw_') && dc === 'connectivity') return null;
+  if (eid.startsWith('binary_sensor.hivefw_')) return null;
 
-  // --- Step 2: meshcore-specific status/control exclusions (entity_id substrings) ---
+  // --- Step 2: HiveFW-specific status/control exclusions (entity_id substrings) ---
   // *_rate sensors are derived counters (per-minute deltas of the totals).
   // The new node-summary card uses TOTALS via composite stacked bars and
   // surfaces the cumulative msg/min rate as an annotation, so the rate
@@ -217,8 +217,8 @@ export function classifyEntity(entity: any): EntityInfo | null {
              metricKey: 'channel_util' };
   }
 
-  // --- Step 5: generic meshcore sensor catch-all ---
-  if (eid.startsWith('sensor.meshcore_')) {
+  // --- Step 5: generic HiveFW sensor catch-all ---
+  if (eid.startsWith('sensor.hivefw_')) {
     const friendlyName = entity.original_name || entity.name || eid.split('.')[1];
     return { entity_id: eid, label: friendlyName, icon: '',
              colorScheme: 'neutral', sortOrder: 99 };
@@ -227,7 +227,7 @@ export function classifyEntity(entity: any): EntityInfo | null {
 }
 
 /**
- * Load and classify meshcore entities from the HA registry.
+ * Load and classify HiveFW entities from the HA registry.
  * Returns (meshcoreDeviceMap, deviceEntities) suitable for assignment to
  * the page's reactive properties.
  */
@@ -244,7 +244,7 @@ export async function loadMeshcoreEntityRegistry(hass: any): Promise<MeshcoreReg
   for (const device of devices) {
     if (!device.identifiers) continue;
     for (const [domain, key] of device.identifiers) {
-      if (domain === 'meshcore') {
+      if (domain === 'hivefw_integration') {
         meshcoreDeviceMap[key] = device.id;
       }
     }
@@ -253,8 +253,8 @@ export async function loadMeshcoreEntityRegistry(hass: any): Promise<MeshcoreReg
   const deviceEntities: Record<string, EntityInfo[]> = {};
   for (const entity of entities) {
     if (!entity.device_id || entity.disabled_by) continue;
-    if (!entity.entity_id.startsWith('sensor.meshcore_')
-        && !entity.entity_id.startsWith('binary_sensor.meshcore_')) continue;
+    if (!entity.entity_id.startsWith('sensor.hivefw_')
+        && !entity.entity_id.startsWith('binary_sensor.hivefw_')) continue;
 
     // Inject the live state's device_class as a fallback for classifyEntity.
     // The registry/list response on this HA install does not surface
