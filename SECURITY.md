@@ -1,40 +1,71 @@
 # Security Policy
 
-## Supported versions
+## Versões suportadas
 
-HiveFW is a pre-1.0 Home Assistant integration distributed through HACS. Security fixes are applied to the latest released version only — please update to the most recent release before reporting an issue.
+HiveFW é uma integração custom para Home Assistant. Correções de segurança são aplicadas à versão mais recente.
 
-| Version | Supported |
-| ------- | --------- |
-| Latest release | Yes |
-| Older releases | No |
+| Versão | Suporte |
+| --- | --- |
+| Mais recente | Sim |
+| Versões anteriores | Não garantido |
 
-## Reporting a vulnerability
+## Reportar uma vulnerabilidade
 
-Please report security vulnerabilities **privately** so they can be fixed before public disclosure. Do **not** open a public GitHub issue for a security problem.
+Não abras um issue público para uma vulnerabilidade.
 
-Use GitHub's private vulnerability reporting:
+Usa **GitHub → Security → Report a vulnerability** e inclui:
 
-1. Open the **Security** tab of this repository.
-2. Click **Report a vulnerability**.
-3. Describe the issue, the affected version, and steps to reproduce.
+- versão/commit afetado;
+- impacto;
+- passos de reprodução;
+- logs ou payloads relevantes, removendo segredos.
 
-You can expect an acknowledgement **within 7 days**. Once a report is confirmed, a fix is coordinated and released before the details are disclosed publicly, and your contribution is credited if you would like.
+O objetivo é confirmar o problema e coordenar uma correção antes de divulgação pública.
 
-## Scope
+## Modelo de confiança
 
-HiveFW is a companion integration that runs inside Home Assistant. It adds a chat panel and a message store on top of the core [`meshcore`](https://github.com/meshcore-dev/meshcore-ha) integration, which owns the radio link.
+HiveFW recebe dados provenientes de uma rede mesh. Nomes de nós, mensagens, canais,
+paths e outros campos recebidos por rádio devem ser tratados como **dados não confiáveis**.
 
-In scope for a report against this integration:
+### Renderização
 
-- Output encoding of untrusted, mesh-sourced data (node names, message text, channel and sender names) in the panel.
-- Authorization of the WebSocket API the panel uses — which commands require a Home Assistant administrator versus any authenticated user.
-- Input validation of the WebSocket commands and of stored data read back from disk.
+O frontend usa Lit e DOM APIs. Dados provenientes da mesh são inseridos através de
+interpolação escapada ou `textContent`. Onde existe markup estático criado por JavaScript,
+esse markup não é construído a partir de valores recebidos da mesh.
 
-Out of scope — these are Home Assistant platform behavior rather than this integration:
+### WebSocket e permissões
 
-- Home Assistant's trust model treats every logged-in user as a member of the household; per-user permissions beyond the administrator / non-administrator split are a Home Assistant core concern.
-- Installation of add-ons and integrations is user-initiated and trusted by design.
-- Vulnerabilities in Home Assistant Core, Home Assistant OS, or the core `meshcore` integration should be reported to those projects.
+Comandos WebSocket que alteram configuração, identidade, contactos, canais, rádio,
+Repeaters remotos ou executam comandos administrativos exigem utilizador administrador
+do Home Assistant.
 
-For a design-level description of how untrusted data is handled and where the trust boundaries are, see [docs/security-posture.md](docs/security-posture.md).
+Operações de leitura e estado podem estar disponíveis a utilizadores autenticados,
+de acordo com o modelo de permissões do Home Assistant.
+
+### Validação
+
+Os comandos WebSocket declaram schemas de entrada. Payloads inválidos são rejeitados
+antes de chegar à lógica do rádio.
+
+### Persistência
+
+Histórico de mensagens, unread cursors e estado auxiliar usam as convenções de storage
+do Home Assistant. Dados persistidos são validados ao carregar e erros de escrita não
+devem provocar substituição silenciosa por estruturas vazias.
+
+### Segredos
+
+Passwords, chaves e identidade do rádio não devem ser expostos em payloads frontend,
+logs ou mensagens de erro além do estritamente necessário.
+
+## Fora do âmbito
+
+- vulnerabilidades do Home Assistant Core;
+- vulnerabilidades do sistema operativo/host;
+- vulnerabilidades do protocolo MeshCore ou do firmware que não sejam introduzidas por HiveFW;
+- comportamento de hardware/radiofrequência que não atravesse a fronteira de segurança da integração.
+
+## Dependências e upstream
+
+HiveFW inclui/adapta componentes de `meshcore-dev/meshcore-ha` e usa o SDK MeshCore.
+A proveniência está documentada em [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
