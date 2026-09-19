@@ -93,6 +93,9 @@ class HiveFWPanel extends BasePanel {
     this.__consoleError = null;
     this.__consoleLoadedEntry = null;
     this.__consoleOverlay = null;
+
+    this.__chatObservedRoot = null;
+    this.__chatObserver = null;
   }
 
   updated(changedProperties) {
@@ -249,6 +252,17 @@ class HiveFWPanel extends BasePanel {
     const chat = this.shadowRoot?.querySelector("hivefw-integration-page");
     const croot = chat?.shadowRoot;
     if (!croot) return;
+
+    if (this.__chatObservedRoot !== croot) {
+      this.__chatObserver?.disconnect();
+      this.__chatObservedRoot = croot;
+      this.__chatObserver = new MutationObserver(() => {
+        queueMicrotask(() => {
+          if (this._activeTab === "chat") this.__enhanceChatUi();
+        });
+      });
+      this.__chatObserver.observe(croot, { childList: true, subtree: true });
+    }
 
     if (!croot.querySelector("#hivefw-chat-layout-style")) {
       const style = document.createElement("style");
