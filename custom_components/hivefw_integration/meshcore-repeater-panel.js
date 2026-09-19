@@ -1636,10 +1636,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const active24=contacts.filter((contact)=>activeAt(contact)>0&&nowSec-activeAt(contact)<=86400).length;
     const active7d=contacts.filter((contact)=>activeAt(contact)>0&&nowSec-activeAt(contact)<=7*86400).length;
     const gps=contacts.filter((contact)=>this.__nodeCoords(contact)).length;
+    const favorites=contacts.filter((contact)=>this.__nodeMeta(contact).favorite).length;
     if(contacts.length){
       hero.appendChild(makeTile(
         "Atividade da rede",active24+" / "+contacts.length,
-        "· 24h · "+active7d+" em 7d · "+gps+" GPS",
+        "· 24h · "+active7d+" em 7d · "+gps+" GPS · "+favorites+" ★",
         Math.min(100,contacts.length?active24/contacts.length*100:0),0,100,"info","network-activity"
       ));
     }
@@ -2442,6 +2443,8 @@ class MeshCoreRepeaterPanel extends BasePanel {
     nroot.querySelectorAll(".map-selection").forEach((el)=>{
       el.remove();
     });
+    this.__decorateNodeCards(nroot);
+    window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -2472,6 +2475,79 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
     this.__nodesInitialViewport=null;
+  }
+
+  __nodeMetaStorageKey() {
+    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
+    return "hivefw.node_meta.v1."+entry;
+  }
+
+  __loadNodeMetaMap() {
+    try{
+      const parsed=JSON.parse(localStorage.getItem(this.__nodeMetaStorageKey())||"{}");
+      return parsed&&typeof parsed==="object"?parsed:{};
+    }catch{return {};}
+  }
+
+  __saveNodeMetaMap(map) {
+    try{localStorage.setItem(this.__nodeMetaStorageKey(),JSON.stringify(map||{}));}catch{}
+  }
+
+  __nodeMeta(contact) {
+    const key=String(contact?.public_key||"").trim().toLowerCase();
+    if(!/^[0-9a-f]{64}$/.test(key))return {favorite:false,tags:[]};
+    const value=this.__loadNodeMetaMap()[key]||{};
+    return {
+      favorite:!!value.favorite,
+      tags:Array.isArray(value.tags)?value.tags.map(String).filter(Boolean).slice(0,8):[],
+    };
+  }
+
+  __setNodeMeta(contact,patch) {
+    const key=String(contact?.public_key||"").trim().toLowerCase();
+    if(!/^[0-9a-f]{64}$/.test(key))return;
+    const map=this.__loadNodeMetaMap();
+    const previous=map[key]||{};
+    const next={
+      favorite:patch.favorite!==undefined?!!patch.favorite:!!previous.favorite,
+      tags:Array.isArray(patch.tags)?patch.tags.slice(0,8):(Array.isArray(previous.tags)?previous.tags.slice(0,8):[]),
+    };
+    if(!next.favorite&&!next.tags.length)delete map[key];
+    else map[key]=next;
+    this.__saveNodeMetaMap(map);
+    this.__nodesMapSignature="";
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    const nroot=page?.shadowRoot;
+    if(nroot)this.__decorateNodeCards(nroot);
+    if(this.__nodesMapPane?.isConnected){
+      void this.__ensureSplitMap(page,this.__nodesMapPane);
+    }
+    if(this.__nodesPersistentPopup){
+      this.__openPersistentNodePopup(contact);
+    }
+    if(this._activeTab==="settings")this.__enhanceSettingsPage();
+  }
+
+  __decorateNodeCards(nroot) {
+    if(!nroot)return;
+    for(const card of nroot.querySelectorAll("meshcore-contact-card")){
+      const root=card.shadowRoot;
+      const name=root?.querySelector(".contact-name");
+      if(!name)continue;
+      let badge=root.querySelector(".hive-node-meta-inline");
+      if(!badge){
+        badge=document.createElement("span");
+        badge.className="hive-node-meta-inline";
+        badge.style.cssText="margin-left:5px;font-size:10px;color:var(--primary-color,#03a9f4);font-weight:650;";
+        name.appendChild(badge);
+      }
+      const meta=this.__nodeMeta(card.contact);
+      const parts=[];
+      if(meta.favorite)parts.push("★");
+      parts.push(...meta.tags.slice(0,2).map((tag)=>"#"+tag));
+      badge.textContent=parts.length?" "+parts.join(" "):"";
+      badge.hidden=!parts.length;
+    }
   }
 
   async __loadNodesMapContacts() {
@@ -2661,7 +2737,22 @@ class MeshCoreRepeaterPanel extends BasePanel {
     header.appendChild(title);
 
     const publicKeyForAction=String(contact.public_key||"").trim();
-    if(!contact.__hivefw_local__ && /^[0-9a-fA-F]{64}$/.test(publicKeyForAction)){
+    const hasRealKey=/^[0-9a-fA-F]{64}$/.test(publicKeyForAction);
+    if(hasRealKey){
+      const meta=this.__nodeMeta(contact);
+      const favorite=document.createElement("button");
+      favorite.type="button";
+      favorite.textContent=meta.favorite?"★":"☆";
+      favorite.title=meta.favorite?"Remover dos favoritos":"Adicionar aos favoritos";
+      favorite.setAttribute("aria-label",favorite.title);
+      favorite.style.cssText="flex:0 0 auto;width:30px;height:30px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:var(--warning-color,#ff9800);font-size:18px;line-height:1;cursor:pointer;";
+      favorite.addEventListener("click",(event)=>{
+        event.preventDefault();event.stopPropagation();
+        this.__setNodeMeta(contact,{favorite:!meta.favorite});
+      });
+      header.appendChild(favorite);
+    }
+    if(!contact.__hivefw_local__ && hasRealKey){
       const added=!!contact.added_to_node;
       const contactAction=document.createElement("button");
       contactAction.type="button";
@@ -2688,6 +2779,38 @@ class MeshCoreRepeaterPanel extends BasePanel {
     }
 
     root.appendChild(header);
+
+    if(hasRealKey){
+      const meta=this.__nodeMeta(contact);
+      const tagRow=document.createElement("div");
+      tagRow.style.cssText="display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:-2px 0 8px;";
+      for(const tag of meta.tags){
+        const chip=document.createElement("button");
+        chip.type="button";
+        chip.textContent="#"+tag+" ×";
+        chip.title="Remover tag "+tag;
+        chip.style.cssText="padding:3px 6px;border:1px solid var(--divider-color,#ccc);border-radius:999px;background:var(--secondary-background-color,#f5f5f5);color:var(--secondary-text-color,#666);font-size:10px;cursor:pointer;";
+        chip.addEventListener("click",(event)=>{
+          event.preventDefault();event.stopPropagation();
+          this.__setNodeMeta(contact,{tags:meta.tags.filter((value)=>value!==tag)});
+        });
+        tagRow.appendChild(chip);
+      }
+      const addTag=document.createElement("button");
+      addTag.type="button";addTag.textContent="+ Tag";addTag.title="Adicionar tag local";
+      addTag.style.cssText="padding:3px 7px;border:1px dashed var(--divider-color,#aaa);border-radius:999px;background:transparent;color:var(--primary-color,#03a9f4);font-size:10px;font-weight:650;cursor:pointer;";
+      addTag.addEventListener("click",(event)=>{
+        event.preventDefault();event.stopPropagation();
+        const raw=window.prompt("Nova tag para este nó:","");
+        if(raw==null)return;
+        const tag=raw.trim().replace(/^#+/,"").replace(/\s+/g," ").slice(0,24);
+        if(!tag)return;
+        const next=[...new Set([...meta.tags,tag])].slice(0,8);
+        this.__setNodeMeta(contact,{tags:next});
+      });
+      tagRow.appendChild(addTag);
+      root.appendChild(tagRow);
+    }
 
     const typeLabels={0:"Client/Unknown",1:"Client",2:"Repeater",3:"Room Server",4:"Sensor"};
     const rows=[];
@@ -2865,7 +2988,10 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const id=this.__nodeId(contact);
       const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
       const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0});
-      marker.bindTooltip?.(isLocal?`${name} · local`:name,{
+      const meta=this.__nodeMeta(contact);
+      const tagText=meta.tags.length?" · "+meta.tags.map((tag)=>"#"+tag).join(" "):"";
+      const tooltipName=(meta.favorite?"★ ":"")+name+(isLocal?" · local":"")+tagText;
+      marker.bindTooltip?.(tooltipName,{
         direction:"top",
         offset:[0,-12],
         permanent:isLocal,
@@ -3027,7 +3153,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const signature=mapContacts.map((c)=>{
       const p=this.__nodeCoords(c);
-      return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}:${String(c?.adv_name||"")}:${c?.__hivefw_local?1:0}`;
+      const meta=this.__nodeMeta(c); return `${this.__nodeId(c)}:${p?.[0]}:${p?.[1]}:${c?.map_entity_id||""}:${String(c?.adv_name||"")}:${c?.__hivefw_local?1:0}:${meta.favorite?1:0}:${meta.tags.join(",")}`;
     }).join("|");
 
     const count=pane.querySelector(".hive-map-count");
