@@ -120,11 +120,6 @@ def _sync_engine_repair_issue(hass: HomeAssistant) -> None:
 # partially-initialized package when ws_api.py executes its top-level
 # imports during package load. The deliberate-ordering noqa silences the
 # E402 module-level-import-not-at-top warning.
-from .ws_api import async_register_ws_commands  # noqa: E402
-from .engine.integration import async_setup_entry as async_setup_engine_entry  # noqa: E402
-from .engine.integration import async_unload_entry as async_unload_engine_entry  # noqa: E402
-
-
 DEFAULT_OBSERVABILITY_SETTINGS: dict[str, Any] = {
     "noise_floor_warn": -105.0,
     "tx_queue_warn": 5.0,
@@ -271,6 +266,15 @@ async def _async_evaluate_health(
                 "health_state": runtime.health_state,
             }
         )
+
+
+# Deferred imports: ws_api back-imports the runtime-data class plus
+# observability defaults/helpers from this module. Keep these imports below
+# all of those definitions so partial package initialization cannot expose
+# missing symbols.
+from .ws_api import async_register_ws_commands  # noqa: E402
+from .engine.integration import async_setup_entry as async_setup_engine_entry  # noqa: E402
+from .engine.integration import async_unload_entry as async_unload_engine_entry  # noqa: E402
 
 
 async def async_setup_entry(
