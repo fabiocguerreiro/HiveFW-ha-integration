@@ -3975,7 +3975,7 @@ async def ws_trace(
         msg.get("entry_id"),
         msg.get("pubkey_prefix", ""),
         trace_result,
-        source="manual",
+        source=msg.get("source", "manual"),
     )
     connection.send_result(msg["id"], trace_result)
 
@@ -4116,7 +4116,7 @@ async def _ws_trace_explicit(
                     msg.get("entry_id"),
                     pubkey_prefix,
                     trace_result,
-                    source="explicit",
+                    source=msg.get("source", "explicit"),
                 )
                 connection.send_result(msg["id"], trace_result)
             except asyncio.TimeoutError:
