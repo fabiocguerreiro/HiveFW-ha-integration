@@ -1,17 +1,22 @@
 # HiveFW
 
-Sidebar chat panel and persistent message store for the MeshCore mesh radio network.
+Integração standalone para ligar e gerir um **HiveFW Companion-Repeater** diretamente no Home Assistant.
 
-A **companion** integration: works alongside the [core meshcore integration](https://github.com/meshcore-dev/meshcore-ha) without modifying it. Install both.
+O HiveFW possui a ligação TCP/Wi-Fi, BLE ou USB ao rádio e fornece, numa única integração:
 
-![HiveFW panel](https://raw.githubusercontent.com/mwolter805/meshcore-ha-chat/main/assets/screenshots/chat-tab.jpg)
+- painel lateral HiveFW;
+- métricas e configuração do dispositivo;
+- Chat & Canais;
+- Nós + mapa;
+- Vizinhos;
+- Console;
+- histórico/unread;
+- RX Log;
+- Trace / Route Health;
+- contactos e canais.
 
-**Features:**
+**Não requer uma integração Home Assistant MeshCore separada.**
 
-- Sidebar chat panel — channels, DMs, contacts
-- Persistent message history
-- Trace / path-discovery dialog
-- Per-conversation search
-- Unread counts and delivery status
+O protocolo/SDK MeshCore continua a ser usado internamente como base de comunicação.
 
-**Requires:** Home Assistant 2024.12+, the core meshcore integration installed and configured.
+Requisitos: Home Assistant 2024.12+ e um Companion compatível. Para a experiência completa é recomendado o firmware [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
