@@ -63,6 +63,11 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__rxLogRows = [];
     this.__rxLogLoading = false;
 
+    this.__lastSeenTraceResult = null;
+    this.__lastTrace = null;
+    this.__lastTraceLoadedEntry = null;
+    this.__traceRouteLayer = null;
+
     this.__hiveNeighbors = null;
     this.__hiveNeighborsLoading = false;
     this.__hiveNeighborsError = null;
@@ -75,6 +80,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     if (super.updated) {
       super.updated(changedProperties);
     }
+    this.__captureTraceResult();
     this.__enhanceRepeaterUi();
   }
 
@@ -2168,6 +2174,171 @@ class MeshCoreRepeaterPanel extends BasePanel {
     await this.__sendRemoteRegionCommand(`region ${this.__regionAction} ${name}`,sroot);
   }
 
+  __lastTraceStorageKey() {
+    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
+    return "hivefw.last_trace.v1."+entry;
+  }
+
+  __loadLastTrace() {
+    const entry=String(this.__entryId()||"default");
+    if(this.__lastTraceLoadedEntry===entry)return this.__lastTrace;
+    this.__lastTraceLoadedEntry=entry;
+    try{
+      const parsed=JSON.parse(localStorage.getItem(this.__lastTraceStorageKey())||"null");
+      this.__lastTrace=parsed&&parsed.result?parsed:null;
+    }catch{this.__lastTrace=null;}
+    return this.__lastTrace;
+  }
+
+  __recordTraceResult(result,target,source="manual") {
+    if(!result||!target)return;
+    const trace={
+      timestamp:Date.now(),
+      source,
+      target:{
+        public_key:String(target.public_key||""),
+        pubkey_prefix:String(target.pubkey_prefix||""),
+        adv_name:String(target.adv_name||target.name||target.pubkey_prefix||"Nó"),
+        adv_lat:Number(target.adv_lat??target.latitude),
+        adv_lon:Number(target.adv_lon??target.longitude),
+      },
+      result:{
+        round_trip_ms:Number(result.round_trip_ms||0),
+        response_time:String(result.response_time||((Number(result.round_trip_ms)||0)+"ms")),
+        hops:Number(result.hops||0),
+        final_snr:result.final_snr==null?null:Number(result.final_snr),
+        path:Array.isArray(result.path)?result.path.map((hop)=>({
+          hash:hop?.hash==null?undefined:String(hop.hash),
+          snr:Number(hop?.snr),
+        })):[],
+      },
+    };
+    this.__lastTrace=trace;
+    this.__lastTraceLoadedEntry=String(this.__entryId()||"default");
+    try{localStorage.setItem(this.__lastTraceStorageKey(),JSON.stringify(trace));}catch{}
+    this.__drawLastTraceRoute();
+  }
+
+  __captureTraceResult() {
+    const result=this._traceDialogResult;
+    if(!result||result===this.__lastSeenTraceResult)return;
+    this.__lastSeenTraceResult=result;
+    const target=this._traceDialogTargetContact;
+    if(target)this.__recordTraceResult(result,target,"manual");
+  }
+
+  __clearLastTrace() {
+    try{localStorage.removeItem(this.__lastTraceStorageKey());}catch{}
+    this.__lastTrace=null;
+    this.__removeTraceRouteLayer();
+    this.__nodesMapPane?.querySelector(".hive-trace-summary")?.remove();
+  }
+
+  __removeTraceRouteLayer() {
+    const map=this.__nodesMapElement?.leafletMap;
+    if(this.__traceRouteLayer&&map){try{map.removeLayer(this.__traceRouteLayer);}catch{}}
+    this.__traceRouteLayer=null;
+  }
+
+  __resolveTraceHash(hash) {
+    const wanted=String(hash||"").trim().replace(/^0x/i,"").toLowerCase();
+    if(!wanted)return null;
+    const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:(Array.isArray(this._contacts)?this._contacts:[]);
+    const matches=source.filter((contact)=>{
+      if(!this.__nodeCoords(contact))return false;
+      const key=String(contact?.public_key||"").toLowerCase();
+      const prefix=String(contact?.pubkey_prefix||key.slice(0,12)).toLowerCase();
+      return key.startsWith(wanted)||prefix.startsWith(wanted);
+    });
+    if(matches.length!==1)return null;
+    return matches[0];
+  }
+
+  __traceTargetContact(trace) {
+    if(!trace?.target)return null;
+    const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:(Array.isArray(this._contacts)?this._contacts:[]);
+    const key=String(trace.target.public_key||"").toLowerCase();
+    const prefix=String(trace.target.pubkey_prefix||"").toLowerCase();
+    const found=source.find((contact)=>{
+      const ckey=String(contact?.public_key||"").toLowerCase();
+      const cp=String(contact?.pubkey_prefix||ckey.slice(0,12)).toLowerCase();
+      return (key&&ckey===key)||(prefix&&cp===prefix);
+    });
+    return found||trace.target;
+  }
+
+  __traceRouteData() {
+    const trace=this.__loadLastTrace();
+    if(!trace?.result)return null;
+    const target=this.__traceTargetContact(trace);
+    const local=this.__localRepeaterMapContact();
+    const points=[];
+    const resolved=[];
+    const unresolved=[];
+    const push=(contact,label,hash,snr)=>{
+      const coords=this.__nodeCoords(contact);
+      if(!coords)return;
+      const previous=points[points.length-1];
+      if(!previous||previous[0]!==coords[0]||previous[1]!==coords[1])points.push(coords);
+      resolved.push({contact,label,hash,snr,coords});
+    };
+    if(target&&this.__nodeCoords(target))push(target,String(target.adv_name||target.pubkey_prefix||"Destino"),null,null);
+    for(const hop of (trace.result.path||[])){
+      if(!hop?.hash)continue;
+      const contact=this.__resolveTraceHash(hop.hash);
+      if(contact)push(contact,String(contact.adv_name||contact.pubkey_prefix||hop.hash),String(hop.hash),hop.snr);
+      else unresolved.push(String(hop.hash));
+    }
+    if(local&&this.__nodeCoords(local))push(local,String(local.adv_name||"Local"),null,trace.result.final_snr);
+    return {trace,points,resolved,unresolved};
+  }
+
+  __drawLastTraceRoute() {
+    const pane=this.__nodesMapPane;
+    const mapEl=this.__nodesMapElement;
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
+    if(!pane||!map||!L)return;
+    this.__removeTraceRouteLayer();
+    pane.querySelector(".hive-trace-summary")?.remove();
+    const data=this.__traceRouteData();
+    if(!data)return;
+
+    if(data.points.length>=2){
+      const line=L.polyline(data.points,{weight:4,opacity:.78,dashArray:"9 6",interactive:false});
+      line.addTo(map);
+      this.__traceRouteLayer=line;
+    }
+
+    const summary=document.createElement("div");
+    summary.className="hive-trace-summary";
+    summary.style.cssText="position:absolute;left:10px;top:10px;z-index:35;max-width:min(360px,calc(100% - 20px));padding:8px 10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 93%,transparent);box-shadow:0 1px 5px rgba(0,0,0,.18);font-size:10px;color:var(--primary-text-color,#222);pointer-events:auto;";
+    const top=document.createElement("div");
+    top.style.cssText="display:flex;align-items:center;gap:8px;";
+    const label=document.createElement("strong");
+    label.style.flex="1";
+    label.textContent="Último Trace · "+String(data.trace.target?.adv_name||data.trace.target?.pubkey_prefix||"Nó");
+    const clear=document.createElement("button");
+    clear.type="button";clear.textContent="Limpar";
+    clear.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
+    clear.addEventListener("click",()=>this.__clearLastTrace());
+    top.append(label,clear);
+    const detail=document.createElement("div");
+    const parts=[data.trace.result.response_time||((data.trace.result.round_trip_ms||0)+"ms"),String(data.trace.result.hops||0)+" hops"];
+    if(Number.isFinite(Number(data.trace.result.final_snr)))parts.push("SNR "+Number(data.trace.result.final_snr).toFixed(1)+" dB");
+    if(data.unresolved.length)parts.push(data.unresolved.length+" hash não resolvido"+(data.unresolved.length===1?"":"s"));
+    detail.textContent=parts.join(" · ");
+    detail.style.cssText="margin-top:3px;color:var(--secondary-text-color,#666);";
+    summary.append(top,detail);
+    if(data.unresolved.length){
+      const hashes=document.createElement("div");
+      hashes.textContent="Sem GPS/ambíguos: "+data.unresolved.join(", ");
+      hashes.style.cssText="margin-top:3px;font:9px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
+      summary.appendChild(hashes);
+    }
+    pane.appendChild(summary);
+  }
+
   async __ensureMapLoaded() {
     if (customElements.get("ha-map")) return true;
     if (this.__mapLoadStarted) return false;
@@ -2601,6 +2772,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     const container=root?.querySelector(".page-container");
     container?.classList.remove("hive-nodes-split");
     if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.remove();
+    this.__removeTraceRouteLayer();
     this.__nodesMapPane=null;
     this.__closePersistentNodePopup();
     this.__nodesMapElement=null;
@@ -3341,6 +3513,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
         this.__nodesMapInitialViewEntry=entryId;
       }
     }
+    this.__drawLastTraceRoute();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
