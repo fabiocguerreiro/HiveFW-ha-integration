@@ -106,8 +106,8 @@ describe('channel-dialog region scope field', () => {
     const hint = dialog.shadowRoot!.querySelector('.scope-empty-hint');
     expect(hint).not.toBeNull();
     expect(hint!.textContent).toContain('Flood Scope Allowlist');
-    const link = hint!.querySelector('a');
-    expect(link!.getAttribute('href')).toBe('/config/integrations/integration/meshcore');
+    expect(hint!.querySelector('a')).toBeNull();
+    expect(hint!.textContent).toContain('HiveFW');
   });
 
   it('preselects the channel scope in edit mode', async () => {
