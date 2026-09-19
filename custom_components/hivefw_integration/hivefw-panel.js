@@ -129,6 +129,21 @@ class HiveFWPanel extends BasePanel {
     // side of the header deliberately minimal: connection state + battery +
     // the white HiveFW wordmark requested for the product identity.
     root.querySelectorAll(".header-right .device-info-wrap").forEach((el) => el.remove());
+    const connectionStatus = root.querySelector(".connection-status");
+    if (connectionStatus) {
+      const online = connectionStatus.classList.contains("online");
+      let label = connectionStatus.querySelector(".hivefw-connection-label");
+      if (!label) {
+        for (const node of [...connectionStatus.childNodes]) {
+          if (node.nodeType === Node.TEXT_NODE) node.remove();
+        }
+        label = document.createElement("span");
+        label.className = "hivefw-connection-label";
+        connectionStatus.appendChild(label);
+      }
+      label.textContent = online ? "Conectado" : "Desconectado";
+    }
+
     const headerRight = root.querySelector(".header-right");
     if (headerRight && !headerRight.querySelector(".hivefw-header-brand-white")) {
       const brand = document.createElement("span");
@@ -164,6 +179,10 @@ class HiveFWPanel extends BasePanel {
       this.__closeRxLog();
     }
 
+    if (this._activeTab === "chat") {
+      this.__enhanceChatUi();
+    }
+
     if (this._activeTab === "nodes") {
       this.__enhanceNodesPage();
       return;
@@ -181,7 +200,9 @@ class HiveFWPanel extends BasePanel {
       const container = root.querySelector(".page-container");
       if (!container) return;
       const overlay = this.__ensureConsoleOverlay(container);
-      this.__renderConsole(overlay);
+      if (!overlay.querySelector(".hivefw-console-page")) {
+        this.__renderConsole(overlay);
+      }
       return;
     }
 
@@ -224,7 +245,76 @@ class HiveFWPanel extends BasePanel {
     }
   }
 
-  __ensureTabs(root) {
+  __enhanceChatUi() {
+    const chat = this.shadowRoot?.querySelector("hivefw-integration-page");
+    const croot = chat?.shadowRoot;
+    if (!croot) return;
+
+    if (!croot.querySelector("#hivefw-chat-layout-style")) {
+      const style = document.createElement("style");
+      style.id = "hivefw-chat-layout-style";
+      style.textContent = `
+        .conversation-sidebar {
+          width: 330px !important;
+          min-width: 330px !important;
+        }
+        @media (max-width: 900px) {
+          .conversation-sidebar {
+            width: 300px !important;
+            min-width: 300px !important;
+          }
+        }
+        :host([narrow]) .conversation-sidebar {
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+      `;
+      croot.appendChild(style);
+    }
+
+    for (const bubbleHost of croot.querySelectorAll("meshcore-message-bubble")) {
+      const broot = bubbleHost.shadowRoot;
+      const group = bubbleHost.group;
+      if (!broot || !group?.messages) continue;
+
+      for (const msg of group.messages) {
+        const bubble = broot.querySelector(`.bubble[data-msg-id="${CSS.escape(String(msg.id))}"]`);
+        if (!bubble) continue;
+
+        let meta = bubble.querySelector(".hivefw-rx-meta");
+        const observations = Array.isArray(msg.rxLogData) ? msg.rxLogData : [];
+        if (!observations.length || msg.isOutgoing || msg.isSystem) {
+          meta?.remove();
+          continue;
+        }
+
+        const best = observations[observations.length - 1] || {};
+        const nodes = Array.isArray(best.path_nodes) ? best.path_nodes : [];
+        const rawHops = Number(best.hop_count);
+        const hops = Number.isFinite(rawHops)
+          ? rawHops
+          : (nodes.length ? nodes.length : 0);
+        const rssi = Number(best.rssi);
+        const snr = Number(best.snr);
+        const parts = [hops + " hop" + (hops === 1 ? "" : "s")];
+        if (Number.isFinite(rssi)) parts.push("RSSI " + Math.round(rssi) + " dBm");
+        if (Number.isFinite(snr)) parts.push("SNR " + snr.toFixed(1) + " dB");
+
+        if (!meta) {
+          meta = document.createElement("div");
+          meta.className = "hivefw-rx-meta";
+          meta.style.cssText =
+            "margin-top:3px;padding-top:3px;border-top:1px solid color-mix(in srgb,currentColor 12%,transparent);" +
+            "font:10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
+            "opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+          bubble.appendChild(meta);
+        }
+        meta.textContent = parts.join(" · ");
+      }
+    }
+  }
+
+    __ensureTabs(root) {
     const tabBar = root.querySelector(".tab-bar");
     if (!tabBar) return;
 
@@ -1707,54 +1797,61 @@ class HiveFWPanel extends BasePanel {
       style.id = "hivefw-cockpit-style";
       style.textContent = `
         .hero-row{
-          grid-template-columns:repeat(10,minmax(0,1fr))!important;
+          grid-template-columns:repeat(4,minmax(0,1fr))!important;
           grid-auto-flow:dense;
-          grid-auto-rows:1fr;
-          gap:8px!important;
+          gap:10px!important;
           align-items:stretch;
         }
-        .hero-row > .hero-tile{grid-column:span 2}
-        .hero-row > .hero-tile.hive-metric-compact{grid-column:span 1}
-        .hero-tile{min-height:82px!important;height:100%;box-sizing:border-box;padding:9px 10px!important;gap:5px!important}
-        .hero-tile-head{font-size:10px!important}
-        .hero-tile-value .primary{font-size:18px!important}
-        .hero-tile-value .secondary{font-size:11px!important}
+        .hero-row > .hero-tile{
+          grid-column:span 2;
+          min-width:0;
+        }
+        .hero-row > .hero-tile.hive-metric-compact{
+          grid-column:span 1;
+        }
+        .hero-tile{
+          min-height:96px!important;
+          height:100%;
+          box-sizing:border-box;
+          padding:12px 13px!important;
+          gap:7px!important;
+          border-radius:13px!important;
+        }
+        .hero-tile-head{
+          font-size:10px!important;
+          letter-spacing:.045em!important;
+          line-height:1.2;
+        }
+        .hero-tile-value .primary{
+          font-size:20px!important;
+          line-height:1.1!important;
+        }
+        .hero-tile-value .secondary{
+          font-size:10px!important;
+          line-height:1.3!important;
+          opacity:.82;
+        }
         .hero-tile.hive-metric-compact{
-          padding:9px 8px!important;
+          padding:11px 12px!important;
         }
         .hero-tile.hive-metric-compact .hero-tile-head{
           font-size:9px!important;
-          letter-spacing:.02em!important;
-          gap:4px!important;
           white-space:normal;
-          line-height:1.15;
-        }
-        .hero-tile.hive-metric-compact .hero-tile-value{
-          gap:3px!important;
         }
         .hero-tile.hive-metric-compact .hero-tile-value .primary{
-          font-size:16px!important;
+          font-size:17px!important;
           white-space:nowrap;
         }
-        .hero-tile.hive-metric-compact .hero-tile-value .secondary{
-          font-size:9px!important;
-          line-height:1.15;
-        }
-        @container(max-width:1050px){
-          .hero-row{grid-template-columns:repeat(8,minmax(0,1fr))!important}
-        }
-        @container(max-width:780px){
-          .hero-row{grid-template-columns:repeat(6,minmax(0,1fr))!important}
-        }
-        @container(max-width:560px){
-          .hero-row{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+        @container(max-width:900px){
+          .hero-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}
           .hero-row > .hero-tile{grid-column:span 2}
-          .hero-row > .hero-tile.hive-metric-compact{grid-column:span 2}
+          .hero-row > .hero-tile.hive-metric-compact{grid-column:span 1}
         }
-        @container(max-width:340px){
+        @container(max-width:520px){
           .hero-row{grid-template-columns:1fr!important}
           .hero-row > .hero-tile,
           .hero-row > .hero-tile.hive-metric-compact{grid-column:1!important}
+          .hero-tile{min-height:88px!important}
         }
       `;
       nroot.appendChild(style);
