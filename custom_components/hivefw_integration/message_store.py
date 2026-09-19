@@ -542,6 +542,7 @@ class MessageStore:
         """
         peers: dict[str, dict] = {}
         links: dict[str, dict] = {}
+        edges: dict[str, dict] = {}
 
         for entity_id in self._message_index:
             messages = await self._load_for_search(entity_id)
@@ -575,10 +576,14 @@ class MessageStore:
                     nodes = observation.get("path_nodes")
                     if not isinstance(nodes, list):
                         nodes = []
-                    for raw_hash in nodes:
-                        hop_hash = str(raw_hash or "").strip().lower()
-                        if not hop_hash:
-                            continue
+                    normalized_nodes = [
+                        str(raw_hash or "").strip().lower()
+                        for raw_hash in nodes
+                        if str(raw_hash or "").strip()
+                    ]
+
+                    for raw_hash in normalized_nodes:
+                        hop_hash = raw_hash
                         link = links.setdefault(
                             hop_hash,
                             {
@@ -605,6 +610,34 @@ class MessageStore:
                             link["snr_sum"] += snr
                             link["snr_count"] += 1
 
+                    # Consecutive path hashes are an observed adjacency.
+                    # Keep this deliberately conservative: endpoints and
+                    # ambiguous/non-consecutive nodes are never inferred.
+                    for left, right in zip(normalized_nodes, normalized_nodes[1:]):
+                        if left == right:
+                            continue
+                        a, b = sorted((left, right))
+                        edge_key = f"{a}|{b}"
+                        edge = edges.setdefault(
+                            edge_key,
+                            {
+                                "a": a,
+                                "b": b,
+                                "observations": 0,
+                                "rssi_sum": 0.0,
+                                "rssi_count": 0,
+                                "snr_sum": 0.0,
+                                "snr_count": 0,
+                            },
+                        )
+                        edge["observations"] += 1
+                        if rssi is not None:
+                            edge["rssi_sum"] += rssi
+                            edge["rssi_count"] += 1
+                        if snr is not None:
+                            edge["snr_sum"] += snr
+                            edge["snr_count"] += 1
+
         for link in links.values():
             link["avg_rssi"] = (
                 round(link["rssi_sum"] / link["rssi_count"], 1)
@@ -619,7 +652,21 @@ class MessageStore:
             for key in ("rssi_sum", "rssi_count", "snr_sum", "snr_count"):
                 link.pop(key, None)
 
-        return {"peers": peers, "links": links}
+        for edge in edges.values():
+            edge["avg_rssi"] = (
+                round(edge["rssi_sum"] / edge["rssi_count"], 1)
+                if edge["rssi_count"]
+                else None
+            )
+            edge["avg_snr"] = (
+                round(edge["snr_sum"] / edge["snr_count"], 1)
+                if edge["snr_count"]
+                else None
+            )
+            for key in ("rssi_sum", "rssi_count", "snr_sum", "snr_count"):
+                edge.pop(key, None)
+
+        return {"peers": peers, "links": links, "edges": edges}
 
     async def search(
         self,
