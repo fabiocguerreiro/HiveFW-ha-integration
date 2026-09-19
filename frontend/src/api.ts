@@ -72,6 +72,54 @@ export async function importContacts(
   return hass.callWS<ImportContactsResult>(msg);
 }
 
+export interface RxLogEntry {
+  message_id: string;
+  entity_id: string;
+  conversation_name: string;
+  timestamp: string;
+  sender: string;
+  text: string;
+  message_type: string;
+  outgoing: boolean;
+  channel_idx?: number;
+  pubkey_prefix?: string;
+  rssi?: number;
+  snr?: number;
+  hop_count?: number;
+  path?: string | string[];
+  path_len?: number;
+  path_nodes?: string[];
+  observation_index?: number;
+  synthesized?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RxLogResponse {
+  rows: RxLogEntry[];
+  count: number;
+  incoming_only: boolean;
+  source: string;
+}
+
+/**
+ * Return bounded RX observations already persisted with messages.
+ * This reads local HA storage only; it does not transmit over the mesh.
+ */
+export async function getRxLog(
+  hass: HomeAssistant,
+  limit = 150,
+  incomingOnly = true,
+  entryId?: string,
+): Promise<RxLogResponse> {
+  const msg: Record<string, unknown> = {
+    type: 'hivefw_integration/get_rx_log',
+    limit,
+    incoming_only: incomingOnly,
+  };
+  if (entryId) msg.entry_id = entryId;
+  return hass.callWS<RxLogResponse>(msg);
+}
+
 /**
  * Get list of channels
  */

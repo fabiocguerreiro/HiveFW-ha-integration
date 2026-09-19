@@ -570,6 +570,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_import_contacts)
 
     # Message store commands
+    websocket_api.async_register_command(hass, ws_get_rx_log)
     websocket_api.async_register_command(hass, ws_get_stored_messages)
     websocket_api.async_register_command(hass, ws_get_stored_message_count)
     websocket_api.async_register_command(hass, ws_search_stored_messages)
@@ -3838,6 +3839,98 @@ def ws_set_contact_blocked(
 # ================================================================
 # Message Store commands
 # ================================================================
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/get_rx_log",
+        vol.Optional("limit", default=150): vol.All(int, vol.Range(min=1, max=500)),
+        vol.Optional("incoming_only", default=True): bool,
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_rx_log(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict,
+) -> None:
+    """Return a bounded RX-observation log derived from stored message metadata.
+
+    This is not a raw-radio packet logger. It exposes rx_log_data already
+    captured by the upstream meshcore integration and persisted by HiveFW,
+    so reading it creates no additional LoRa traffic.
+    """
+    store = _get_store(hass, None)
+    if store is None:
+        connection.send_error(
+            msg["id"], "not_found", "No HiveFW message store found"
+        )
+        return
+
+    limit = msg.get("limit", 150)
+    incoming_only = bool(msg.get("incoming_only", True))
+    rows: list[dict] = []
+
+    for entity_id in list(store.get_message_index().keys()):
+        messages = await store._load_for_search(entity_id)
+        state = hass.states.get(entity_id)
+        conversation_name = (
+            state.attributes.get("friendly_name", entity_id)
+            if state
+            else entity_id
+        )
+
+        for message in reversed(messages):
+            outgoing = bool(message.get("outgoing", False))
+            if incoming_only and outgoing:
+                continue
+
+            base = {
+                "message_id": message.get("id", ""),
+                "entity_id": entity_id,
+                "conversation_name": conversation_name,
+                "timestamp": message.get("timestamp", ""),
+                "sender": message.get("sender", ""),
+                "text": (message.get("text", "") or "")[:160],
+                "message_type": message.get("message_type", ""),
+                "outgoing": outgoing,
+                "channel_idx": message.get("channel_idx"),
+                "pubkey_prefix": message.get("pubkey_prefix"),
+            }
+
+            observations = message.get("rx_log_data")
+            if isinstance(observations, list) and observations:
+                for idx, observation in enumerate(observations):
+                    if not isinstance(observation, dict):
+                        continue
+                    row = dict(base)
+                    row.update(observation)
+                    row["observation_index"] = idx
+                    rows.append(row)
+            elif any(
+                message.get(key) is not None
+                for key in ("rssi", "snr", "hop_count")
+            ):
+                row = dict(base)
+                for key in ("rssi", "snr", "hop_count", "path", "path_len"):
+                    if message.get(key) is not None:
+                        row[key] = message.get(key)
+                row["synthesized"] = True
+                row["observation_index"] = 0
+                rows.append(row)
+
+    rows.sort(key=lambda row: str(row.get("timestamp", "")), reverse=True)
+    rows = rows[:limit]
+    connection.send_result(
+        msg["id"],
+        {
+            "rows": rows,
+            "count": len(rows),
+            "incoming_only": incoming_only,
+            "source": "stored_message_rx_log",
+        },
+    )
 
 
 @websocket_api.websocket_command(

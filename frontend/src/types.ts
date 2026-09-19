@@ -240,6 +240,11 @@ export interface Contact {
   [key: string]: unknown;
 }
 
+export interface HiveNodeMeta {
+  favorite: boolean;
+  tags: string[];
+}
+
 /**
  * Channel from meshcore/get_channels WebSocket API
  */
