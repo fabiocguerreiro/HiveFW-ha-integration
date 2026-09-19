@@ -369,7 +369,7 @@ Projetos relacionados:
 
 ## Histórico de alterações
 
-O histórico detalhado é mantido pelo Git e pelas releases/commits do repositório, evitando duplicar documentação de versões antigas num changelog manual. A release 1.1.0 corresponde à conclusão da fase funcional descrita no ROADMAP; depois da validação em hardware esse ficheiro pode ser removido.
+O histórico detalhado é mantido pelo Git e pelas releases/commits do repositório, evitando duplicar documentação de versões antigas num changelog manual. A versão 1.1.0 corresponde à conclusão da fase funcional descrita no ROADMAP; depois da validação em hardware esse ficheiro pode ser removido.
 
 ## Disclaimer
 
