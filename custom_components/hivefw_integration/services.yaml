@@ -1,0 +1,340 @@
+send_message:
+  name: Send message
+  description: Send a text message to a MeshCore node by name or public key.
+  fields:
+    node_id:
+      name: Node ID
+      description: The name of the node to send the message to.
+      required: false
+      example: "node1"
+      selector:
+        text:
+    pubkey_prefix:
+      name: Public Key Prefix
+      description: The public key prefix (at least 6 characters) of the node to send the message to.
+      required: false
+      example: "f293ac"
+      selector:
+        text:
+    message:
+      name: Message
+      description: The message to send.
+      required: true
+      example: "Hello from Home Assistant!"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+send_channel_message:
+  name: Send channel message
+  description: Send a text message to a MeshCore public channel.
+  fields:
+    channel_idx:
+      name: Channel Index
+      description: The index number of the channel to send to.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    message:
+      name: Message
+      description: The message to send to the channel.
+      required: true
+      example: "Hello from Home Assistant!"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+    scope:
+      name: Flood Scope
+      description: >-
+        Optional region scope for the message. Use a hashtag region name (e.g. "pl-mz" or "#pl-mz")
+        to restrict the flood to that region. Leave empty to send with no scope (global flood).
+        The scope is applied only for this send and reset to no scope immediately after.
+      required: false
+      example: "pl-mz"
+      selector:
+        text:
+
+send_ui_message:
+  name: Send UI Message
+  description: >-
+    Send a message using the UI helpers belonging to one MeshCore config entry.
+    Helper entities are resolved by registry identity, so renamed entity IDs are supported.
+    Call this service directly from a button card for a seamless messaging interface.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID. Required when multiple MeshCore devices are configured.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+execute_command:
+  name: Execute MeshCore Command
+  description: >-
+    Execute a command provided by the MeshCore Python library. This is an advanced feature
+    that provides direct access to the underlying commands interface.
+    CAUTION: Some commands will make PERMANENT CHANGES to your node's configuration. Use with care.
+  fields:
+    command:
+      name: Command
+      description: >-
+        The command with parameters to execute. Format is "[command_name] [param1] [param2] ..."
+        Examples:
+        - set_name "MyDevice"
+        - send_msg "f293ac" "Hello from Home Assistant!"
+        - get_bat
+        - set_tx_power 20
+        - set_coords 37.7749 -122.4194
+      required: true
+      example: "set_name \"MyDevice\""
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+    record_to_console:
+      name: Record to CLI Console
+      description: >-
+        Record the command and its response to the CLI Console transcript and fire the
+        meshcore_cli_response event, so the output is visible in the UI. Requires the
+        CLI Console to be enabled in Global Settings. Defaults to false.
+      required: false
+      example: true
+      default: false
+      selector:
+        boolean:
+
+execute_command_ui:
+  name: Execute Command from UI
+  description: >-
+    Execute a command using the command helper belonging to one MeshCore config entry.
+    The helper is resolved by registry identity, so renamed entity IDs are supported.
+    It will automatically clear the input field after execution.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID. Required when multiple MeshCore devices are configured.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+    record_to_console:
+      name: Record to CLI Console
+      description: >-
+        Record the command and its response to the CLI Console transcript and fire the
+        meshcore_cli_response event, so the output is visible in the UI. Requires the
+        CLI Console to be enabled in Global Settings. Defaults to false.
+      required: false
+      example: true
+      default: false
+      selector:
+        boolean:
+
+cli_console_clear:
+  name: Clear CLI Console
+  description: >-
+    Clear the CLI Console transcript. With no entry_id, clears every configured device's console.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to clear all.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+add_selected_contact:
+  name: Add Selected Contact
+  description: Add the contact selected in the discovered contact select entity to your node's contact list.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+remove_selected_contact:
+  name: Remove Selected Contact
+  description: Remove the contact selected in the added contact select entity from your node's contact list.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+remove_discovered_contact:
+  name: Remove Discovered Contact
+  description: >-
+    Remove a discovered contact from the discovered contacts list.
+    This will remove the contact from Home Assistant but does NOT remove it from your node's contact list.
+    You can specify the pubkey_prefix directly, or leave it blank to use the selected contact from the discovered contact select entity.
+  fields:
+    pubkey_prefix:
+      name: Public Key Prefix
+      description: The public key prefix (at least 6 characters) of the contact to remove. Leave empty to use the selected contact from the discovered contact select entity.
+      required: false
+      example: "f293ac"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+cleanup_unavailable_contacts:
+  name: Cleanup Unavailable Contacts
+  description: Remove all unavailable MeshCore contact binary sensors from Home Assistant.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to clean all devices.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+get_contacts:
+  name: Get Contacts
+  description: >-
+    Return the device's known contacts as a structured list.
+    Use this instead of string-scraping execute_command output — the response
+    shape is stable across releases. See the companion-integration API docs for
+    the full schema.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+get_discovered_contact:
+  name: Get Discovered Contact
+  description: >-
+    Return the full data dict for a single discovered (un-added) contact,
+    matched by public-key prefix. In data-only mode discovered contacts have
+    no per-contact entity, so this is the supported way to inspect one. The
+    returned data is the same already exposed via get_contacts and the
+    discovered-contact dropdown.
+  fields:
+    pubkey_prefix:
+      name: Public Key Prefix
+      description: The public key prefix (e.g. the 12-character prefix shown in the discovered-contact dropdown) of the contact to look up. A full public key also works.
+      required: true
+      example: "f293ac1b2c3d"
+      selector:
+        text:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+get_channels:
+  name: Get Channels
+  description: >-
+    Return the device's configured channels as a structured list. The shared
+    secret is never leaked — only its presence is reported via
+    shared_secret_present.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+trace:
+  name: Trace Contact
+  description: >-
+    Trace the route to a contact and return hop count, per-hop path, and
+    round-trip time. The contact must be saved to the device — discovered-only
+    contacts return {"trace": null, "error": "contact_not_on_device"}. For
+    flood contacts a path-discovery pass runs first; the result is used to
+    build the trace. On timeout or any failure, returns {"trace": null,
+    "error": "..."} so automations always get a structured response.
+  fields:
+    pubkey_prefix:
+      name: Public Key Prefix
+      description: The public key prefix (at least 6 characters) of the contact to trace.
+      required: true
+      example: "f293ac"
+      selector:
+        text:
+    timeout:
+      name: Timeout
+      description: Maximum seconds to wait for the trace response. The effective timeout also respects the firmware's suggested_timeout.
+      required: false
+      default: 15
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: seconds
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
+
+clear_discovered_contacts:
+  name: Clear Discovered Contacts
+  description: >-
+    Remove discovered contacts and their associated binary sensor entities from Home Assistant.
+    When days_threshold is specified, only contacts whose last update is older than the threshold
+    are removed and contacts saved to the node are preserved. Without days_threshold, all
+    discovered contacts are removed. This does NOT remove contacts from your node's contact list.
+  fields:
+    days_threshold:
+      name: Days Threshold
+      description: Only remove contacts whose last update is older than this many days. Contacts saved to the node are always preserved. If omitted, all discovered contacts are removed.
+      required: false
+      example: "30"
+      selector:
+        number:
+          min: 1
+          max: 365
+          unit_of_measurement: days
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID if you have multiple MeshCore devices. Leave empty to use the first available device.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:

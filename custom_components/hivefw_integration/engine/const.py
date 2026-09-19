@@ -1,0 +1,229 @@
+# Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
+# Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
+"""Constants for the MeshCore integration."""
+
+from enum import IntEnum
+from typing import Final
+
+DOMAIN: Final = "meshcore"
+
+# Connection types
+CONF_CONNECTION_TYPE: Final = "connection_type"
+CONF_USB_PATH: Final = "usb_path"
+CONF_BLE_ADDRESS: Final = "ble_address"
+CONF_TCP_HOST: Final = "tcp_host"
+CONF_TCP_PORT: Final = "tcp_port"
+CONF_BAUDRATE: Final = "baudrate"
+DEFAULT_BAUDRATE: Final = 115200
+DEFAULT_TCP_PORT: Final = 5000
+CONF_NAME: Final = "name"
+CONF_PUBKEY: Final = "pubkey"
+
+# Connection type options
+CONNECTION_TYPE_USB: Final = "usb"
+CONNECTION_TYPE_BLE: Final = "ble"
+CONNECTION_TYPE_TCP: Final = "tcp"
+
+# Incoming Companion queue ownership (preserve existing behavior by default).
+CONF_CONSUME_INCOMING_MESSAGES: Final = "consume_incoming_messages"
+
+# Polling settings
+CONF_SCAN_INTERVAL: Final = "scan_interval"
+DEFAULT_SCAN_INTERVAL: Final = 30  # seconds
+
+# Services
+SERVICE_SEND_MESSAGE: Final = "send_message"
+SERVICE_SEND_CHANNEL_MESSAGE: Final = "send_channel_message"
+SERVICE_EXECUTE_COMMAND: Final = "execute_command"
+SERVICE_EXECUTE_COMMAND_UI: Final = "execute_command_ui"
+SERVICE_CLI_CLEAR: Final = "cli_console_clear"
+SERVICE_MESSAGE_SCRIPT: Final = "send_ui_message"
+SERVICE_ADD_SELECTED_CONTACT: Final = "add_selected_contact"
+SERVICE_REMOVE_SELECTED_CONTACT: Final = "remove_selected_contact"
+SERVICE_REMOVE_DISCOVERED_CONTACT: Final = "remove_discovered_contact"
+SERVICE_CLEANUP_UNAVAILABLE_CONTACTS: Final = "cleanup_unavailable_contacts"
+SERVICE_CLEAR_DISCOVERED_CONTACTS: Final = "clear_discovered_contacts"
+SERVICE_GET_CONTACTS: Final = "get_contacts"
+SERVICE_GET_DISCOVERED_CONTACT: Final = "get_discovered_contact"
+SERVICE_GET_CHANNELS: Final = "get_channels"
+SERVICE_TRACE: Final = "trace"
+
+# Select entity placeholders
+SELECT_NO_CONTACTS: Final = "Select a contact..."
+SELECT_NO_DISCOVERED: Final = "No discovered contacts"
+SELECT_NO_ADDED: Final = "No added contacts"
+ATTR_NODE_ID: Final = "node_id"
+ATTR_PUBKEY_PREFIX: Final = "pubkey_prefix"
+ATTR_CHANNEL_IDX: Final = "channel_idx"
+ATTR_MESSAGE: Final = "message"
+ATTR_COMMAND: Final = "command"
+ATTR_ENTRY_ID: Final = "entry_id"
+ATTR_SCOPE: Final = "scope"
+# When set on execute_command / execute_command_ui, the command/response pair is
+# recorded to the CLI Console transcript and the meshcore_cli_response event fires.
+ATTR_RECORD_TO_CONSOLE: Final = "record_to_console"
+
+# Platform constants
+PLATFORM_MESSAGE: Final = "message"
+
+# Entity naming constants
+ENTITY_DOMAIN_BINARY_SENSOR: Final = "binary_sensor"
+ENTITY_DOMAIN_SENSOR: Final = "sensor"
+ENTITY_DOMAIN_BUTTON: Final = "button"
+DEFAULT_DEVICE_NAME: Final = "meshcore"
+MESSAGES_SUFFIX: Final = "messages"
+CONTACT_SUFFIX: Final = "contact"
+ONLINE_SUFFIX: Final = "online"
+CHANNEL_PREFIX: Final = "ch_"
+
+# Repeater subscription constants
+CONF_REPEATER_SUBSCRIPTIONS: Final = "repeater_subscriptions"
+CONF_REPEATER_NAME: Final = "repeater_name"
+CONF_REPEATER_PASSWORD: Final = "password"
+CONF_REPEATER_UPDATE_INTERVAL: Final = "update_interval"
+CONF_REPEATER_TELEMETRY_ENABLED: Final = "telemetry_enabled"
+CONF_REPEATER_DISABLE_PATH_RESET: Final = "disable_path_reset"
+CONF_REPEATER_NEIGHBORS_ENABLED: Final = "neighbors_enabled"
+DEFAULT_REPEATER_UPDATE_INTERVAL: Final = 7200  # 2 hours in seconds
+MIN_UPDATE_INTERVAL: Final = 300  # 5 minutes minimum
+MAX_REPEATER_FAILURES_BEFORE_LOGIN: Final = 5  # After this many failures, try login
+
+# Client tracking constants
+CONF_TRACKED_CLIENTS: Final = "tracked_clients"
+CONF_CLIENT_NAME: Final = "client_name"
+CONF_CLIENT_UPDATE_INTERVAL: Final = "update_interval"
+CONF_CLIENT_DISABLE_PATH_RESET: Final = "disable_path_reset"
+DEFAULT_CLIENT_UPDATE_INTERVAL: Final = 7200  # 2 hours in seconds
+
+# Device monitoring
+CONF_DEVICE_DISABLED: Final = "disabled"
+AUTO_DISABLE_HOURS: Final = 120  # Auto-disable devices after this many hours without success
+
+# Contact discovery settings
+CONF_LIMIT_DISCOVERED_CONTACTS: Final = "limit_discovered_contacts"
+CONF_MAX_DISCOVERED_CONTACTS: Final = "max_discovered_contacts"
+DEFAULT_MAX_DISCOVERED_CONTACTS: Final = 100
+
+# Contact discovery mode: a single tri-state setting controlling how much
+# discovered-contact machinery runs. Supersedes the legacy per-flag discovery
+# settings, mapped on entry migration from the old "disable_contact_discovery"
+# and "large_mesh_mode" keys (see async_migrate_entry). Machine values are
+# stored in config_entry.data; the user-facing labels come from the translations.
+#   full      - every discovered contact gets a per-contact binary_sensor (default)
+#   data_only - discovered contacts are tracked as data only, no per-contact entity
+#   off       - discovered contacts are not processed at all
+CONF_CONTACT_DISCOVERY_MODE: Final = "contact_discovery_mode"
+MODE_FULL: Final = "full"
+MODE_DATA_ONLY: Final = "data_only"
+MODE_OFF: Final = "off"
+DEFAULT_CONTACT_DISCOVERY_MODE: Final = MODE_FULL
+CONTACT_DISCOVERY_MODES: Final = (MODE_FULL, MODE_DATA_ONLY, MODE_OFF)
+
+
+def get_contact_discovery_mode(config_entry) -> str:
+    """Return the contact-discovery mode from entry data (default full)."""
+    return config_entry.data.get(
+        CONF_CONTACT_DISCOVERY_MODE, DEFAULT_CONTACT_DISCOVERY_MODE
+    )
+
+
+# Self telemetry settings
+CONF_SELF_TELEMETRY_ENABLED: Final = "self_telemetry_enabled"
+CONF_SELF_TELEMETRY_INTERVAL: Final = "self_telemetry_interval"
+DEFAULT_SELF_TELEMETRY_INTERVAL: Final = 300  # 5 minutes in seconds
+
+# Self diagnostics settings (local get_stats_core/radio/packets polling — no mesh traffic)
+CONF_SELF_DIAGNOSTICS_ENABLED: Final = "self_diagnostics_enabled"
+CONF_SELF_DIAGNOSTICS_INTERVAL: Final = "self_diagnostics_interval"
+DEFAULT_SELF_DIAGNOSTICS_INTERVAL: Final = 300  # 5 minutes in seconds
+
+# CLI console settings. An interactive command surface for the local companion
+# radio: execute_command / execute_command_ui called with record_to_console: true
+# record the command and its response into a sensor transcript so output is
+# visible in the UI (a plain execute_command_ui discards the response). It does
+# NOT stream LOG_DATA / RX_LOG packet noise — only command/response pairs.
+CONF_CLI_CONSOLE_ENABLED: Final = "cli_console_enabled"
+# Number of command/response pairs kept in the rolling console transcript.
+CLI_CONSOLE_MAX_LINES: Final = 50
+# Event fired after a CLI console command completes (for logbook/automations).
+EVENT_CLI_RESPONSE: Final = f"{DOMAIN}_cli_response"
+
+# STATS_CORE `errors` is a bitmask of radio dispatcher fault events, not a
+# count. Each bit latches on first occurrence and clears only on a radio
+# reboot. Bit values mirror the firmware (_err_flags in MeshCore Dispatcher.h);
+# they are decoded into individual diagnostic `problem` binary sensors.
+SELF_DIAG_ERR_POOL_FULL: Final = 1 << 0       # packet pool exhausted (allocation failed)
+SELF_DIAG_ERR_CAD_TIMEOUT: Final = 1 << 1     # channel-activity-detection stayed busy too long
+SELF_DIAG_ERR_RX_TIMEOUT: Final = 1 << 2      # radio failed to (re)enter receive mode
+
+# Map Auto Uploader settings
+CONF_MAP_UPLOAD_ENABLED: Final = "map_upload_enabled"
+
+# Stale contact cleanup settings
+CONF_AUTO_CLEANUP_STALE_CONTACTS: Final = "auto_cleanup_stale_contacts"
+CONF_STALE_CONTACT_DAYS: Final = "stale_contact_days"
+DEFAULT_STALE_CONTACT_DAYS: Final = 30
+
+# MQTT upload settings
+CONF_MQTT_IATA: Final = "mqtt_iata"
+CONF_MQTT_DECODER_CMD: Final = "mqtt_decoder_cmd"
+CONF_MQTT_PRIVATE_KEY: Final = "mqtt_private_key"
+CONF_MQTT_TOKEN_TTL_SECONDS: Final = "mqtt_token_ttl_seconds"
+CONF_MQTT_BROKERS: Final = "mqtt_brokers"
+
+# Backoff constants for repeater failures
+REPEATER_BACKOFF_BASE: Final = 2  # Base multiplier for exponential backoff
+REPEATER_BACKOFF_MAX_MULTIPLIER: Final = 120  # Maximum backoff multiplier (10 minutes when * 5 seconds)
+MAX_FAILURES_BEFORE_PATH_RESET: Final = 3  # Reset path after this many failures
+MAX_RETRY_ATTEMPTS: Final = 5  # Maximum retry attempts within refresh window
+MAX_RANDOM_DELAY: Final = 30  # Maximum random delay in seconds
+
+# Repeater neighbor settings
+NEIGHBOR_PUBKEY_PREFIX_LENGTH: Final = 6  # Bytes requested from firmware (12 hex chars)
+NEIGHBOR_STALE_THRESHOLD: Final = 259200  # 72 hours in seconds — neighbor goes unavailable after this
+SEEN_WINDOW_SECS: Final = 172800  # 48-hour rolling window for seen count
+CONF_AUTO_CLEANUP_STALE_NEIGHBORS: Final = "auto_cleanup_stale_neighbors"
+CONF_STALE_NEIGHBOR_DAYS: Final = "stale_neighbor_days"
+DEFAULT_STALE_NEIGHBOR_DAYS: Final = 7
+
+
+# Generic battery voltage to percentage lookup table
+BAT_VMIN: Final = 3000
+BAT_VMAX: Final = 4200
+
+
+# Update intervals for different data types
+CONF_INFO_INTERVAL: Final = "info_interval"  # For both node info and contacts
+CONF_MESSAGES_INTERVAL: Final = "messages_interval"
+
+DEFAULT_UPDATE_TICK: Final = 5  # base polling interval
+
+# Repair issue IDs
+REPAIR_PUBKEY_CHANGED: Final = "pubkey_changed"
+
+# Other constants
+CONNECTION_TIMEOUT: Final = 10  # seconds
+
+# Rate limiter settings
+RATE_LIMITER_CAPACITY: Final = 20
+RATE_LIMITER_REFILL_RATE_SECONDS: Final = 120
+
+# RX_LOG correlation cache settings
+RX_LOG_CACHE_MAX_SIZE: Final = 200
+RX_LOG_CACHE_TTL_SECONDS: Final = 20.0
+
+# Adaptive poll-wait for incoming channel message RX_LOG correlation
+CONF_ADAPTIVE_POLL_WAIT: Final = "adaptive_poll_wait"
+
+# Flood scope allowlist (comma-separated region names, e.g. "pl-mz, pl-waw")
+CONF_FLOOD_SCOPES: Final = "flood_scopes"
+
+# Sensor availability timeout multiplier
+SENSOR_AVAILABILITY_TIMEOUT_MULTIPLIER: Final = 3
+
+
+class NodeType(IntEnum):
+    CLIENT = 1
+    REPEATER = 2
+    ROOM_SERVER = 3
+    SENSOR = 4
