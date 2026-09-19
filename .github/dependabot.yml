@@ -22,9 +22,9 @@ updates:
           - "minor"
           - "patch"
 
-  # Python test/tooling dependencies (requirements_test.txt, pyproject.toml).
-  # The integration declares no runtime Python requirements, so this covers
-  # only the test and tooling surface.
+  # Python test/tooling dependencies declared as pip requirement files.
+  # Runtime requirements are declared in the Home Assistant manifest and are
+  # tracked separately from Dependabot's pip file discovery.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
