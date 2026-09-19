@@ -38,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class MeshCoreChatRuntimeData:
+class HiveFWRuntimeData:
     """Per-entry runtime state for the HiveFW companion.
 
     Stored on ``entry.runtime_data`` (HA Bronze convention, post-2024.6).
@@ -53,7 +53,7 @@ class MeshCoreChatRuntimeData:
 
 # Type alias for ConfigEntry parameterized with our runtime data shape.
 # Lets typecheckers verify ``entry.runtime_data`` is the expected type.
-type MeshCoreChatConfigEntry = ConfigEntry[MeshCoreChatRuntimeData]
+type HiveFWConfigEntry = ConfigEntry[HiveFWRuntimeData]
 
 
 # ─── Upstream-presence helpers ───────────────────────────────────────────
@@ -104,7 +104,7 @@ def _sync_engine_repair_issue(hass: HomeAssistant) -> None:
         )
 
 
-# NOTE: ws_api.py imports ``MeshCoreChatRuntimeData`` and
+# NOTE: ws_api.py imports ``HiveFWRuntimeData`` and
 # ``_sync_engine_repair_issue`` from this module. Keep this import
 # below the dataclass + helper definitions so the symbols exist on the
 # partially-initialized package when ws_api.py executes its top-level
@@ -116,7 +116,7 @@ from .engine.integration import async_unload_entry as async_unload_engine_entry 
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: MeshCoreChatConfigEntry
+    hass: HomeAssistant, entry: HiveFWConfigEntry
 ) -> bool:
     """Set up the unified HiveFW radio engine and UI from one config entry."""
     # Register the HiveFW sidebar as soon as this entry starts. The panel
@@ -159,7 +159,7 @@ async def async_setup_entry(
     # Per-entry runtime state lives on entry.runtime_data (Bronze pattern,
     # post-2024.6). Process-global singletons (panel registration, WS
     # commands, unread tracker) continue to live on hass.data[DOMAIN].
-    entry.runtime_data = MeshCoreChatRuntimeData(store=store)
+    entry.runtime_data = HiveFWRuntimeData(store=store)
 
     # Best-effort retention pass at startup. Failures here must not block
     # setup — they are logged and we continue.
@@ -262,7 +262,7 @@ async def async_setup_entry(
 
 
 async def async_unload_entry(
-    hass: HomeAssistant, entry: MeshCoreChatConfigEntry
+    hass: HomeAssistant, entry: HiveFWConfigEntry
 ) -> bool:
     """Tear down a config entry.
 
@@ -272,7 +272,7 @@ async def async_unload_entry(
     so no manual listener loop is required here.
     """
     runtime = entry.runtime_data
-    if isinstance(runtime, MeshCoreChatRuntimeData):
+    if isinstance(runtime, HiveFWRuntimeData):
         await runtime.store.async_unload()
 
     # Flush any pending debounced last-read save before tearing down
@@ -574,13 +574,13 @@ def _make_connection_state_handler(
 def _resolve_store(hass: HomeAssistant, entry_id: str) -> MessageStore | None:
     """Look up the MessageStore for an entry, defensively."""
     entry = hass.config_entries.async_get_entry(entry_id)
-    if entry is None or not isinstance(entry.runtime_data, MeshCoreChatRuntimeData):
+    if entry is None or not isinstance(entry.runtime_data, HiveFWRuntimeData):
         return None
     return entry.runtime_data.store
 
 
 async def _async_options_updated(
-    hass: HomeAssistant, entry: MeshCoreChatConfigEntry
+    hass: HomeAssistant, entry: HiveFWConfigEntry
 ) -> None:
     """Handle options-flow updates without requiring an HA restart.
 
