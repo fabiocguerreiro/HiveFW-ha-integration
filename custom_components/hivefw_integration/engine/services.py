@@ -422,7 +422,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                                 "ack_received": ack_received,
                                 "send_id": send_id,
                             }
-                            hass.bus.async_fire(f"{DOMAIN}_message_sent", outgoing_msg)
+                            hass.bus.async_fire("hivefw_message_sent", outgoing_msg)
 
                         # Retain the task reference (HA-native; ties it to the event
                         # loop so it cannot be GC'd before the ACK resolves).
@@ -520,7 +520,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                             "scope": scope,
                         }
                         # Fire event for outgoing message to update message-related entities
-                        hass.bus.async_fire(f"{DOMAIN}_message_sent", outgoing_msg)
+                        hass.bus.async_fire("hivefw_message_sent", outgoing_msg)
                 except Exception as ex:
                     _LOGGER.error(
                         "Error sending message to channel %s: %s", channel_idx, ex
@@ -1101,7 +1101,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         Runs the command and returns its normalized response. When
         record_to_console is set, the command/response pair is also appended to
-        the CLI Console transcript and a hivefw_integration_cli_response event is fired so
+        the CLI Console transcript and a hivefw_cli_response event is fired so
         the output is visible in the UI.
         """
         response = await _async_run_command(call)
