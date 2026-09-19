@@ -279,7 +279,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return True
 
     # Get configuration from entry
-    connection_type = entry.data[CONF_CONNECTION_TYPE]
+    connection_type = entry.data.get(CONF_CONNECTION_TYPE)
+    if not connection_type:
+        raise ConfigEntryNotReady(
+            "HiveFW has no radio connection configuration. "
+            "Remove the incomplete HiveFW config entry and add HiveFW again "
+            "to configure TCP/Wi-Fi, BLE or USB."
+        )
     
     _LOGGER.debug("Entry data: %s", entry.data)
     
@@ -313,7 +319,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connected = await api.connect()
 
         if connected:
-            _LOGGER.info("Successfully connected to MeshCore device")
+            _LOGGER.info("Successfully connected to HiveFW radio")
             break
 
         if attempt < max_retries - 1:
@@ -324,7 +330,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not connected:
         raise ConfigEntryNotReady(
-            f"Failed to connect to MeshCore device at "
+            f"Failed to connect to HiveFW radio at "
             f"{entry.data.get(CONF_TCP_HOST, 'unknown')}:{entry.data.get(CONF_TCP_PORT, 5000)} "
             f"after {max_retries} attempts"
         )
@@ -601,7 +607,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Fire event to HA event bus with sanitized payload
             _LOGGER.debug(f"Firing event to HA event bus: {event}")
-            hass.bus.async_fire(f"{DOMAIN}_raw_event", {
+            hass.bus.async_fire("hivefw_raw_event", {
                 "event_type": event_type_str,
                 "payload": sanitized_payload,
                 "timestamp": time.time()
@@ -613,7 +619,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as ex:
             _LOGGER.error(f"Error serializing event payload: {ex}")
             # Fire event without payload to ensure delivery
-            hass.bus.async_fire(f"{DOMAIN}_raw_event", {
+            hass.bus.async_fire("hivefw_raw_event", {
                 "event_type": event_type_str,
                 "payload": None,
                 "timestamp": time.time(),
