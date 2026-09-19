@@ -140,7 +140,7 @@ async def async_setup_entry(
     # ConfigEntryNotReady alone is invisible to non-developers — HA
     # surfaces it as a generic "Setup retry" badge with no remediation
     # text. Pair it with a Repairs issue so the user gets a clickable
-    # explanation of what to do (install/configure meshcore, or remove
+    # explanation of what to do (reconfigure the HiveFW radio connection, or remove
     # hivefw_integration) on the Settings → System → Repairs page.
     if not _internal_engine_present(hass):
         _sync_engine_repair_issue(hass)
@@ -336,7 +336,7 @@ def _store_message_id(payload: dict) -> str | None:
 
 
 def _make_message_handler(hass: HomeAssistant, entry_id: str):
-    """Return a listener that persists incoming/outgoing meshcore_message events."""
+    """Return a listener that persists incoming/outgoing HiveFW message events."""
 
     async def _handle(event: Event) -> None:
         store = _resolve_store(hass, entry_id)
@@ -357,7 +357,7 @@ def _make_message_handler(hass: HomeAssistant, entry_id: str):
             # same way the frontend's generateId() in message-parser.ts
             # does — sha256(f"{timestamp}|{sender}|{message}")[:12]. This
             # matters for live-bubble dedup: the panel renders an "rt_"
-            # bubble immediately on the meshcore_message event using its
+            # bubble immediately on the hivefw_message event using its
             # own hash, and reconciles against stored ids on the next
             # fetch. If the stored id is anything other than that exact
             # 12-hex digest, the rt_ bubble cannot be matched and stays
@@ -470,7 +470,7 @@ def _make_message_handler(hass: HomeAssistant, entry_id: str):
 
 
 def _make_delivery_update_handler(hass: HomeAssistant, entry_id: str):
-    """Return a listener that applies meshcore_delivery_update to a stored message.
+    """Return a listener that applies hivefw_delivery_update to a stored message.
 
     If ``entity_id`` is missing on the event (older event format), fall
     back to an all-conversations scan to locate the message by id.
@@ -550,7 +550,7 @@ def _make_delivery_update_handler(hass: HomeAssistant, entry_id: str):
 def _make_connection_state_handler(
     hass: HomeAssistant, entry_id: str, *, connected: bool
 ):
-    """Return a listener for meshcore_connected / meshcore_disconnected.
+    """Return a listener for hivefw_connected / hivefw_disconnected.
 
     The store does not currently persist node connection state — the panel
     surfaces it from binary_sensor entity state. This handler is a hook
