@@ -13,22 +13,22 @@ export const MENTION_BRACKET_REGEX = /@\[([^\]]+)\]/g;
 export const MENTION_WORD_REGEX = /@(\w+)/g;
 
 /**
- * MeshCore preset entity patterns — the panel always uses these.
+ * HiveFW preset entity patterns — the panel always uses these.
  */
-export const MESHCORE_PRESET = {
-  recipient_type_entity: 'select.meshcore_recipient_type',
-  channel_entity: 'select.meshcore_channel',
-  contact_entity: 'select.meshcore_contact',
-  channel_entity_pattern: 'binary_sensor.meshcore_{prefix}_ch_{idx}_messages',
-  contact_entity_pattern: 'binary_sensor.meshcore_{prefix}_{contact}_messages',
-  domain_filter: 'meshcore',
+export const HIVEFW_PRESET = {
+  recipient_type_entity: 'select.hivefw_recipient_type',
+  channel_entity: 'select.hivefw_channel',
+  contact_entity: 'select.hivefw_contact',
+  channel_entity_pattern: 'binary_sensor.hivefw_{prefix}_ch_{idx}_messages',
+  contact_entity_pattern: 'binary_sensor.hivefw_{prefix}_{contact}_messages',
+  domain_filter: 'hivefw',
 };
 
 /**
  * Default display/realtime config values
  */
 export const DEFAULT_PANEL_CONFIG: Omit<PanelConfig, 'node_name'> = {
-  ...MESHCORE_PRESET,
+  ...HIVEFW_PRESET,
   hours_to_show: 48,
   initial_hours: 1,
   max_messages: 500,
