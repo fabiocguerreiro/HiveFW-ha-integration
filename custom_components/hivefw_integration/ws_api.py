@@ -720,6 +720,7 @@ def ws_get_devices(hass, connection, msg):
     """Return all configured MeshCore companion devices."""
     devices = []
     for entry_id, coordinator in _get_all_coordinators(hass):
+        self_info = getattr(coordinator.api, "self_info", {}) or {}
         devices.append(
             {
                 "entry_id": entry_id,
@@ -728,6 +729,7 @@ def ws_get_devices(hass, connection, msg):
                 "pubkey_prefix": (coordinator.pubkey or "")[:12],
                 "firmware": coordinator.device_info.get("sw_version", ""),
                 "connected": coordinator.api.connected,
+                "path_hash_mode": self_info.get("path_hash_mode"),
             }
         )
     connection.send_result(msg["id"], {"devices": devices})
