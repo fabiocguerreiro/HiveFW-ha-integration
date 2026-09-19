@@ -1,153 +1,135 @@
-# HiveFW Unified Integration Roadmap
+# HiveFW Home Assistant Roadmap
 
-This roadmap is the source of truth for the standalone HiveFW Home Assistant integration.
-Do not remove completed items; mark them complete and link the implementing commit.
+Este ficheiro é a fonte de verdade para desenvolvimento futuro da integração standalone **HiveFW**.
 
-## Goal
+## Objetivo
 
-One Home Assistant integration only: **HiveFW**.
+Uma única integração Home Assistant:
 
-- HiveFW owns the TCP / BLE / USB connection to the radio.
-- No installed `meshcore-ha` integration is required.
-- All user-facing services, entities, events, config flows and UI use the HiveFW name/domain.
-- The MeshCore Python protocol/library remains an implementation dependency only.
-- Existing HiveFW UI/features must not regress during the migration.
-- `main-stable` is the rollback point created before the standalone migration.
+- HiveFW possui a ligação TCP/Wi-Fi, BLE ou USB ao rádio;
+- não é necessária uma instalação separada de `meshcore-ha`;
+- entidades, serviços, eventos, config flow, storage, WebSocket API e frontend pertencem ao HiveFW;
+- MeshCore permanece como protocolo/SDK e como origem devidamente atribuída de partes do engine;
+- funcionalidades que geram RF devem ser on-demand sempre que possível.
 
-## Phase 0 — Safety
+## Base standalone — concluída
 
-- [x] Freeze pre-migration build in `main-stable` at `abea27f18f638c4edc1c5f29a931838b3e15feca`.
-- [x] Start embedded radio-engine migration on `main` (`0ca722415146540ee85d98b16f04eaf32d61f9b6`).
-- [ ] Keep this roadmap and `MIGRATION_STATUS.md` updated after every functional commit.
-- [ ] Add upstream attribution / embedded engine SHA.
+- [x] Branch de rollback `main-stable` criada antes da consolidação.
+- [x] Engine MeshCore HA adaptado e incorporado em `hivefw_integration.engine`.
+- [x] Proveniência upstream e commit base documentados.
+- [x] Runtime requirements geridos pelo próprio HiveFW.
+- [x] Config flow HiveFW configura TCP/Wi-Fi, BLE ou USB diretamente.
+- [x] HiveFW inicia e termina o coordinator/engine.
+- [x] Plataformas HA expostas pelo domínio HiveFW: sensor, binary_sensor, device_tracker, button, select e text.
+- [x] Serviços públicos em `hivefw_integration.*`.
+- [x] Entidades públicas com prefixo `hivefw_*`.
+- [x] Eventos públicos com prefixo `hivefw_*`.
+- [x] Painel/sidebar e recursos estáticos próprios.
+- [x] Message store, unread, scopes e helpers pertencem à mesma config entry.
+- [x] UI/help removidos de dependências numa segunda integração Home Assistant MeshCore.
+- [x] Map uploader e MQTT uploader ligados ao engine HiveFW.
+- [x] Telemetria, diagnostics, managed devices e consultas de firmware integradas.
+- [x] README/HACS/security atualizados para arquitetura standalone.
 
-## Phase 1 — Standalone HiveFW engine
+## Interface atual — preservar
 
-- [x] Vendor the radio engine used by the current upstream MeshCore HA integration.
-- [x] Remove manifest dependency on an installed `meshcore` integration.
-- [x] Add runtime requirements directly to HiveFW.
-- [x] Make HiveFW config flow configure TCP / BLE / USB directly.
-- [x] Start / stop the embedded engine from the HiveFW config entry.
-- [ ] Remove remaining assumptions that an external `meshcore` domain/config entry exists.
-- [ ] Ensure all engine imports are internal to `hivefw_integration.engine`.
-- [ ] Forward HA platforms from HiveFW: sensor, binary_sensor, device_tracker, button, select, text.
-- [ ] Verify map uploader, MQTT uploader, telemetry, neighbors, diagnostics and repeater subscriptions under the HiveFW config entry.
-- [ ] Verify clean unload/reload and reconnect behavior.
+Estas funcionalidades existem e devem permanecer em qualquer refactor:
 
-## Phase 2 — HiveFW public surface
+- [x] **Dispositivo** com cockpit de métricas e editor de layout.
+- [x] Configuração Companion/Repeater.
+- [x] Local Advert, Flood Advert, Sync Clock, Trace e Reboot.
+- [x] Regions & Scopes.
+- [x] RX Log inline e export JSON.
+- [x] **Chat & Canais**.
+- [x] Histórico persistente, search e unread.
+- [x] Gestão de contactos e canais.
+- [x] Hops/RSSI/SNR nas mensagens quando disponíveis.
+- [x] **Nós** em split view lista + mapa.
+- [x] Matching dinâmico do rádio local.
+- [x] Contact add/remove no popup do mapa.
+- [x] Import/export de contactos.
+- [x] Favorites e Tags locais.
+- [x] Trace e rota mais recente no mapa.
+- [x] Trace Monitor / Route Health on-demand.
+- [x] **Vizinhos** zero-hop.
+- [x] **Console** com comandos livres e catálogo pré-definido.
+- [x] Command history ↑/↓ e transcript.
+- [x] RF Health, Airtime, Reliability, Integrity e Current Traffic.
+- [x] Network Activity / first-seen.
+- [x] 48h Recorder mini-history.
 
-Everything user-facing must be HiveFW; do not keep legacy service naming just for compatibility.
+## Próxima fase — mapa, rotas e topologia
 
-- [ ] Services use `hivefw_integration.*`.
-- [ ] Events use `hivefw_integration_*`.
-- [ ] Helper entities use HiveFW names / IDs.
-- [ ] Device names/manufacturer/model wording use HiveFW where appropriate.
-- [ ] Static resource paths use `/api/hivefw/...`.
-- [ ] Service YAML descriptions use HiveFW wording.
-- [ ] Remove stale UI/help text that says the external MeshCore integration must be installed.
-- [ ] Keep “MeshCore” only where it identifies the protocol/ecosystem/SDK rather than the installed HA integration.
+- [ ] Cores por idade do nó: <1h, <6h, <24h, <7d, stale.
+- [ ] Filtros: all, active 24h, repeaters, clients, favorites, GPS, stale.
+- [ ] Route History, não apenas o último Trace.
+- [ ] Path history por mensagem e ação **Mostrar no mapa**.
+- [ ] Contagem RX/TX por peer e volume de link.
+- [ ] Distância hop-to-hop e distância acumulada da rota.
+- [ ] Topology graph com links baseados em SNR/atividade.
+- [ ] Activity heatmap com origem dos dados claramente indicada.
+- [ ] Continuar a nunca adivinhar hashes ambíguos.
+- [ ] Ferramenta LOS/elevation/Fresnel quando existir uma fonte de elevação adequada.
 
-## Phase 3 — Preserve current HiveFW functionality
+## Contactos, canais e partilha
 
-Regression checklist:
-
-- [ ] Chat & Channels.
-- [ ] Message persistence/search/unread state.
-- [ ] Nodes split view and map.
-- [ ] Dynamic local repeater matching.
-- [ ] Contact add/remove from map popup.
-- [ ] Contact import/export.
-- [ ] Favorites and local tags.
-- [ ] Persistent node popup.
-- [ ] Trace dialog and last Trace route on map.
-- [ ] Trace Monitor with persistent route-health history.
-- [ ] RX Log viewer/export.
-- [ ] Neighbors page.
-- [ ] Device metrics and editable metric menu.
-- [ ] HA entity More Info deep links.
-- [ ] Local/Flood advert, Sync Clock, Trace, Reboot.
-- [ ] Repeater scopes/regions/settings.
-- [ ] Device/repeater/client management.
-- [ ] Self telemetry/diagnostics.
-- [ ] MQTT/map upload options.
-- [ ] Existing HiveFW message-retention settings.
-
-## Phase 4 — Console tab
-
-- [x] Add top-level **Console** tab.
-- [x] Move console/CLI controls out of Device.
-- [x] Free-form command input.
-- [x] Run command button and Enter-to-submit.
-- [x] Transcript with command, response, timestamp and errors.
-- [x] Clear transcript.
-- [x] Command history (Up/Down).
-- [x] Useful command shortcuts / command palette.
-- [x] Per-selected-device execution.
-- [x] Explicit warning for commands that can modify persistent node settings.
-
-## Phase 5 — Map / topology / route intelligence
-
-- [ ] Node-age colors: <1h, <6h, <24h, <7d, stale.
-- [ ] Filters: all, active 24h, repeaters, clients, favorites, GPS, stale.
-- [ ] Route History, not only latest Trace.
-- [ ] Path history per message and “Show on map”.
-- [ ] Peer RX/TX counts and link volume.
-- [ ] Hop-to-hop distance and cumulative route distance.
-- [ ] Topology graph with SNR/activity-driven links.
-- [ ] Activity heatmap (clearly label source: RX/message/trace/contact activity).
-- [ ] Preserve conservative hash resolution: never guess ambiguous path hashes.
-- [ ] Optional LOS tool with elevation/Fresnel profile once a suitable data source is selected.
-
-## Phase 6 — Contacts / channels / sharing
-
-- [ ] Complete channel manager: create/edit/remove.
+- [x] Criar/editar/remover canais.
 - [ ] Channel QR.
 - [ ] Contact QR / share URI.
-- [ ] Contact bulk cleanup by stale age.
-- [ ] Cleanup protections for favorites, added contacts, configured repeaters and protected tags.
-- [ ] Bulk selection/actions.
-- [ ] Search by name/public key/tag.
+- [ ] Bulk cleanup por idade.
+- [ ] Proteções de cleanup para favorites, contactos adicionados, Repeaters configurados e tags protegidas.
+- [ ] Seleção e ações em massa.
+- [ ] Pesquisa avançada por nome/public key/tag.
 
-## Phase 7 — Repeater administration
+## Administração remota de Repeaters
 
-- [ ] Remote repeater login.
-- [ ] Remote status / telemetry / neighbors.
-- [ ] Path discovery.
-- [ ] Trace and Route Health.
-- [ ] Repeater admin CLI/console.
-- [ ] Firmware/version status.
-- [ ] Password stored only in HA config data and never exposed in frontend payloads.
+- [ ] UI dedicada de login remoto.
+- [ ] Estado/telemetria/vizinhos remotos consolidados.
+- [ ] Path discovery remoto.
+- [ ] Trace/Route Health por Repeater.
+- [ ] Console administrativo remoto.
+- [ ] Estado de firmware/versão.
+- [ ] Passwords apenas em config data backend; nunca em payloads frontend.
 
-## Phase 8 — Observability
-
-Already implemented before standalone migration and must be preserved/enhanced:
+## Observabilidade
 
 - [x] RF Health.
 - [x] Airtime.
 - [x] Reliability.
-- [x] Integrity / duplicate / error metrics.
-- [x] Current traffic rates.
-- [x] Network activity / first-seen.
+- [x] Erros/duplicates/integrity.
+- [x] Taxas atuais RX/TX.
+- [x] Network Activity / first-seen.
 - [x] Health alerts.
-- [x] 48h HA Recorder mini-history.
+- [x] Recorder history.
 - [x] RX Log.
-- [x] Trace Monitor / Route Health samples.
-- [ ] Per-peer long-term health trends.
-- [ ] Configurable alert thresholds.
-- [ ] Optional HA notifications/automations for meaningful health transitions.
+- [x] Trace Monitor.
+- [ ] Tendências long-term por peer.
+- [ ] Thresholds configuráveis.
+- [ ] Notificações/automations HA para transições significativas.
 
-## Phase 9 — Validation / release
+## Firmware / protocolo HiveFW
 
-- [ ] Python import/compile checks.
-- [ ] Frontend build/typecheck.
-- [ ] Home Assistant integration validation.
-- [ ] Fresh install test with no `meshcore-ha` installed.
-- [ ] TCP/Wi-Fi test.
-- [ ] BLE test.
-- [ ] USB test where available.
-- [ ] Multi-entry/device switching test.
-- [ ] Restart/reload test.
-- [ ] Verify no duplicate radio connections.
-- [ ] Verify no external MeshCore HA integration is required.
-- [ ] Update README/install/upgrade instructions.
-- [ ] Release standalone HiveFW integration.
+Itens que exigem alterações ao firmware devem ser tratados no projeto
+[HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
+
+Exemplos:
+
+- [ ] investigar recorrência e recuperação de `CAD Timeout`;
+- [ ] expor dados que o Companion protocol ainda não fornece;
+- [ ] melhorar telemetria específica de Repeater quando necessário.
+
+## Qualidade e release
+
+- [ ] Python import/compile checks em CI.
+- [ ] Frontend build/typecheck em CI.
+- [ ] Testes frontend/backend ativos em GitHub Actions.
+- [ ] HACS/Home Assistant validation.
+- [ ] Fresh install sem `meshcore-ha`.
+- [ ] Teste TCP/Wi-Fi.
+- [ ] Teste BLE.
+- [ ] Teste USB quando disponível.
+- [ ] Teste multi-entry.
+- [ ] Reload/restart/reconnect.
+- [ ] Confirmar ausência de ligações duplicadas ao rádio.
+- [ ] Rebuild do bundle após a limpeza da antiga Devices page.
+- [ ] Release standalone HiveFW 1.0.0.
