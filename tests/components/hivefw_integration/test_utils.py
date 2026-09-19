@@ -1,4 +1,3 @@
-from custom_components.hivefw_integration.engine.utils import build_device_name
 """Unit tests for ``custom_components.hivefw_integration.utils``.
 
 Covers the flood-scope helpers shared by the dialog scope picker
@@ -20,6 +19,8 @@ These are pure functions; (3) takes a minimal stand-in for ``hass`` with
 ``config_entry.data`` dict.
 """
 from __future__ import annotations
+
+from custom_components.hivefw_integration.engine.utils import build_device_name
 
 from types import SimpleNamespace
 
