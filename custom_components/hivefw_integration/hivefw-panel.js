@@ -4427,14 +4427,13 @@ class HiveFWPanel extends BasePanel {
   __enhanceNodesPage() {
     const root=this.shadowRoot;
     const page=root?.querySelector("meshcore-nodes-page");
-    const container=root?.querySelector(".page-container");
     const nroot=page?.shadowRoot;
     const content=nroot?.querySelector(".content-area");
-    if(!root||!page||!container||!nroot||!content)return;
+    const pane=nroot?.querySelector(".nodes-map-pane");
+    if(!root||!page||!nroot||!content||!pane)return;
 
-    // Remove all previous experimental controls/overlays from inside the
-    // Lit-managed Nodes component. The map now lives beside that component,
-    // outside its render range, so a Nodes rerender cannot destroy it.
+    // The Nodes component now owns the layout from first paint. The wrapper
+    // only augments controls and fills the native map pane.
     nroot.querySelector(".hive-view-switch")?.remove();
     nroot.querySelector(".hive-map-overlay")?.remove();
     this.__ensureNodeExportControls(nroot,page);
@@ -4448,44 +4447,12 @@ class HiveFWPanel extends BasePanel {
       };
     }
 
-    let style=root.querySelector("#hive-node-split-style");
+    let style=nroot.querySelector("#hive-node-runtime-style");
     if(!style){
       style=document.createElement("style");
-      style.id="hive-node-split-style";
+      style.id="hive-node-runtime-style";
       style.textContent=`
-        .page-container.hive-nodes-split{
-          --hive-nodes-list-width:340px;
-          --hive-nodes-toolbar-height:118px;
-          display:block!important;
-          position:relative!important;
-          overflow:hidden!important;
-          min-height:0!important;
-        }
-        .page-container.hive-nodes-split > meshcore-nodes-page{
-          position:absolute;
-          inset:0;
-          min-width:0;
-          min-height:0;
-          width:100%;
-          height:100%;
-          overflow:hidden;
-          z-index:1;
-        }
-        .page-container.hive-nodes-split > .hive-nodes-map-pane{
-          position:absolute;
-          left:var(--hive-nodes-list-width);
-          right:0;
-          top:var(--hive-nodes-toolbar-height);
-          bottom:0;
-          min-width:0;
-          min-height:0;
-          overflow:hidden;
-          background:var(--card-background-color,#fff);
-          border-left:1px solid var(--divider-color,#e0e0e0);
-          border-top:1px solid var(--divider-color,#e0e0e0);
-          z-index:2;
-        }
-        .hive-nodes-map-pane ha-map{
+        .nodes-map-pane ha-map{
           display:block;
           width:100%;
           height:100%;
@@ -4501,12 +4468,19 @@ class HiveFWPanel extends BasePanel {
           text-align:center;
         }
         .hive-map-count{
-          position:absolute;top:10px;right:10px;z-index:30;
-          padding:6px 9px;border-radius:14px;
+          position:absolute;
+          top:10px;
+          right:10px;
+          z-index:30;
+          padding:6px 9px;
+          border-radius:14px;
           background:color-mix(in srgb,var(--card-background-color) 90%,transparent);
-          color:var(--primary-text-color);border:1px solid var(--divider-color);
-          font-size:11px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.18);
-          pointer-events:auto
+          color:var(--primary-text-color);
+          border:1px solid var(--divider-color);
+          font-size:11px;
+          font-weight:600;
+          box-shadow:0 1px 4px rgba(0,0,0,.18);
+          pointer-events:auto;
         }
         .hive-map-count button{
           border:0;
@@ -4556,11 +4530,7 @@ class HiveFWPanel extends BasePanel {
           position:relative;
           background:color-mix(in srgb,var(--card-background-color,#fff) 97%,var(--primary-color,#03a9f4));
         }
-        .hive-topology-canvas svg{
-          width:100%;
-          height:100%;
-          display:block;
-        }
+        .hive-topology-canvas svg{width:100%;height:100%;display:block}
         .hive-topology-legend{
           display:flex;
           flex-wrap:wrap;
@@ -4571,126 +4541,23 @@ class HiveFWPanel extends BasePanel {
           font-size:10px;
           flex:0 0 auto;
         }
-        .hive-activity-legend{
-          position:absolute;
-          left:10px;
-          bottom:10px;
-          z-index:34;
-          max-width:min(420px,calc(100% - 20px));
-          padding:7px 9px;
-          border:1px solid var(--divider-color,#ccc);
-          border-radius:9px;
-          background:color-mix(in srgb,var(--card-background-color,#fff) 92%,transparent);
-          color:var(--secondary-text-color,#666);
-          box-shadow:0 1px 4px rgba(0,0,0,.18);
-          font-size:10px;
-          pointer-events:none;
-        }
-        @media(max-width:870px){
-          .page-container.hive-nodes-split{
-            --hive-nodes-list-width:100%;
-          }
-          .page-container.hive-nodes-split > .hive-nodes-map-pane{
-            left:0;
-            top:max(56%,var(--hive-nodes-toolbar-height));
-            border-left:0;
-          }
-        }
       `;
-      root.appendChild(style);
+      nroot.appendChild(style);
     }
 
-    let innerStyle=nroot.querySelector("#hive-node-inner-layout-style");
-    if(!innerStyle){
-      innerStyle=document.createElement("style");
-      innerStyle.id="hive-node-inner-layout-style";
-      innerStyle.textContent=`
-        :host{
-          width:100%!important;
-          height:100%!important;
-          --hive-nodes-list-width:340px;
-        }
-        .nodes-layout{
-          display:grid!important;
-          grid-template-columns:var(--hive-nodes-list-width) minmax(0,1fr)!important;
-          grid-template-rows:auto minmax(0,1fr)!important;
-          width:100%!important;
-          height:100%!important;
-          min-height:0!important;
-          overflow:hidden!important;
-        }
-        .nodes-header{
-          grid-column:1 / -1!important;
-          grid-row:1!important;
-          min-width:0!important;
-          padding:10px 12px!important;
-          box-sizing:border-box!important;
-        }
-        .content-area{
-          grid-column:1!important;
-          grid-row:2!important;
-          min-width:0!important;
-          min-height:0!important;
-          padding:8px!important;
-          border-right:0!important;
-        }
-        .nodes-grid{
-          grid-template-columns:1fr!important;
-          gap:7px!important;
-        }
-        /* HiveFW owns the only map. The upstream Nodes map would otherwise
-           instantiate a second ha-map (MapLibre/Leaflet + tiles) behind it. */
-        .nodes-map-pane{
-          display:none!important;
-        }
-        @media(max-width:870px){
-          :host{--hive-nodes-list-width:100%}
-          .nodes-layout{
-            grid-template-columns:1fr!important;
-            grid-template-rows:auto minmax(300px,45%) minmax(300px,55%)!important;
-          }
-          .content-area{grid-column:1!important;grid-row:2!important}
-        }
-      `;
-      nroot.appendChild(innerStyle);
-    }
-
-    container.classList.add("hive-nodes-split");
-
-    // Stop meshcore-nodes-page from maintaining its own hidden map.
-    // Its async loader may complete after first render, so force the state
-    // back to false on every enhancement pass and remove any live ha-map.
-    try{
-      if("_mapReady" in page && page._mapReady!==false){
-        page._mapReady=false;
-        page.requestUpdate?.();
-      }
-      const upstreamPane=nroot.querySelector(".nodes-map-pane");
-      upstreamPane?.querySelector("ha-map")?.remove();
-    }catch{}
-
-    let pane=container.querySelector(":scope > .hive-nodes-map-pane");
-    if(!pane){
-      pane=document.createElement("section");
-      pane.className="hive-nodes-map-pane";
-      // Appended after Lit's child-part markers: this node is not owned by
-      // the Nodes template and therefore survives its frequent rerenders.
-      container.appendChild(pane);
-    }
     this.__nodesMapPane=pane;
     pane.querySelector(".hive-map-selection")?.remove();
-    nroot.querySelectorAll(".map-selection").forEach((el)=>{
-      el.remove();
-    });
+    nroot.querySelectorAll(".map-selection").forEach((el)=>el.remove());
+
     if(this.__peerActivityLoadedEntry!==this.__entryId()&&!this.__peerActivityLoading){
       void this.__loadPeerActivity();
     }
     if(this.__lastTraceLoadedEntry!==String(this.__entryId()||"default")){
       void this.__restoreLatestTraceFromHistory();
     }
+
     this.__decorateNodeCards(nroot);
     window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
-    this.__syncNodesSplitGeometry(container,page,nroot);
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -4698,22 +4565,23 @@ class HiveFWPanel extends BasePanel {
         const path=event.composedPath?.()||[];
         const card=path.find((el)=>el?.tagName==="MESHCORE-CONTACT-CARD");
         const contact=card?.contact;
-        if(contact){
-          event.preventDefault?.();
-          event.stopPropagation();
-          event.stopImmediatePropagation?.();
-          if(this.__bulkMode){
-            const key=String(contact?.public_key||"").trim().toLowerCase();
-            if(key){
-              if(this.__bulkSelection.has(key))this.__bulkSelection.delete(key);
-              else this.__bulkSelection.add(key);
-              this.__decorateNodeCards(nroot);
-              this.__syncBulkToolbar(nroot.querySelector(".l1-filters"),nroot,page);
-            }
-            return;
+        if(!contact)return;
+
+        event.preventDefault?.();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+
+        if(this.__bulkMode){
+          const key=String(contact?.public_key||"").trim().toLowerCase();
+          if(key){
+            if(this.__bulkSelection.has(key))this.__bulkSelection.delete(key);
+            else this.__bulkSelection.add(key);
+            this.__decorateNodeCards(nroot);
+            this.__syncBulkToolbar(nroot.querySelector(".l1-filters"),nroot,page);
           }
-          this.__focusNodeOnMap(contact);
+          return;
         }
+        this.__focusNodeOnMap(contact);
       },true);
     }
 
@@ -4728,21 +4596,22 @@ class HiveFWPanel extends BasePanel {
     this.__bulkSelection.clear();
     this.__closeTopologyOverlay();
     this.__removeActivityHeatmapLayer();
+
     if(this.__nodesMapFrame){
       cancelAnimationFrame(this.__nodesMapFrame);
       this.__nodesMapFrame=0;
     }
-    this.__nodesHeaderResizeObserver?.disconnect();
-    this.__nodesHeaderResizeObserver=null;
-    const root=this.shadowRoot;
-    const container=root?.querySelector(".page-container");
-    container?.classList.remove("hive-nodes-split");
-    if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.remove();
+
     this.__removeTraceRouteLayer();
     this.__traceHistoryPanel?.remove();
     this.__traceHistoryPanel=null;
-    this.__nodesMapPane=null;
     this.__closePersistentNodePopup();
+
+    // The pane belongs to meshcore-nodes-page now. Never remove it; only clear
+    // runtime children so returning to Nós reuses the native layout.
+    if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.replaceChildren();
+
+    this.__nodesMapPane=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
