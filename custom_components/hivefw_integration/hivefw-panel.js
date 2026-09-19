@@ -323,7 +323,8 @@ class HiveFWPanel extends BasePanel {
             "opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
           bubble.appendChild(meta);
         }
-        meta.textContent = parts.join(" · ");
+        const nextText = parts.join(" · ");
+        if (meta.textContent !== nextText) meta.textContent = nextText;
       }
     }
   }
