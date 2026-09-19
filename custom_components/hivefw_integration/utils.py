@@ -1,69 +1,20 @@
-"""Utility helpers for the HiveFW companion integration.
+"""Shared HiveFW helpers used by the WebSocket/message layer.
 
-Lifted minimally from the upstream meshcore integration's `utils.py` — only
-the two helpers `ws_api.py` references at module load. The companion's helper
-uses ENTITY_PREFIX when building entity IDs so WebSocket helpers
-match the entities created by the embedded HiveFW engine.
-
-If the companion grows to need more of the upstream `utils.py` surface
-(e.g. `parse_rx_log_data`, `decrypt_channel_message`), copy them here
-with a similar minimal-import treatment rather than adding a hard import
-on the upstream module.
+Entity naming delegates to the embedded engine so the backend has one source
+of truth for public `hivefw_*` entity IDs.
 """
 from __future__ import annotations
 
-import logging
-
 from homeassistant.core import HomeAssistant
-from homeassistant.util import slugify
 
-from .const import CONF_FLOOD_SCOPES_UPSTREAM, ENTITY_PREFIX, MESHCORE_DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
-
-
-def sanitize_name(name: str) -> str:
-    """Convert a name to a format safe for entity IDs.
-
-    Normalize names consistently for HiveFW entity IDs.
-    """
-    return slugify(name.lower() if name else "")
-
-
-def format_entity_id(
-    domain: str, device_name: str, entity_key: str, suffix: str = ""
-) -> str:
-    """Format a consistent entity ID.
-
-    Public HiveFW entity IDs use the short "hivefw" prefix, while the
-    technical Home Assistant integration domain remains "hivefw_integration".
-
-    Args:
-        domain: Entity domain (e.g. 'binary_sensor', 'sensor').
-        device_name: Device name fragment (already sanitized by caller).
-        entity_key: Entity-specific identifier.
-        suffix: Optional suffix.
-
-    Returns:
-        Formatted entity ID like `binary_sensor.hivefw_<device>_<key>_<suffix>`.
-    """
-    if not domain or not entity_key:
-        _LOGGER.warning("Missing required parameters for entity ID formatting")
-        return ""
-
-    # Build the entity name parts (everything after the entity domain).
-    # Filter out empty strings to prevent double underscores.
-    name_parts = [
-        part for part in [ENTITY_PREFIX, device_name, entity_key, suffix] if part
-    ]
-    entity_name = "_".join(name_parts).replace("__", "_")
-    return f"{domain}.{sanitize_name(entity_name)}"
+from .const import CONF_FLOOD_SCOPES_UPSTREAM, MESHCORE_DOMAIN
+from .engine.utils import format_entity_id, sanitize_name
 
 
 def enrich_rx_log_entries(rx_log_data):
     """Backfill ``path_nodes`` and ``hop_count`` on rx_log entries.
 
-    The upstream coordinator this companion consumes builds
+    The embedded HiveFW coordinator builds
     rx_log_entry dicts with ``path`` (hex string) and ``path_len`` (int)
     but omits two convenience fields the frontend relies on
     (``path_nodes`` — the per-node split — and ``hop_count`` — an
@@ -93,7 +44,7 @@ def enrich_rx_log_entries(rx_log_data):
             # Per-hop width in hex chars. A flood path is uniform-width
             # per packet (originator-stamped), so
             # one width describes the whole path. Prefer the protocol
-            # field path_hash_size (propagated from meshcore-ha). If
+            # field path_hash_size (propagated by the embedded engine). If
             # absent (entries fired before that fix, or any path lacking
             # it), derive it: path_len is the hop count and len(raw)//2
             # the byte count, so bytes-per-hop is their ratio. Fall back
@@ -117,7 +68,7 @@ def enrich_rx_log_entries(rx_log_data):
 
 
 def parse_flood_scope_allowlist(raw: object) -> tuple[list[str], bool]:
-    """Parse the upstream integration's comma-separated flood-scope
+    """Parse the HiveFW config entry's comma-separated flood-scope
     allowlist into ``(named_region_scopes, wildcard_present)``.
 
     ``'#'`` and blank entries are sentinels/noise (skipped); ``'*'`` is the
@@ -140,7 +91,7 @@ def parse_flood_scope_allowlist(raw: object) -> tuple[list[str], bool]:
 
 
 def wildcard_global_allowlisted(hass: HomeAssistant) -> bool:
-    """True when the upstream meshcore flood-scope allowlist contains ``'*'``.
+    """True when the HiveFW flood-scope allowlist contains ``'*'``.
 
     The allowlist (``CONF_FLOOD_SCOPES_UPSTREAM``) lives on the *upstream*
     meshcore config entry, which the companion consumes via
@@ -172,7 +123,7 @@ def derive_flood_scope(
     """Derive one ``(flood_scope, region_scope)`` for a message from its
     per-repeater rx_log entries.
 
-    Stock upstream meshcore-ha stamps each rx_log entry of a received
+    The embedded HiveFW engine stamps each rx_log entry of a received
     channel message with ``region_scope`` (``route_type == 0`` — True when
     the flood carried a transport region code) and, for a transport-scoped
     flood, a ``flood_scope`` region name (via ``match_flood_scope``). It
@@ -181,7 +132,7 @@ def derive_flood_scope(
     so they share one scope — this returns the first entry's values.
 
     When the entries describe an explicit global flood (``region_scope`` is
-    ``False``) with no upstream-supplied ``flood_scope`` and the caller
+    ``False``) with no supplied ``flood_scope`` and the caller
     passes ``wildcard_global=True`` (the user allowlisted ``'*'``), the
     "all regions" label ``'*'`` is synthesized here. ``'*'`` is a
     presentation label local to this panel, not a wire/protocol value
@@ -208,7 +159,7 @@ def derive_flood_scope(
             region_scope = entry["region_scope"]
     if flood_scope is None and region_scope is False and wildcard_global:
         # Global/unscoped flood (a plain FLOOD, route_type 1 -> region_scope
-        # False). Stock upstream meshcore-ha supplies no flood_scope for this
+        # False). The engine supplies no flood_scope for this
         # case (only named regions, via match_flood_scope); '*' is this
         # panel's label for "all regions", applied only when the user
         # allowlisted '*'.
