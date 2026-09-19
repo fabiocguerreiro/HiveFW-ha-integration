@@ -36,6 +36,11 @@ export class ContactCard extends LitElement {
       background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.08);
       border-color: var(--primary-color, #03a9f4);
     }
+    .contact-card.age-lt1h { border-left: 4px solid #2e7d32; }
+    .contact-card.age-lt6h { border-left: 4px solid #66a832; }
+    .contact-card.age-lt24h { border-left: 4px solid #f9a825; }
+    .contact-card.age-lt7d { border-left: 4px solid #ef6c00; }
+    .contact-card.age-stale { border-left: 4px solid #757575; opacity: .78; }
 
     .contact-avatar {
       width: 32px;
@@ -84,6 +89,20 @@ export class ContactCard extends LitElement {
       color: var(--secondary-text-color, #727272);
       margin-top: 2px;
     }
+    .contact-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .contact-tag {
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+      color: var(--primary-color);
+      font-size: 9px;
+      line-height: 1.4;
+    }
 
     .category-badge {
       font-size: 10px;
@@ -111,17 +130,26 @@ export class ContactCard extends LitElement {
     const avatarClass = this._getTypeClass(c.type);
     const { label: catLabel, cls: catCls } = this._getCategoryBadge(c);
 
+    const ageClass = c.age_bucket ? `age-${c.age_bucket}` : 'age-stale';
+    const cardClass = `contact-card ${ageClass}${this.selected ? ' selected' : ''}`;
+    const tags = Array.isArray(c.tags) ? c.tags : [];
+
     return html`
-      <div class=${this.selected ? 'contact-card selected' : 'contact-card'}>
+      <div class=${cardClass}>
         <div class="contact-avatar ${avatarClass}">
           ${this._getTypeIcon(c.type)}
         </div>
         <div class="contact-info">
-          <div class="contact-name">${c.adv_name}</div>
+          <div class="contact-name">${c.favorite ? '★ ' : ''}${c.adv_name}</div>
           <div class="contact-prefix">${c.pubkey_prefix}</div>
           <div class="contact-meta">
             ${c.lastmod ? `Last heard ${new Date(c.lastmod * 1000).toLocaleString()}` : ''}
           </div>
+          ${tags.length
+            ? html`<div class="contact-tags">
+                ${tags.slice(0, 3).map((tag) => html`<span class="contact-tag">#${tag}</span>`)}
+              </div>`
+            : html``}
         </div>
         <span class="category-badge ${catCls}">${catLabel}</span>
       </div>
