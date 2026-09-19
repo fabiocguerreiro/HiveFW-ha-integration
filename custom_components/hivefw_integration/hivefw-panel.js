@@ -46,6 +46,7 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapLoading = false;
     this.__nodesMapLoadedEntry = null;
     this.__nodesMapMarkerElements = new Map();
+    this.__nodesLeafletMarkers = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
     this.__nodesPopupId = "";
@@ -55,7 +56,6 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapFrame = 0;
     this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
-    this.__mapTileAccess = null;
 
     this.__diagHistory = null;
     this.__diagHistoryKey = "";
@@ -3659,8 +3659,6 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeTraceRouteLayer() {
-    const map=this.__nodesMapElement;
-    if(map && "paths" in map)map.paths=[];
     this.__traceRouteLayer=null;
   }
 
@@ -3748,73 +3746,10 @@ class HiveFWPanel extends BasePanel {
   }
 
   __drawLastTraceRoute() {
-    const pane=this.__nodesMapPane;
-    const map=this.__nodesMapElement;
-    if(!pane||!map)return;
+    // The base Nodes map is deliberately immutable. Route history is exposed
+    // through ROTAS, but no path layer is injected into ha-map.
     this.__removeTraceRouteLayer();
-    pane.querySelector(".hive-trace-summary")?.remove();
-    const data=this.__traceRouteData();
-    if(!data)return;
-
-    if(data.points.length>=2 && "paths" in map){
-      const now=Date.now();
-      map.paths=[{
-        name:"HiveFW route",
-        color:"#1565c0",
-        gradualOpacity:0,
-        points:data.points.map((point,index)=>({
-          point,
-          timestamp:new Date(now+index*1000),
-        })),
-      }];
-      this.__traceRouteLayer=true;
-    }
-
-    const summary=document.createElement("div");
-    summary.className="hive-trace-summary";
-    summary.style.cssText="position:absolute;left:10px;top:10px;z-index:35;max-width:min(360px,calc(100% - 20px));padding:8px 10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 93%,transparent);box-shadow:0 1px 5px rgba(0,0,0,.18);font-size:10px;color:var(--primary-text-color,#222);pointer-events:auto;";
-    const top=document.createElement("div");
-    top.style.cssText="display:flex;align-items:center;gap:8px;";
-    const label=document.createElement("strong");
-    label.style.flex="1";
-    const sourceLabel=data.trace.source==="message"?"Rota da mensagem":data.trace.source==="history"?"Trace histórico":"Último Trace";
-    label.textContent=sourceLabel+" · "+String(data.trace.target?.adv_name||data.trace.target?.pubkey_prefix||"Nó");
-    const history=document.createElement("button");
-    history.type="button";history.textContent="Histórico";
-    history.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
-    history.addEventListener("click",()=>void this.__toggleTraceHistory());
-    const clear=document.createElement("button");
-    clear.type="button";clear.textContent="Limpar";
-    clear.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
-    clear.addEventListener("click",()=>this.__clearLastTrace());
-    top.append(label,history,clear);
-    const detail=document.createElement("div");
-    const parts=[data.trace.result.response_time||((data.trace.result.round_trip_ms||0)+"ms"),String(data.trace.result.hops||0)+" hops"];
-    if(data.segments.length){
-      const total=data.totalDistanceKm;
-      parts.push("Distância "+(total>=10?total.toFixed(1):total.toFixed(2))+" km");
-    }
-    if(Number.isFinite(Number(data.trace.result.final_snr)))parts.push("SNR "+Number(data.trace.result.final_snr).toFixed(1)+" dB");
-    if(data.unresolved.length)parts.push(data.unresolved.length+" hash não resolvido"+(data.unresolved.length===1?"":"s"));
-    detail.textContent=parts.join(" · ");
-    detail.style.cssText="margin-top:3px;color:var(--secondary-text-color,#666);";
-    summary.append(top,detail);
-    if(data.segments.length){
-      const segmentLine=document.createElement("div");
-      segmentLine.textContent=data.segments.map((segment)=>{
-        const km=segment.km;
-        return segment.from+" → "+segment.to+" "+(km>=10?km.toFixed(1):km.toFixed(2))+" km";
-      }).join(" · ");
-      segmentLine.style.cssText="margin-top:3px;font-size:9px;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
-      summary.appendChild(segmentLine);
-    }
-    if(data.unresolved.length){
-      const hashes=document.createElement("div");
-      hashes.textContent="Sem GPS/ambíguos: "+data.unresolved.join(", ");
-      hashes.style.cssText="margin-top:3px;font:9px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
-      summary.appendChild(hashes);
-    }
-    pane.appendChild(summary);
+    this.__nodesMapPane?.querySelector(".hive-trace-summary")?.remove();
   }
 
 
@@ -3992,7 +3927,7 @@ class HiveFWPanel extends BasePanel {
       page?._syncAll?.();
       if(this.__nodesMapPane?.isConnected){
         await this.__loadNodesMapContacts();
-        this.__scheduleSplitMap(page,this.__nodesMapPane);
+        
       }
 
       if(button){
@@ -4282,7 +4217,7 @@ class HiveFWPanel extends BasePanel {
       await this.__loadNodesMapContacts();
       page?._syncAll?.();
       this.__decorateNodeCards(nroot);
-      if(this.__nodesMapPane?.isConnected)this.__scheduleSplitMap(page,this.__nodesMapPane);
+      if(this.__nodesMapPane?.isConnected)
     }catch(error){
       console.error("HiveFW bulk metadata action failed",error);
     }
@@ -4385,7 +4320,7 @@ class HiveFWPanel extends BasePanel {
         page?._syncAll?.();
         this.__decorateNodeCards(nroot);
         this.__syncBulkToolbar(nroot?.querySelector(".l1-filters"),nroot,page);
-        if(this.__nodesMapPane?.isConnected)this.__scheduleSplitMap(page,this.__nodesMapPane);
+        if(this.__nodesMapPane?.isConnected)
         console.info("HiveFW bulk cleanup removed",result?.removed_count||0);
       }catch(error){
         preview.textContent="Erro na limpeza: "+String(error);
@@ -5074,9 +5009,10 @@ class HiveFWPanel extends BasePanel {
   }
 
   __mapLocations(contacts) {
+    const fallback=contacts.filter((c)=>!c?.map_entity_id || !this.hass?.states?.[c.map_entity_id]);
     const active=new Set();
     const selectedId=this.__nodesMapFocusId||"";
-    const locations=contacts.map((c)=>{
+    const locations=fallback.map((c)=>{
       const id=this.__nodeId(c);
       const coords=this.__nodeCoords(c);
       active.add(id);
@@ -5094,6 +5030,58 @@ class HiveFWPanel extends BasePanel {
       if(!active.has(id))this.__nodesMapMarkerElements.delete(id);
     }
     return locations;
+  }
+
+  async __waitForLegacyLeaflet(map) {
+    if(!map || !("layers" in map))return false;
+    for(let i=0;i<40;i++){
+      if(map.leafletMap && map.Leaflet)return true;
+      await new Promise((resolve)=>setTimeout(resolve,75));
+      if(!map.isConnected)return false;
+    }
+    return !!(map.leafletMap && map.Leaflet);
+  }
+
+  __legacyLeafletLayers(map,contacts,page) {
+    const L=map?.Leaflet;
+    if(!L)return [];
+    this.__nodesLeafletMarkers.clear();
+    return contacts.map((contact)=>{
+      const coords=this.__nodeCoords(contact);
+      if(!coords)return null;
+      const isLocal=!!contact.__hivefw_local;
+      const id=this.__nodeId(contact);
+      const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
+      const age=String(contact?.age_bucket|| (isLocal?"lt1h":"stale"));
+      const ageColors={
+        lt1h:"#2e7d32",
+        lt6h:"#66a832",
+        lt24h:"#f9a825",
+        lt7d:"#ef6c00",
+        stale:"#757575",
+      };
+      const markerColor=ageColors[age]||ageColors.stale;
+      const markerIcon=L.divIcon?.({
+        className:"hivefw-node-age-marker",
+        html:'<span style="display:block;width:14px;height:14px;border-radius:50%;background:'+markerColor+';border:'+(isLocal?'3px solid var(--primary-color,#03a9f4)':'2px solid white')+';box-shadow:0 1px 4px rgba(0,0,0,.5)"></span>',
+        iconSize:[18,18],
+        iconAnchor:[9,9],
+      });
+      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0,...(markerIcon?{icon:markerIcon}:{})});
+      const meta=this.__nodeMeta(contact);
+      const tagText=meta.tags.length?" · "+meta.tags.map((tag)=>"#"+tag).join(" "):"";
+      const tooltipName=(meta.favorite?"★ ":"")+name+(isLocal?" · local":"")+tagText;
+      marker.bindTooltip?.(tooltipName,{
+        direction:"top",
+        offset:[0,-12],
+        permanent:isLocal,
+      });
+      marker.on?.("click",()=>{
+        this.__focusNodeOnMap(contact,true);
+      });
+      if(id)this.__nodesLeafletMarkers.set(id,marker);
+      return marker;
+    }).filter(Boolean);
   }
 
   __activityMapLocations() {
@@ -5793,88 +5781,90 @@ class HiveFWPanel extends BasePanel {
 
   __closePersistentNodePopup() {
     const popup=this.__nodesPersistentPopup;
-    if(popup?.isConnected)popup.remove();
+    const map=this.__nodesMapElement?.leafletMap;
+    if(popup && map){
+      try{ map.removeLayer(popup); }catch{}
+    }
     this.__nodesPersistentPopup=null;
     this.__nodesPopupId="";
   }
 
   __openPersistentNodePopup(contact) {
-    const pane=this.__nodesMapPane;
+    const mapEl=this.__nodesMapElement;
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
     const coords=this.__nodeCoords(contact);
-    if(!pane||!coords)return false;
+    if(!map||!L||!coords)return false;
 
     this.__closePersistentNodePopup();
 
-    const popup=document.createElement("section");
-    popup.className="hivefw-node-popup-card";
-    popup.style.cssText="position:absolute;right:12px;top:48px;z-index:48;width:min(390px,calc(100% - 24px));max-height:calc(100% - 62px);overflow:auto;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:11px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 5px 20px rgba(0,0,0,.24);";
+    const id=this.__nodeId(contact);
+    const popup=L.popup({
+      autoPan:true,
+      autoClose:false,
+      closeOnClick:false,
+      closeButton:true,
+      minWidth:320,
+      maxWidth:440,
+      className:"hivefw-node-popup",
+      offset:[0,-10],
+    })
+      .setLatLng(coords)
+      .setContent(this.__nodeMapPopup(contact));
 
-    const close=document.createElement("button");
-    close.type="button";
-    close.textContent="✕";
-    close.title="Fechar";
-    close.style.cssText="position:absolute;right:7px;top:7px;z-index:2;border:0;background:var(--card-background-color,#fff);color:var(--secondary-text-color,#666);font-size:16px;cursor:pointer;border-radius:50%;width:28px;height:28px;";
-    close.addEventListener("click",(event)=>{
-      event.preventDefault();
-      event.stopPropagation();
-      this.__closePersistentNodePopup();
+    popup.on?.("remove",()=>{
+      if(this.__nodesPersistentPopup===popup){
+        this.__nodesPersistentPopup=null;
+        this.__nodesPopupId="";
+      }
     });
 
-    const body=document.createElement("div");
-    body.style.cssText="padding:12px 38px 12px 12px;";
-    body.appendChild(this.__nodeMapPopup(contact));
-    popup.append(close,body);
-    pane.appendChild(popup);
+    popup.addTo(map);
     this.__nodesPersistentPopup=popup;
-    this.__nodesPopupId=this.__nodeId(contact);
+    this.__nodesPopupId=id;
     return true;
   }
 
   __resetNodesMapView() {
-    const map=this.__nodesMapElement;
+    const map=this.__nodesMapElement?.leafletMap;
     const saved=this.__nodesInitialViewport;
     if(!map||!saved)return false;
     this.__closePersistentNodePopup();
-    if(typeof map.panTo==="function"){
-      map.zoom=saved.zoom;
-      map.panTo([saved.lat,saved.lng]);
-      return true;
-    }
-    map.setView?.([saved.lat,saved.lng],saved.zoom);
+    map.setView([saved.lat,saved.lng],saved.zoom,{animate:true});
     return true;
   }
 
   async __applyInitialNodesMapView(localRepeater) {
-    const map=this.__nodesMapElement;
+    const mapEl=this.__nodesMapElement;
+    if(!mapEl||!localRepeater)return false;
+    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
+
     const coords=this.__nodeCoords(localRepeater);
-    if(!map||!coords)return false;
-    if(typeof map.panTo==="function"){
-      map.zoom=9;
-      map.panTo(coords);
-      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
-      return true;
+    if(!coords)return false;
+
+    const bounds=mapEl.Leaflet.circle(coords,{radius:100000}).getBounds();
+    mapEl.leafletMap.fitBounds(bounds,{animate:false});
+
+    const center=mapEl.leafletMap.getCenter?.();
+    const zoom=mapEl.leafletMap.getZoom?.();
+    if(center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)){
+      this.__nodesInitialViewport={lat:center.lat,lng:center.lng,zoom};
     }
-    if(typeof map.setView==="function"){
-      map.setView(coords,9);
-      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
-      return true;
-    }
-    return false;
+    return true;
   }
 
   __removeActivityHeatmapLayer() {
     this.__activityHeatmapLayer=null;
     this.__activityHeatmapVisible=false;
+    this.__nodesMapPane?.querySelector(".hive-activity-overlay")?.remove();
     this.__nodesMapPane?.querySelector(".hive-activity-legend")?.remove();
-    const contacts=this.__validMapContacts();
-    this.__applyPublicMapLocations(contacts);
   }
 
   __toggleActivityHeatmap() {
-    this.__activityHeatmapVisible=!this.__activityHeatmapVisible;
-    if(!this.__activityHeatmapVisible){
+    if(this.__activityHeatmapVisible){
       this.__removeActivityHeatmapLayer();
     }else{
+      this.__activityHeatmapVisible=true;
       this.__drawActivityHeatmap();
     }
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
@@ -5885,14 +5875,59 @@ class HiveFWPanel extends BasePanel {
     if(!this.__activityHeatmapVisible)return;
     const pane=this.__nodesMapPane;
     if(!pane)return;
-    this.__activityHeatmapLayer=true;
-    this.__applyPublicMapLocations(this.__validMapContacts());
-    pane.querySelector(".hive-activity-legend")?.remove();
+    pane.querySelector(".hive-activity-overlay")?.remove();
 
-    const legend=document.createElement("div");
-    legend.className="hive-activity-legend";
-    legend.textContent="Atividade · círculos maiores = mais RX + TX + aparições em paths · histórico local HiveFW · sem tráfego RF";
-    pane.appendChild(legend);
+    const source=this.__validMapContacts()
+      .map((contact)=>{
+        const activity=this.__peerActivityFor(contact);
+        const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
+        return {contact,activity,score};
+      })
+      .filter((item)=>item.score>0)
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,20);
+
+    const overlay=document.createElement("section");
+    overlay.className="hive-activity-overlay";
+    overlay.style.cssText="position:absolute;right:12px;top:48px;z-index:46;width:min(360px,calc(100% - 24px));max-height:calc(100% - 64px);overflow:auto;padding:10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 96%,transparent);box-shadow:0 3px 14px rgba(0,0,0,.20);font-size:11px;color:var(--primary-text-color,#222);";
+
+    const head=document.createElement("div");
+    head.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    const title=document.createElement("strong");
+    title.textContent="Atividade observada";
+    title.style.flex="1";
+    const close=document.createElement("button");
+    close.type="button"; close.textContent="✕";
+    close.style.cssText="border:0;background:transparent;cursor:pointer;color:var(--secondary-text-color,#666);";
+    close.addEventListener("click",()=>this.__removeActivityHeatmapLayer());
+    head.append(title,close);
+    overlay.appendChild(head);
+
+    if(!source.length){
+      const empty=document.createElement("div");
+      empty.textContent="Ainda sem atividade local suficiente.";
+      empty.style.color="var(--secondary-text-color,#666)";
+      overlay.appendChild(empty);
+    }else{
+      for(const item of source){
+        const row=document.createElement("button");
+        row.type="button";
+        row.style.cssText="display:flex;width:100%;align-items:center;gap:8px;padding:7px 5px;border:0;border-top:1px solid var(--divider-color,#eee);background:transparent;color:inherit;text-align:left;cursor:pointer;";
+        const name=document.createElement("span");
+        name.style.flex="1";
+        name.textContent=String(item.contact.adv_name||item.contact.pubkey_prefix||"Nó");
+        const value=document.createElement("strong");
+        value.textContent=String(item.score);
+        row.append(name,value);
+        row.addEventListener("click",()=>{
+          this.__focusNodeOnMap(item.contact,true);
+          this.__removeActivityHeatmapLayer();
+        });
+        overlay.appendChild(row);
+      }
+    }
+    pane.appendChild(overlay);
+    this.__activityHeatmapLayer=overlay;
   }
 
   __resolveTopologyHash(hash) {
@@ -6112,26 +6147,7 @@ class HiveFWPanel extends BasePanel {
     this.__topologyOverlay=overlay;
   }
 
-  async __ensureMapTileAccess() {
-    if(!this.hass?.connection)return null;
-    const now=Date.now();
-    if(this.__mapTileAccess?.token && now-(this.__mapTileAccess.at||0)<15*60*1000){
-      return this.__mapTileAccess.token;
-    }
-    try{
-      const result=await this.hass.connection.sendMessagePromise({
-        type:"map_tiles/access_token",
-      });
-      const token=String(result?.token||"").trim();
-      if(token){
-        this.__mapTileAccess={token,at:now};
-        return token;
-      }
-    }catch(error){
-      console.warn("HiveFW map tile token unavailable",error);
-    }
-    return null;
-  }
+
 
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
@@ -6183,16 +6199,6 @@ class HiveFWPanel extends BasePanel {
     }
 
     if(!this.__nodesMapElement?.isConnected){
-      const tileToken=await this.__ensureMapTileAccess();
-      if(!tileToken){
-        pane.replaceChildren();
-        const note=document.createElement("div");
-        note.className="hive-map-note";
-        note.textContent="Mapa indisponível: o Home Assistant não devolveu o token de cartografia.";
-        pane.appendChild(note);
-        return;
-      }
-
       pane.replaceChildren();
 
       const count=document.createElement("div");
@@ -6200,64 +6206,10 @@ class HiveFWPanel extends BasePanel {
       pane.appendChild(count);
 
       const map=document.createElement("ha-map");
-      // Force Home Assistant's light raster Leaflet engine. MapLibre/WebGL is
-      // unnecessarily heavy for a contacts map and was the source of blank
-      // territory in this custom-panel context.
-      map._forceLeaflet=true;
-      map.dataset.hiveTileTokenReady="1";
-      if(this.hass){
-        // ha-map normally receives these through HA context providers. A custom
-        // panel does not reliably provide that context, so inject the same
-        // shapes explicitly before the element connects.
-        map._states=this.hass.states||{};
-        map._config={
-          auth:this.hass.auth,
-          config:this.hass.config,
-          user:this.hass.user,
-          userData:this.hass.userData,
-          systemData:this.hass.systemData,
-        };
-        map._connection={
-          connection:this.hass.connection,
-          connected:this.hass.connected,
-          debugConnection:this.hass.debugConnection,
-          hassUrl:this.hass.hassUrl,
-        };
-        map._ui={
-          themes:this.hass.themes,
-          selectedTheme:this.hass.selectedTheme,
-          panels:this.hass.panels,
-          panelUrl:this.hass.panelUrl,
-          dockedSidebar:this.hass.dockedSidebar,
-          kioskMode:this.hass.kioskMode,
-          enableShortcuts:this.hass.enableShortcuts,
-          vibrate:this.hass.vibrate,
-          suspendWhenHidden:this.hass.suspendWhenHidden,
-        };
-        map._i18n={
-          localize:this.hass.localize,
-          locale:this.hass.locale,
-          loadBackendTranslation:this.hass.loadBackendTranslation,
-          loadFragmentTranslation:this.hass.loadFragmentTranslation,
-          language:this.hass.language,
-          selectedLanguage:this.hass.selectedLanguage,
-          translationMetadata:this.hass.translationMetadata,
-        };
-        map._formatters={
-          formatEntityState:this.hass.formatEntityState,
-          formatEntityStateToParts:this.hass.formatEntityStateToParts,
-          formatEntityAttributeValue:this.hass.formatEntityAttributeValue,
-          formatEntityAttributeValueToParts:this.hass.formatEntityAttributeValueToParts,
-          formatEntityAttributeName:this.hass.formatEntityAttributeName,
-          formatEntityName:this.hass.formatEntityName,
-        };
-      }
       map.autoFit=false;
-      map.clusterMarkers=false;
+      map.clusterMarkers=true;
       map.scaleRuler=true;
-      map.zoom=9;
-      map.themeMode="auto";
-      map.style.cssText="display:block;width:100%;height:100%;min-height:0;";
+      map.themeMode="light";
       map.addEventListener("editable-location-clicked",(e)=>{
         const id=e.detail?.id;
         const contact=this.__validMapContacts().find((c)=>this.__nodeId(c)===id);
@@ -6283,20 +6235,43 @@ class HiveFWPanel extends BasePanel {
       const center=document.createElement("button");
       center.type="button";
       center.textContent="CENTRAR";
-      center.title="Centrar no Repeater local";
+      center.title="Centrar no repetidor local";
       center.addEventListener("click",(event)=>{
         event.preventDefault();
         event.stopPropagation();
-        this.__centerNodesMap();
+
+        const local=this.__localRepeaterMapContact();
+        if(!local)return;
+
+        const id=this.__nodeId(local);
+        const marker=this.__nodesLeafletMarkers.get(id);
+
+        // This is intentionally the same operation as clicking the actual
+        // local contact marker. Because "local" is now the real discovered
+        // contact, its marker id/coordinates are the same ones shown on map.
+        if(marker?.fire){
+          marker.fire("click");
+          return;
+        }
+        this.__focusNodeOnMap(local,true);
       });
       count.append(label,center);
     }
 
-    const mapChanged=this.__nodesMapSignature!==signature;
-    if(mapChanged){
+    // Home Assistant 2026.9's ha-map has no editableLocations API yet.
+    // It does expose Leaflet layers, so use real Leaflet markers there.
+    // Newer HA builds are feature-detected and use editableLocations/entities.
+    if(this.__nodesMapSignature!==signature){
       const map=this.__nodesMapElement;
-      map.entities=[];
-      if("editableLocations" in map)this.__applyPublicMapLocations(mapContacts);
+      if("layers" in map && await this.__waitForLegacyLeaflet(map)){
+        map.entities=[];
+        map.layers=this.__legacyLeafletLayers(map,mapContacts,page);
+      }else{
+        map.entities=this.__mapEntities(mapContacts);
+        if("editableLocations" in map){
+          map.editableLocations=this.__mapLocations(mapContacts);
+        }
+      }
       this.__nodesMapSignature=signature;
     }
 
@@ -6305,8 +6280,7 @@ class HiveFWPanel extends BasePanel {
         this.__nodesMapInitialViewEntry=entryId;
       }
     }
-    if(mapChanged || !this.__traceRouteLayer)this.__drawLastTraceRoute();
-    if(this.__activityHeatmapVisible && !this.__activityHeatmapLayer)this.__drawActivityHeatmap();
+    this.__drawLastTraceRoute();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
@@ -6322,14 +6296,20 @@ class HiveFWPanel extends BasePanel {
 
     const contacts=this.__validMapContacts();
     const map=this.__nodesMapElement;
-    this.__applyPublicMapLocations(contacts);
-    if(typeof map.panTo==="function"){
-      map.zoom=12;
-      map.panTo(coords);
-    }else{
+    if(map.leafletMap){
+      map.leafletMap.setView(coords,12,{animate:true});
+      if(openPopup){
+        const marker=this.__nodesLeafletMarkers.get(id);
+        marker?.setZIndexOffset?.(2000);
+        window.setTimeout(()=>{
+          this.__openPersistentNodePopup(contact);
+        },180);
+      }
+    }else if(!("layers" in map)){
+      map.entities=this.__mapEntities(contacts);
+      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
       map.setView?.(coords,12);
     }
-    if(openPopup)window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
   }
 
     __settingsSelect(label, options, value) {
@@ -7700,71 +7680,5 @@ class HiveFWPanel extends BasePanel {
     }
     wrap.appendChild(grid);
   }
-
-  __neighborCard(neighbor) {
-    const card = document.createElement("article");
-    card.className = "hive-neighbor-card";
-
-    const icon = document.createElement("div");
-    icon.className = "hive-neighbor-icon";
-    icon.textContent = "⌁";
-
-    const info = document.createElement("div");
-
-    const name = document.createElement("div");
-    name.className = "hive-neighbor-name";
-    name.textContent = neighbor.name || neighbor.pubkey_prefix || "Repeater";
-
-    const prefix = document.createElement("div");
-    prefix.className = "hive-neighbor-prefix";
-    prefix.textContent = String(neighbor.pubkey_prefix || "").toUpperCase();
-
-    const meta = document.createElement("div");
-    meta.className = "hive-neighbor-meta";
-
-    const direct = document.createElement("span");
-    direct.className = "hive-neighbor-pill";
-    direct.textContent = "ZERO-HOP";
-    meta.appendChild(direct);
-
-    if (neighbor.known_contact) {
-      const known = document.createElement("span");
-      known.textContent = "Contacto adicionado";
-      meta.appendChild(known);
-    } else {
-      const discovered = document.createElement("span");
-      discovered.textContent = "Descoberto";
-      meta.appendChild(discovered);
-    }
-
-    info.append(name, prefix, meta);
-
-    const side = document.createElement("div");
-    side.className = "hive-neighbor-side";
-
-    const age = document.createElement("div");
-    age.className = "hive-neighbor-age";
-    age.textContent = this.__age(Number(neighbor.secs_ago || 0));
-
-    const label = document.createElement("div");
-    label.className = "hive-neighbor-side-label";
-    label.textContent = "último advert";
-
-    side.append(age, label);
-    card.append(icon, info, side);
-    return card;
-  }
-
-  __age(seconds) {
-    const value = Math.max(0, Math.floor(Number(seconds) || 0));
-    if (value < 10) return "agora";
-    if (value < 60) return `${value}s`;
-    const minutes = Math.floor(value / 60);
-    if (minutes < 60) return `${minutes} min`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} h`;
-    return `${Math.floor(hours / 24)} d`;
-  }
-}
 
 customElements.define("hivefw-panel", HiveFWPanel);
