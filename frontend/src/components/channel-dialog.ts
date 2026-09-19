@@ -262,12 +262,9 @@ export class ChannelDialog extends LitElement {
   }
 
   /**
-   * Region-scope selector. Sourced from the upstream meshcore
-   * integration's Global Settings allowlist (meshcore-dev/meshcore-ha
-   * #250). When the allowlist is empty the select is disabled and an
-   * inline hint explains where scope names come from — required for
-   * HA-only setups, where the firmware's region auto-discovery isn't
-   * reachable through the companion protocol.
+   * Region-scope selector backed by HiveFW's own flood-scope allowlist.
+   * When the allowlist is empty the select is disabled and an inline hint
+   * explains that scopes can be configured directly in HiveFW.
    */
   private _renderScopeField() {
     const scopes = this._availableScopes;
@@ -301,15 +298,10 @@ export class ChannelDialog extends LitElement {
           <option selected>All regions (global flood)</option>
         </select>
         <div class="form-description scope-empty-hint">
-          No region scopes are configured yet. Add scope names in the
-          <a
-            href="/config/integrations/integration/meshcore"
-            target="_blank"
-            rel="noopener">MeshCore integration</a>
-          first (Configure → Global Settings → Flood Scope Allowlist),
-          then reopen this dialog. Region names are agreed within your
-          local mesh community — check your community's reference, or
-          scan for nearby regions from the MeshCore mobile app.
+          No region scopes are configured yet. Add them in HiveFW
+          (Dispositivo → Global Settings → Flood Scope Allowlist), then
+          reopen this dialog. Region names are agreed within your local
+          mesh community.
         </div>
       `;
     }
