@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Dynamic telemetry sensor platform for MeshCore integration."""
+"""Dynamic telemetry sensor platform for HiveFW."""
 
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ class TelemetrySensorManager:
     async def setup_telemetry_listener(self):
         """Set up the telemetry event listener."""
         if not self.coordinator.api.mesh_core:
-            _LOGGER.warning("No MeshCore instance available for telemetry sensor setup")
+            _LOGGER.warning("No HiveFW radio instance available for telemetry sensor setup")
             return
 
         # Subscribe to telemetry response events
@@ -536,7 +536,7 @@ class MeshCoreTelemetrySensor(CoordinatorEntity, SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             name=device_name,
-            manufacturer="MeshCore",
+            manufacturer="HiveFW",
             model=device_model,
             via_device=(
                 (DOMAIN, coordinator.config_entry.entry_id)
