@@ -55,6 +55,7 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapFrame = 0;
     this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
+    this.__mapTileAccess = null;
 
     this.__diagHistory = null;
     this.__diagHistoryKey = "";
@@ -6111,6 +6112,27 @@ class HiveFWPanel extends BasePanel {
     this.__topologyOverlay=overlay;
   }
 
+  async __ensureMapTileAccess() {
+    if(!this.hass?.connection)return null;
+    const now=Date.now();
+    if(this.__mapTileAccess?.token && now-(this.__mapTileAccess.at||0)<15*60*1000){
+      return this.__mapTileAccess.token;
+    }
+    try{
+      const result=await this.hass.connection.sendMessagePromise({
+        type:"map_tiles/access_token",
+      });
+      const token=String(result?.token||"").trim();
+      if(token){
+        this.__mapTileAccess={token,at:now};
+        return token;
+      }
+    }catch(error){
+      console.warn("HiveFW map tile token unavailable",error);
+    }
+    return null;
+  }
+
   async __ensureSplitMap(page,pane) {
     if(!pane?.isConnected)return;
     const entryId=this.__entryId()||null;
@@ -6161,6 +6183,16 @@ class HiveFWPanel extends BasePanel {
     }
 
     if(!this.__nodesMapElement?.isConnected){
+      const tileToken=await this.__ensureMapTileAccess();
+      if(!tileToken){
+        pane.replaceChildren();
+        const note=document.createElement("div");
+        note.className="hive-map-note";
+        note.textContent="Mapa indisponível: o Home Assistant não devolveu o token de cartografia.";
+        pane.appendChild(note);
+        return;
+      }
+
       pane.replaceChildren();
 
       const count=document.createElement("div");
@@ -6172,12 +6204,19 @@ class HiveFWPanel extends BasePanel {
       // unnecessarily heavy for a contacts map and was the source of blank
       // territory in this custom-panel context.
       map._forceLeaflet=true;
+      map.dataset.hiveTileTokenReady="1";
       if(this.hass){
         // ha-map normally receives these through HA context providers. A custom
         // panel does not reliably provide that context, so inject the same
         // shapes explicitly before the element connects.
         map._states=this.hass.states||{};
-        map._config=this.hass.config||{};
+        map._config={
+          auth:this.hass.auth,
+          config:this.hass.config,
+          user:this.hass.user,
+          userData:this.hass.userData,
+          systemData:this.hass.systemData,
+        };
         map._connection={
           connection:this.hass.connection,
           connected:this.hass.connected,
