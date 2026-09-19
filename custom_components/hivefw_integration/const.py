@@ -5,13 +5,11 @@ from typing import Final
 
 # This integration's own domain.
 DOMAIN: Final = "hivefw_integration"
+ENTITY_PREFIX: Final = "hivefw"
 PUBLIC_EVENT_PREFIX: Final = "hivefw"
 
-# Domain of the upstream meshcore integration we listen to and consume from.
-# Used for: filtering binary_sensor entities by their source integration,
-# subscribing to events fired on hass.bus, and as the prefix on services
-# we call (`meshcore.send_message`, etc.) — never appears in our own
-# data namespace, only as a reference to the producer.
+# Internal engine/service domain. Kept as an alias because older lifted
+# helper code still imports MESHCORE_DOMAIN, but it resolves to HiveFW itself.
 MESHCORE_DOMAIN: Final = DOMAIN
 
 # Upstream meshcore config-entry data key for the companion device name.
@@ -33,8 +31,7 @@ CONF_NAME_UPSTREAM: Final = "name"
 # versions; consumers treat absence as "no scopes available".
 CONF_FLOOD_SCOPES_UPSTREAM: Final = "flood_scopes"
 
-# Events fired on hass.bus by the upstream meshcore integration that we
-# subscribe to from __init__.py.
+# Public HiveFW events fired on hass.bus and consumed by the panel/store.
 EVENT_MESHCORE_MESSAGE: Final = f"{PUBLIC_EVENT_PREFIX}_message"
 EVENT_MESHCORE_DELIVERY_UPDATE: Final = f"{PUBLIC_EVENT_PREFIX}_delivery_update"
 EVENT_MESHCORE_CONNECTED: Final = f"{PUBLIC_EVENT_PREFIX}_connected"
