@@ -176,6 +176,9 @@ class HiveFWPanel extends BasePanel {
       this.__nodesPersistentPopup = null;
       this.__nodesInitialViewport = null;
       this.__nodesMapInitialViewEntry = null;
+      this.__closeTopologyOverlay();
+      this.__removeActivityHeatmapLayer();
+      this.__peerActivityLoadedEntry = null;
     }
 
     if (this._activeTab !== "neighbors") {
@@ -4650,7 +4653,13 @@ class HiveFWPanel extends BasePanel {
     if(!pane||!map||!L)return;
 
     if(this.__activityHeatmapLayer){
-      try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
+      if(Array.isArray(this.__activityHeatmapLayer.__hiveLayers)){
+        for(const layer of this.__activityHeatmapLayer.__hiveLayers){
+          try{map.removeLayer(layer);}catch{}
+        }
+      }else{
+        try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
+      }
       this.__activityHeatmapLayer=null;
     }
     pane.querySelector(".hive-activity-legend")?.remove();
