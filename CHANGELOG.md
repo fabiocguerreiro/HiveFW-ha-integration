@@ -4,6 +4,16 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+### Repository / architecture cleanup
+- Rewrote README and HACS metadata for the standalone HiveFW architecture; a separate Home Assistant `meshcore-ha` integration is no longer documented or required.
+- Consolidated security and upstream-attribution documentation and removed completed migration notes.
+- Removed obsolete source for the former Devices tab and components used only by that page; managed-device controls remain under **Dispositivo**.
+- Removed stale screenshots/assets from the pre-standalone UI.
+- Removed the unused `meshcore-cli` runtime requirement; Console commands use the integrated MeshCore SDK/engine.
+- Unified duplicate HiveFW wordmark assets around `brand/logo.png`.
+- Aligned the frontend package version with integration version `1.0.0`.
+
+
 ## [0.11.0] - 2026-09-19
 
 ### Network observability
