@@ -105,7 +105,7 @@ EXECUTE_COMMAND_SCHEMA = vol.Schema(
     }
 )
 
-# Schema for execute_command_ui (reads the text.meshcore_command helper)
+# Schema for execute_command_ui (reads the text.hivefw_command helper)
 EXECUTE_COMMAND_UI_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
@@ -176,7 +176,7 @@ def _resolve_ui_helper_state(
     if entity_id is None:
         return None, None, _ui_service_error(
             "helper_not_found",
-            f"MeshCore {helper} helper is not registered for config entry {entry_id}",
+            f"HiveFW {helper} helper is not registered for config entry {entry_id}",
             entry_id=entry_id,
             helper=helper,
             unique_id=unique_id,
@@ -185,7 +185,7 @@ def _resolve_ui_helper_state(
     if state is None:
         return None, entity_id, _ui_service_error(
             "helper_state_not_found",
-            f"MeshCore {helper} helper has no state: {entity_id}",
+            f"HiveFW {helper} helper has no state: {entity_id}",
             entry_id=entry_id,
             helper=helper,
             entity_id=entity_id,
@@ -193,7 +193,7 @@ def _resolve_ui_helper_state(
     if state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
         return None, entity_id, _ui_service_error(
             "helper_state_unavailable",
-            f"MeshCore {helper} helper is unavailable: {entity_id}",
+            f"HiveFW {helper} helper is unavailable: {entity_id}",
             entry_id=entry_id,
             helper=helper,
             entity_id=entity_id,
@@ -300,7 +300,7 @@ def _node_has_tracked_subscription(coordinator, pubkey_prefix: str) -> bool:
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Set up services for MeshCore integration."""
+    """Set up services for HiveFW."""
     
     async def async_send_message_service(call: ServiceCall) -> None:
         """Handle sending a message service call."""
@@ -1101,7 +1101,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         Runs the command and returns its normalized response. When
         record_to_console is set, the command/response pair is also appended to
-        the CLI Console transcript and a meshcore_cli_response event is fired so
+        the CLI Console transcript and a hivefw_integration_cli_response event is fired so
         the output is visible in the UI.
         """
         response = await _async_run_command(call)
@@ -1114,7 +1114,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_execute_command_ui_service(call: ServiceCall):
         """Execute command from the text helper entity.
 
-        Reads text.meshcore_command, runs it, and clears the input. Passes
+        Reads text.hivefw_command, runs it, and clears the input. Passes
         record_to_console through so the CLI Console Run button (which sets the
         flag) captures the response in the transcript.
         """
@@ -1479,7 +1479,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
     async def async_cleanup_unavailable_contacts_service(call: ServiceCall) -> None:
-        """Remove all unavailable MeshCore contact binary sensors."""
+        """Remove all unavailable HiveFW contact binary sensors."""
         entry_id = call.data.get(ATTR_ENTRY_ID)
 
         entity_registry = er.async_get(hass)
@@ -1498,7 +1498,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     entity_registry.async_remove(entity.entity_id)
                     removed_count += 1
 
-        _LOGGER.info(f"Removed {removed_count} unavailable MeshCore contact sensors")
+        _LOGGER.info(f"Removed {removed_count} unavailable HiveFW contact sensors")
 
     hass.services.async_register(
         DOMAIN,
@@ -1593,7 +1593,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     # See docs/docs/companion-integration-api.md for the published surface.
 
     def _resolve_coordinator(entry_id: Optional[str]) -> Any:
-        """Locate a MeshCore coordinator by entry_id, or the first available one."""
+        """Locate a HiveFW coordinator by entry_id, or the first available one."""
         if entry_id:
             coord = hass.data[DOMAIN].get(entry_id)
             if coord is not None and hasattr(coord, "api"):
@@ -2027,7 +2027,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
-    """Unload MeshCore services."""
+    """Unload HiveFW services."""
     if hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
         hass.services.async_remove(DOMAIN, SERVICE_SEND_MESSAGE)
 
