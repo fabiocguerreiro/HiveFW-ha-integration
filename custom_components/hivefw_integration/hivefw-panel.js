@@ -6169,9 +6169,47 @@ class HiveFWPanel extends BasePanel {
       // unnecessarily heavy for a contacts map and was the source of blank
       // territory in this custom-panel context.
       map._forceLeaflet=true;
-      if(this.hass?.connection)map._connection=this.hass.connection;
-      if(this.hass?.config)map._config=this.hass.config;
-      if(this.hass?.states)map._states=this.hass.states;
+      if(this.hass){
+        // ha-map normally receives these through HA context providers. A custom
+        // panel does not reliably provide that context, so inject the same
+        // shapes explicitly before the element connects.
+        map._states=this.hass.states||{};
+        map._config=this.hass.config||{};
+        map._connection={
+          connection:this.hass.connection,
+          connected:this.hass.connected,
+          debugConnection:this.hass.debugConnection,
+          hassUrl:this.hass.hassUrl,
+        };
+        map._ui={
+          themes:this.hass.themes,
+          selectedTheme:this.hass.selectedTheme,
+          panels:this.hass.panels,
+          panelUrl:this.hass.panelUrl,
+          dockedSidebar:this.hass.dockedSidebar,
+          kioskMode:this.hass.kioskMode,
+          enableShortcuts:this.hass.enableShortcuts,
+          vibrate:this.hass.vibrate,
+          suspendWhenHidden:this.hass.suspendWhenHidden,
+        };
+        map._i18n={
+          localize:this.hass.localize,
+          locale:this.hass.locale,
+          loadBackendTranslation:this.hass.loadBackendTranslation,
+          loadFragmentTranslation:this.hass.loadFragmentTranslation,
+          language:this.hass.language,
+          selectedLanguage:this.hass.selectedLanguage,
+          translationMetadata:this.hass.translationMetadata,
+        };
+        map._formatters={
+          formatEntityState:this.hass.formatEntityState,
+          formatEntityStateToParts:this.hass.formatEntityStateToParts,
+          formatEntityAttributeValue:this.hass.formatEntityAttributeValue,
+          formatEntityAttributeValueToParts:this.hass.formatEntityAttributeValueToParts,
+          formatEntityAttributeName:this.hass.formatEntityAttributeName,
+          formatEntityName:this.hass.formatEntityName,
+        };
+      }
       map.autoFit=false;
       map.clusterMarkers=false;
       map.scaleRuler=true;
