@@ -1,11 +1,13 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Constants for the MeshCore integration."""
+"""Constants for the HiveFW integration."""
 
 from enum import IntEnum
 from typing import Final
 
 DOMAIN: Final = "hivefw_integration"
+ENTITY_PREFIX: Final = "hivefw"
+PUBLIC_EVENT_PREFIX: Final = "hivefw"
 
 # Connection types
 CONF_CONNECTION_TYPE: Final = "connection_type"
@@ -60,7 +62,7 @@ ATTR_COMMAND: Final = "command"
 ATTR_ENTRY_ID: Final = "entry_id"
 ATTR_SCOPE: Final = "scope"
 # When set on execute_command / execute_command_ui, the command/response pair is
-# recorded to the CLI Console transcript and the meshcore_cli_response event fires.
+# recorded to the CLI Console transcript and the hivefw_cli_response event fires.
 ATTR_RECORD_TO_CONSOLE: Final = "record_to_console"
 
 # Platform constants
@@ -144,7 +146,7 @@ CONF_CLI_CONSOLE_ENABLED: Final = "cli_console_enabled"
 # Number of command/response pairs kept in the rolling console transcript.
 CLI_CONSOLE_MAX_LINES: Final = 50
 # Event fired after a CLI console command completes (for logbook/automations).
-EVENT_CLI_RESPONSE: Final = f"{DOMAIN}_cli_response"
+EVENT_CLI_RESPONSE: Final = f"{PUBLIC_EVENT_PREFIX}_cli_response"
 
 # STATS_CORE `errors` is a bitmask of radio dispatcher fault events, not a
 # count. Each bit latches on first occurrence and clears only on a radio
