@@ -232,9 +232,9 @@ Frontend:
 ```bash
 cd frontend
 npm ci
+npm run typecheck
 npm run build
 npm test
-npm run lint
 ```
 
 Backend:
