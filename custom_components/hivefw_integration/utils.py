@@ -2,9 +2,8 @@
 
 Lifted minimally from the upstream meshcore integration's `utils.py` — only
 the two helpers `ws_api.py` references at module load. The companion's helper
-intentionally references MESHCORE_DOMAIN (the upstream meshcore domain)
-when building entity_ids, because the entities being addressed live under
-the upstream integration's namespace, not the companion's.
+uses ENTITY_PREFIX when building entity IDs so WebSocket helpers
+match the entities created by the embedded HiveFW engine.
 
 If the companion grows to need more of the upstream `utils.py` surface
 (e.g. `parse_rx_log_data`, `decrypt_channel_message`), copy them here
@@ -18,7 +17,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
-from .const import CONF_FLOOD_SCOPES_UPSTREAM, MESHCORE_DOMAIN
+from .const import CONF_FLOOD_SCOPES_UPSTREAM, ENTITY_PREFIX, MESHCORE_DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,8 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 def sanitize_name(name: str) -> str:
     """Convert a name to a format safe for entity IDs.
 
-    Mirrors upstream `meshcore.utils.sanitize_name` exactly so entity_ids
-    constructed here match what the upstream integration registered.
+    Normalize names consistently for HiveFW entity IDs.
     """
     return slugify(name.lower() if name else "")
 
@@ -37,12 +35,8 @@ def format_entity_id(
 ) -> str:
     """Format a consistent entity ID.
 
-    The first name part is the *upstream* MeshCore domain ("meshcore"), not
-    the companion's DOMAIN ("hivefw_integration"). The entity being identified
-    was registered by the upstream integration, so its entity_id begins
-    with `<entity_domain>.meshcore_<device>_<key>...`. Using the companion
-    DOMAIN here would produce IDs that don't match anything in the
-    registry.
+    Public HiveFW entity IDs use the short "hivefw" prefix, while the
+    technical Home Assistant integration domain remains "hivefw_integration".
 
     Args:
         domain: Entity domain (e.g. 'binary_sensor', 'sensor').
@@ -51,7 +45,7 @@ def format_entity_id(
         suffix: Optional suffix.
 
     Returns:
-        Formatted entity ID like `binary_sensor.meshcore_<device>_<key>_<suffix>`.
+        Formatted entity ID like `binary_sensor.hivefw_<device>_<key>_<suffix>`.
     """
     if not domain or not entity_key:
         _LOGGER.warning("Missing required parameters for entity ID formatting")
@@ -60,7 +54,7 @@ def format_entity_id(
     # Build the entity name parts (everything after the entity domain).
     # Filter out empty strings to prevent double underscores.
     name_parts = [
-        part for part in [MESHCORE_DOMAIN, device_name, entity_key, suffix] if part
+        part for part in [ENTITY_PREFIX, device_name, entity_key, suffix] if part
     ]
     entity_name = "_".join(name_parts).replace("__", "_")
     return f"{domain}.{sanitize_name(entity_name)}"
