@@ -74,16 +74,16 @@ Regression checklist:
 
 ## Phase 4 — Console tab
 
-- [ ] Add top-level **Console** tab.
-- [ ] Move console/CLI controls out of Device.
-- [ ] Free-form command input.
-- [ ] Run command button and Enter-to-submit.
-- [ ] Transcript with command, response, timestamp and errors.
-- [ ] Clear transcript.
-- [ ] Command history (Up/Down).
-- [ ] Useful command shortcuts / command palette.
-- [ ] Per-selected-device execution.
-- [ ] Explicit warning for commands that can modify persistent node settings.
+- [x] Add top-level **Console** tab.
+- [x] Move console/CLI controls out of Device.
+- [x] Free-form command input.
+- [x] Run command button and Enter-to-submit.
+- [x] Transcript with command, response, timestamp and errors.
+- [x] Clear transcript.
+- [x] Command history (Up/Down).
+- [x] Useful command shortcuts / command palette.
+- [x] Per-selected-device execution.
+- [x] Explicit warning for commands that can modify persistent node settings.
 
 ## Phase 5 — Map / topology / route intelligence
 
