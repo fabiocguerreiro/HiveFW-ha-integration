@@ -37,11 +37,11 @@ from custom_components.hivefw_integration import (
     _make_message_handler,
     _resolve_store,
     _store_message_id,
-    _sync_upstream_repair_issue,
-    _upstream_meshcore_present,
+    _sync_engine_repair_issue,
+    _internal_engine_present,
     async_unload_entry,
 )
-from custom_components.hivefw_integration.const import DOMAIN, MESHCORE_DOMAIN
+from custom_components.hivefw_integration.const import DOMAIN
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
 
@@ -548,44 +548,44 @@ async def test_unload_entry_returns_true_with_no_runtime_data(
     assert result is True
 
 
-# ─── _upstream_meshcore_present ────────────────────────────────────────
+# ─── _internal_engine_present ────────────────────────────────────────
 
 
-def test_upstream_meshcore_present_false_when_data_missing(
+def test_internal_engine_present_false_when_data_missing(
     hass: HomeAssistant,
 ) -> None:
-    """No MESHCORE_DOMAIN key in hass.data → False."""
-    hass.data.pop(MESHCORE_DOMAIN, None)
-    assert _upstream_meshcore_present(hass) is False
+    """No DOMAIN key in hass.data → False."""
+    hass.data.pop(DOMAIN, None)
+    assert _internal_engine_present(hass) is False
 
 
-def test_upstream_meshcore_present_false_when_data_empty_dict(
+def test_internal_engine_present_false_when_data_empty_dict(
     hass: HomeAssistant,
 ) -> None:
-    """MESHCORE_DOMAIN key present but empty dict → False.
+    """DOMAIN key present but empty dict → False.
 
-    This is the upstream-was-removed-at-runtime case: upstream's unload
+    This is the engine-coordinator-missing case: engine cleanup
     pops its coordinator entry but leaves the bucket dict in place.
     """
-    hass.data[MESHCORE_DOMAIN] = {}
-    assert _upstream_meshcore_present(hass) is False
+    hass.data[DOMAIN] = {}
+    assert _internal_engine_present(hass) is False
 
 
-def test_upstream_meshcore_present_true_when_populated(
+def test_internal_engine_present_true_when_populated(
     hass: HomeAssistant,
 ) -> None:
-    """At least one entry under MESHCORE_DOMAIN → True."""
-    hass.data[MESHCORE_DOMAIN] = {"entry": object()}
-    assert _upstream_meshcore_present(hass) is True
+    """At least one API-bearing coordinator under DOMAIN → True."""
+    hass.data[DOMAIN] = {"entry": SimpleNamespace(api=object())}
+    assert _internal_engine_present(hass) is True
 
 
-# ─── _sync_upstream_repair_issue ───────────────────────────────────────
+# ─── _sync_engine_repair_issue ───────────────────────────────────────
 
 
 def _has_repair_issue(hass: HomeAssistant) -> bool:
-    """True iff the upstream_meshcore_unavailable issue is registered."""
+    """True iff the radio_engine_unavailable issue is registered."""
     issue = ir.async_get(hass).async_get_issue(
-        DOMAIN, "upstream_meshcore_unavailable"
+        DOMAIN, "radio_engine_unavailable"
     )
     return issue is not None
 
@@ -593,33 +593,33 @@ def _has_repair_issue(hass: HomeAssistant) -> bool:
 def test_sync_creates_issue_when_upstream_absent(
     hass: HomeAssistant,
 ) -> None:
-    """No upstream → call creates the issue."""
-    hass.data.pop(MESHCORE_DOMAIN, None)
+    """No engine coordinator → call creates the issue."""
+    hass.data.pop(DOMAIN, None)
     assert not _has_repair_issue(hass)
-    _sync_upstream_repair_issue(hass)
+    _sync_engine_repair_issue(hass)
     assert _has_repair_issue(hass)
 
 
 def test_sync_deletes_issue_when_upstream_returns(
     hass: HomeAssistant,
 ) -> None:
-    """Issue exists, upstream returns → call deletes it."""
-    # Pre-state: issue exists, upstream absent.
-    hass.data.pop(MESHCORE_DOMAIN, None)
-    _sync_upstream_repair_issue(hass)
+    """Issue exists, engine coordinator returns → call deletes it."""
+    # Pre-state: issue exists, engine coordinator absent.
+    hass.data.pop(DOMAIN, None)
+    _sync_engine_repair_issue(hass)
     assert _has_repair_issue(hass)
-    # Upstream returns.
-    hass.data[MESHCORE_DOMAIN] = {"entry": object()}
-    _sync_upstream_repair_issue(hass)
+    # Engine coordinator returns.
+    hass.data[DOMAIN] = {"entry": SimpleNamespace(api=object())}
+    _sync_engine_repair_issue(hass)
     assert not _has_repair_issue(hass)
 
 
 def test_sync_no_op_when_present_and_no_issue(
     hass: HomeAssistant,
 ) -> None:
-    """Upstream present + no existing issue → call leaves registry empty."""
-    hass.data[MESHCORE_DOMAIN] = {"entry": object()}
-    _sync_upstream_repair_issue(hass)
+    """Engine coordinator present + no existing issue → call leaves registry empty."""
+    hass.data[DOMAIN] = {"entry": SimpleNamespace(api=object())}
+    _sync_engine_repair_issue(hass)
     assert not _has_repair_issue(hass)
 
 
@@ -627,32 +627,32 @@ def test_sync_no_op_when_absent_and_issue_already_present(
     hass: HomeAssistant,
 ) -> None:
     """Upstream absent + issue already present → call is a no-op (idempotent)."""
-    hass.data.pop(MESHCORE_DOMAIN, None)
-    _sync_upstream_repair_issue(hass)
+    hass.data.pop(DOMAIN, None)
+    _sync_engine_repair_issue(hass)
     assert _has_repair_issue(hass)
     # Second call with the same state — issue should still exist (single entry).
-    _sync_upstream_repair_issue(hass)
+    _sync_engine_repair_issue(hass)
     assert _has_repair_issue(hass)
 
 
 def test_sync_idempotent_under_50x_loop_absent(
     hass: HomeAssistant,
 ) -> None:
-    """Risk 1 verification: 50x calls with upstream absent → exactly 1 issue.
+    """Risk 1 verification: 50x calls with engine coordinator absent → exactly 1 issue.
 
     HA's issue registry dedupes by (domain, issue_id); repeated
     create-issue calls with the same key are no-ops, so the panel-
     polling rate is safe even at high frequency.
     """
-    hass.data.pop(MESHCORE_DOMAIN, None)
+    hass.data.pop(DOMAIN, None)
     for _ in range(50):
-        _sync_upstream_repair_issue(hass)
+        _sync_engine_repair_issue(hass)
     # Exactly one entry registered for our (DOMAIN, issue_id).
     registry = ir.async_get(hass)
     issues = [
         i for i in registry.issues.values()
         if i.domain == DOMAIN
-        and i.issue_id == "upstream_meshcore_unavailable"
+        and i.issue_id == "radio_engine_unavailable"
     ]
     assert len(issues) == 1
 
@@ -660,18 +660,18 @@ def test_sync_idempotent_under_50x_loop_absent(
 def test_sync_idempotent_under_50x_loop_present(
     hass: HomeAssistant,
 ) -> None:
-    """50x calls with upstream present → registry stays empty.
+    """50x calls with engine coordinator present → registry stays empty.
 
     delete-on-non-existent is a no-op in HA's issue registry, so the
     repeated delete-issue calls are safe under high panel-polling rate.
     """
-    hass.data[MESHCORE_DOMAIN] = {"entry": object()}
+    hass.data[DOMAIN] = {"entry": SimpleNamespace(api=object())}
     for _ in range(50):
-        _sync_upstream_repair_issue(hass)
+        _sync_engine_repair_issue(hass)
     registry = ir.async_get(hass)
     issues = [
         i for i in registry.issues.values()
         if i.domain == DOMAIN
-        and i.issue_id == "upstream_meshcore_unavailable"
+        and i.issue_id == "radio_engine_unavailable"
     ]
     assert len(issues) == 0
