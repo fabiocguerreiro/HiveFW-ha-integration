@@ -53,6 +53,9 @@ class HiveFWPanel extends BasePanel {
     this.__nodesPersistentPopup = null;
     this.__nodesInitialViewport = null;
     this.__nodesMapInitialViewEntry = null;
+    this.__nodesMarkerLayer = null;
+    this.__nodesMapFrame = 0;
+    this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
 
     this.__diagHistory = null;
@@ -3971,7 +3974,28 @@ class HiveFWPanel extends BasePanel {
       style.id="hive-node-export-style";
       style.textContent=`
         .l1-filters .hive-export-btn{
+          margin-left:0;
+        }
+        .l1-filters{
+          width:100%;
+          align-items:center;
+          flex-wrap:wrap;
+        }
+        .hive-map-menu-group{
           margin-left:auto;
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          flex-wrap:wrap;
+        }
+        .hive-map-menu-group .l1-btn{
+          border-left-width:1px!important;
+          font-weight:650;
+        }
+        .hive-map-menu-group .l1-btn.active{
+          background:color-mix(in srgb,var(--primary-color,#03a9f4) 12%,transparent);
+          color:var(--primary-color,#03a9f4);
+          border-color:color-mix(in srgb,var(--primary-color,#03a9f4) 45%,var(--divider-color,#ddd));
         }
         .l1-filters .hive-export-btn,
         .l1-filters .hive-import-btn,
@@ -3992,6 +4016,7 @@ class HiveFWPanel extends BasePanel {
 
     if(filters.querySelector(".hive-export-btn")){
       this.__syncBulkToolbar(filters,nroot,page);
+      this.__ensureNodeMapMenus(filters,page);
       return;
     }
 
@@ -4033,6 +4058,76 @@ class HiveFWPanel extends BasePanel {
 
     filters.append(exportButton,importButton,bulkButton,input);
     this.__syncBulkToolbar(filters,nroot,page);
+    this.__ensureNodeMapMenus(filters,page);
+  }
+
+  __ensureNodeMapMenus(filters,page) {
+    if(!filters)return;
+    let group=filters.querySelector(".hive-map-menu-group");
+    if(!group){
+      group=document.createElement("span");
+      group.className="hive-map-menu-group";
+
+      const make=(key,label,title,handler)=>{
+        const button=document.createElement("button");
+        button.type="button";
+        button.className="l1-btn hive-map-menu-"+key;
+        button.textContent=label;
+        button.title=title;
+        button.addEventListener("click",(event)=>{
+          event.preventDefault();
+          event.stopPropagation();
+          handler();
+          this.__syncNodeMapMenuState(filters);
+        });
+        group.appendChild(button);
+        return button;
+      };
+
+      make("routes","ROTAS","Histórico de Trace",()=>void this.__toggleTraceHistory());
+      make("activity","ATIVIDADE","Heatmap derivado do histórico local",()=>this.__toggleActivityHeatmap());
+      make("topology","TOPOLOGIA","Topologia observada por caminhos reais",()=>this.__toggleTopologyOverlay());
+      filters.appendChild(group);
+    }
+    this.__syncNodeMapMenuState(filters);
+  }
+
+  __syncNodeMapMenuState(filters) {
+    if(!filters)return;
+    filters.querySelector(".hive-map-menu-activity")?.classList.toggle("active",!!this.__activityHeatmapVisible);
+    filters.querySelector(".hive-map-menu-topology")?.classList.toggle("active",!!this.__topologyVisible);
+    filters.querySelector(".hive-map-menu-routes")?.classList.toggle("active",!!this.__traceHistoryPanel?.isConnected);
+  }
+
+  __scheduleSplitMap(page,pane) {
+    if(!pane?.isConnected)return;
+    if(this.__nodesMapFrame)return;
+    this.__nodesMapFrame=requestAnimationFrame(()=>{
+      this.__nodesMapFrame=0;
+      if(pane.isConnected)void this.__ensureSplitMap(page,pane);
+    });
+  }
+
+  __syncNodesSplitGeometry(container,page,nroot) {
+    const header=nroot?.querySelector(".nodes-header");
+    if(!container||!page||!header)return;
+    const apply=()=>{
+      if(!container.isConnected||!header.isConnected)return;
+      const height=Math.max(1,Math.ceil(header.getBoundingClientRect().height));
+      container.style.setProperty("--hive-nodes-toolbar-height",height+"px");
+      page.style.setProperty("--hive-nodes-toolbar-height",height+"px");
+      const map=this.__nodesMapElement?.leafletMap;
+      if(map?.invalidateSize){
+        requestAnimationFrame(()=>{
+          try{map.invalidateSize({pan:false,animate:false});}catch{}
+        });
+      }
+    };
+    apply();
+    if(!this.__nodesHeaderResizeObserver && typeof ResizeObserver!=="undefined"){
+      this.__nodesHeaderResizeObserver=new ResizeObserver(()=>apply());
+      this.__nodesHeaderResizeObserver.observe(header);
+    }
   }
 
   __syncBulkToolbar(filters,nroot,page) {
@@ -4275,32 +4370,36 @@ class HiveFWPanel extends BasePanel {
       style.id="hive-node-split-style";
       style.textContent=`
         .page-container.hive-nodes-split{
-          display:grid!important;
-          grid-template-columns:minmax(360px,1fr) minmax(0,1fr)!important;
-          grid-template-rows:minmax(0,1fr)!important;
+          --hive-nodes-list-width:340px;
+          --hive-nodes-toolbar-height:118px;
+          display:block!important;
+          position:relative!important;
           overflow:hidden!important;
           min-height:0!important;
         }
         .page-container.hive-nodes-split > meshcore-nodes-page{
-          grid-column:1;
-          grid-row:1;
+          position:absolute;
+          inset:0;
           min-width:0;
           min-height:0;
           width:100%;
           height:100%;
           overflow:hidden;
+          z-index:1;
         }
         .page-container.hive-nodes-split > .hive-nodes-map-pane{
-          grid-column:2;
-          grid-row:1;
-          position:relative;
+          position:absolute;
+          left:var(--hive-nodes-list-width);
+          right:0;
+          top:var(--hive-nodes-toolbar-height);
+          bottom:0;
           min-width:0;
           min-height:0;
-          width:100%;
-          height:100%;
           overflow:hidden;
           background:var(--card-background-color,#fff);
           border-left:1px solid var(--divider-color,#e0e0e0);
+          border-top:1px solid var(--divider-color,#e0e0e0);
+          z-index:2;
         }
         .hive-nodes-map-pane ha-map{
           display:block;
@@ -4405,20 +4504,66 @@ class HiveFWPanel extends BasePanel {
         }
         @media(max-width:870px){
           .page-container.hive-nodes-split{
-            grid-template-columns:1fr!important;
-            grid-template-rows:minmax(360px,55%) minmax(300px,45%)!important;
-            overflow-y:auto!important;
-          }
-          .page-container.hive-nodes-split > meshcore-nodes-page{
-            grid-column:1;grid-row:1
+            --hive-nodes-list-width:100%;
           }
           .page-container.hive-nodes-split > .hive-nodes-map-pane{
-            grid-column:1;grid-row:2;border-left:0;
-            border-top:1px solid var(--divider-color,#e0e0e0)
+            left:0;
+            top:max(56%,var(--hive-nodes-toolbar-height));
+            border-left:0;
           }
         }
       `;
       root.appendChild(style);
+    }
+
+    let innerStyle=nroot.querySelector("#hive-node-inner-layout-style");
+    if(!innerStyle){
+      innerStyle=document.createElement("style");
+      innerStyle.id="hive-node-inner-layout-style";
+      innerStyle.textContent=`
+        :host{
+          width:100%!important;
+          height:100%!important;
+          --hive-nodes-list-width:340px;
+        }
+        .nodes-layout{
+          display:grid!important;
+          grid-template-columns:var(--hive-nodes-list-width) minmax(0,1fr)!important;
+          grid-template-rows:auto minmax(0,1fr)!important;
+          width:100%!important;
+          height:100%!important;
+          min-height:0!important;
+          overflow:hidden!important;
+        }
+        .nodes-header{
+          grid-column:1 / -1!important;
+          grid-row:1!important;
+          min-width:0!important;
+          padding:10px 12px!important;
+          box-sizing:border-box!important;
+        }
+        .content-area{
+          grid-column:1!important;
+          grid-row:2!important;
+          min-width:0!important;
+          min-height:0!important;
+          padding:8px!important;
+          border-right:0!important;
+        }
+        .nodes-grid{
+          grid-template-columns:1fr!important;
+          gap:7px!important;
+        }
+        @media(max-width:870px){
+          :host{--hive-nodes-list-width:100%}
+          .nodes-layout{
+            grid-template-columns:1fr!important;
+            grid-template-rows:auto minmax(300px,45%) minmax(300px,55%)!important;
+          }
+          .content-area{grid-column:1!important;grid-row:2!important}
+        }
+      `;
+      nroot.appendChild(innerStyle);
     }
 
     container.classList.add("hive-nodes-split");
@@ -4444,6 +4589,7 @@ class HiveFWPanel extends BasePanel {
     }
     this.__decorateNodeCards(nroot);
     window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
+    this.__syncNodesSplitGeometry(container,page,nroot);
 
     if(!content.dataset.hiveMapFocusBound){
       content.dataset.hiveMapFocusBound="1";
@@ -4470,7 +4616,7 @@ class HiveFWPanel extends BasePanel {
       },true);
     }
 
-    void this.__ensureSplitMap(page,pane);
+    this.__scheduleSplitMap(page,pane);
   }
 
   __cleanupNodesSplit() {
@@ -4481,6 +4627,12 @@ class HiveFWPanel extends BasePanel {
     this.__bulkSelection.clear();
     this.__closeTopologyOverlay();
     this.__removeActivityHeatmapLayer();
+    if(this.__nodesMapFrame){
+      cancelAnimationFrame(this.__nodesMapFrame);
+      this.__nodesMapFrame=0;
+    }
+    this.__nodesHeaderResizeObserver?.disconnect();
+    this.__nodesHeaderResizeObserver=null;
     const root=this.shadowRoot;
     const container=root?.querySelector(".page-container");
     container?.classList.remove("hive-nodes-split");
