@@ -46,15 +46,12 @@ class HiveFWPanel extends BasePanel {
     this.__nodesMapLoading = false;
     this.__nodesMapLoadedEntry = null;
     this.__nodesMapMarkerElements = new Map();
-    this.__nodesLeafletMarkers = new Map();
     this.__nodesMapSignature = "";
     this.__nodesMapFocusId = "";
     this.__nodesPopupId = "";
     this.__nodesPersistentPopup = null;
     this.__nodesInitialViewport = null;
     this.__nodesMapInitialViewEntry = null;
-    this.__nodesMarkerLayer = null;
-    this.__nodesBaseTileLayer = null;
     this.__nodesMapFrame = 0;
     this.__nodesHeaderResizeObserver = null;
     this.__mapLoadStarted = false;
@@ -4123,14 +4120,7 @@ class HiveFWPanel extends BasePanel {
 
   __centerNodesMap() {
     const local=this.__localRepeaterMapContact();
-    if(!local)return;
-    const id=this.__nodeId(local);
-    const marker=this.__nodesLeafletMarkers.get(id);
-    if(marker?.fire){
-      marker.fire("click");
-      return;
-    }
-    this.__focusNodeOnMap(local,true);
+    if(local)this.__focusNodeOnMap(local,true);
   }
 
   __ensureNodeMapMenus(filters,page) {
@@ -4710,18 +4700,6 @@ class HiveFWPanel extends BasePanel {
     this.__traceHistoryPanel=null;
     this.__nodesMapPane=null;
     this.__closePersistentNodePopup();
-    const leafletMap=this.__nodesMapElement?.leafletMap;
-    if(this.__nodesMarkerLayer && leafletMap){
-      if(Array.isArray(this.__nodesMarkerLayer.__hiveLayers)){
-        for(const marker of this.__nodesMarkerLayer.__hiveLayers){
-          try{leafletMap.removeLayer(marker);}catch{}
-        }
-      }else{
-        try{leafletMap.removeLayer(this.__nodesMarkerLayer);}catch{}
-      }
-    }
-    this.__nodesMarkerLayer=null;
-    this.__nodesBaseTileLayer=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
@@ -5118,60 +5096,6 @@ class HiveFWPanel extends BasePanel {
       ...this.__mapLocations(contacts),
       ...this.__activityMapLocations(),
     ];
-  }
-
-  async __ensureLegacyBaseTiles(mapEl) {
-    const map=mapEl?.leafletMap;
-    const L=mapEl?.Leaflet;
-    if(!map||!L||!this.hass?.connection)return false;
-
-    let hasTiles=false;
-    try{
-      map.eachLayer?.((layer)=>{
-        if(hasTiles)return;
-        if((L.TileLayer && layer instanceof L.TileLayer) || typeof layer?._url==="string"){
-          hasTiles=true;
-        }
-      });
-    }catch{}
-    if(hasTiles)return true;
-
-    try{
-      const result=await this.hass.connection.sendMessagePromise({
-        type:"map_tiles/access_token",
-      });
-      const token=String(result?.token||"").trim();
-      if(!token||!L.tileLayer)return false;
-      const tile=L.tileLayer(
-        "/api/map_tiles/raster/{z}/{x}/{y}.png?token="+encodeURIComponent(token),
-        {
-          maxNativeZoom:19,
-          maxZoom:20,
-          attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        }
-      );
-      tile.addTo(map);
-      this.__nodesBaseTileLayer=tile;
-      return true;
-    }catch(error){
-      console.warn("HiveFW map tile fallback unavailable",error);
-      return false;
-    }
-  }
-
-  async __waitForLegacyLeaflet(map) {
-    if(!map)return false;
-    if(map.leafletMap && map.Leaflet)return true;
-    // Modern ha-map exposes editableLocations/panTo and has no public
-    // Leaflet object. Never wait on that implementation.
-    if("editableLocations" in map || typeof map.panTo==="function")return false;
-    if(!("layers" in map))return false;
-    for(let i=0;i<8;i++){
-      if(map.leafletMap && map.Leaflet)return true;
-      await new Promise((resolve)=>setTimeout(resolve,50));
-      if(!map.isConnected)return false;
-    }
-    return !!(map.leafletMap && map.Leaflet);
   }
 
   __traceMonitorStorageKey(contact=this.__traceMonitorContact) {
@@ -5824,48 +5748,6 @@ class HiveFWPanel extends BasePanel {
     return root;
   }
 
-  __legacyLeafletLayers(map,contacts,page) {
-    const L=map?.Leaflet;
-    if(!L)return [];
-    this.__nodesLeafletMarkers.clear();
-    return contacts.map((contact)=>{
-      const coords=this.__nodeCoords(contact);
-      if(!coords)return null;
-      const isLocal=!!contact.__hivefw_local;
-      const id=this.__nodeId(contact);
-      const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
-      const age=String(contact?.age_bucket|| (isLocal?"lt1h":"stale"));
-      const ageColors={
-        lt1h:"#2e7d32",
-        lt6h:"#66a832",
-        lt24h:"#f9a825",
-        lt7d:"#ef6c00",
-        stale:"#757575",
-      };
-      const markerColor=ageColors[age]||ageColors.stale;
-      const markerIcon=L.divIcon?.({
-        className:"hivefw-node-age-marker",
-        html:'<span style="display:block;width:14px;height:14px;border-radius:50%;background:'+markerColor+';border:'+(isLocal?'3px solid var(--primary-color,#03a9f4)':'2px solid white')+';box-shadow:0 1px 4px rgba(0,0,0,.5)"></span>',
-        iconSize:[18,18],
-        iconAnchor:[9,9],
-      });
-      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0,...(markerIcon?{icon:markerIcon}:{})});
-      const meta=this.__nodeMeta(contact);
-      const tagText=meta.tags.length?" · "+meta.tags.map((tag)=>"#"+tag).join(" "):"";
-      const tooltipName=(meta.favorite?"★ ":"")+name+(isLocal?" · local":"")+tagText;
-      marker.bindTooltip?.(tooltipName,{
-        direction:"top",
-        offset:[0,-12],
-        permanent:isLocal,
-      });
-      marker.on?.("click",()=>{
-        this.__focusNodeOnMap(contact,true);
-      });
-      if(id)this.__nodesLeafletMarkers.set(id,marker);
-      return marker;
-    }).filter(Boolean);
-  }
-
   __closePersistentNodePopup() {
     const popup=this.__nodesPersistentPopup;
     if(popup?.isConnected)popup.remove();
@@ -5920,31 +5802,21 @@ class HiveFWPanel extends BasePanel {
   }
 
   async __applyInitialNodesMapView(localRepeater) {
-    const mapEl=this.__nodesMapElement;
-    if(!mapEl||!localRepeater)return false;
-
+    const map=this.__nodesMapElement;
     const coords=this.__nodeCoords(localRepeater);
-    if(!coords)return false;
-
-    if(typeof mapEl.panTo==="function"){
-      mapEl.zoom=9;
-      mapEl.panTo(coords);
+    if(!map||!coords)return false;
+    if(typeof map.panTo==="function"){
+      map.zoom=9;
+      map.panTo(coords);
       this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
       return true;
     }
-
-    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
-    await this.__ensureLegacyBaseTiles(mapEl);
-
-    mapEl.leafletMap.setView(coords,9,{animate:false});
-    try{mapEl.leafletMap.invalidateSize?.({pan:false,animate:false});}catch{}
-
-    const center=mapEl.leafletMap.getCenter?.();
-    const zoom=mapEl.leafletMap.getZoom?.();
-    if(center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)){
-      this.__nodesInitialViewport={lat:center.lat,lng:center.lng,zoom};
+    if(typeof map.setView==="function"){
+      map.setView(coords,9);
+      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
+      return true;
     }
-    return true;
+    return false;
   }
 
   __removeActivityHeatmapLayer() {
@@ -6292,42 +6164,11 @@ class HiveFWPanel extends BasePanel {
       count.append(label);
     }
 
-    // Keep HiveFW markers in an independent Leaflet LayerGroup.
-    // Never assign ha-map.layers: that property belongs to Home Assistant and
-    // replacing it can remove/rebuild the base tile layer (blank territory).
     const mapChanged=this.__nodesMapSignature!==signature;
     if(mapChanged){
       const map=this.__nodesMapElement;
-      if("editableLocations" in map || typeof map.panTo==="function"){
-        // Public Home Assistant map API (current frontend).
-        map.entities=[];
-        if("editableLocations" in map){
-          this.__applyPublicMapLocations(mapContacts);
-        }
-      }else if(await this.__waitForLegacyLeaflet(map)){
-        // Compatibility path for older HA versions. Keep HiveFW overlays
-        // separate from ha-map's own layers so its territory tiles survive.
-        await this.__ensureLegacyBaseTiles(map);
-        if(this.__nodesMarkerLayer && map.leafletMap){
-          try{map.leafletMap.removeLayer(this.__nodesMarkerLayer);}catch{}
-        }
-        const markers=this.__legacyLeafletLayers(map,mapContacts,page);
-        this.__nodesMarkerLayer=map.Leaflet?.layerGroup
-          ? map.Leaflet.layerGroup(markers).addTo(map.leafletMap)
-          : {__hiveLayers:markers};
-        if(!map.Leaflet?.layerGroup){
-          for(const marker of markers){
-            try{marker.addTo(map.leafletMap);}catch{}
-          }
-        }
-        requestAnimationFrame(()=>{
-          try{map.leafletMap?.invalidateSize?.({pan:false,animate:false});}catch{}
-        });
-      }else{
-        // Old transitional builds with entity-only map support.
-        map.entities=[];
-        if("editableLocations" in map)this.__applyPublicMapLocations(mapContacts);
-      }
+      map.entities=[];
+      if("editableLocations" in map)this.__applyPublicMapLocations(mapContacts);
       this.__nodesMapSignature=signature;
     }
 
@@ -6353,21 +6194,14 @@ class HiveFWPanel extends BasePanel {
 
     const contacts=this.__validMapContacts();
     const map=this.__nodesMapElement;
-    if(map.leafletMap){
-      map.leafletMap.setView(coords,12,{animate:true});
-      if(openPopup)window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
-    }else if(typeof map.panTo==="function"){
-      this.__applyPublicMapLocations(contacts);
+    this.__applyPublicMapLocations(contacts);
+    if(typeof map.panTo==="function"){
       map.zoom=12;
       map.panTo(coords);
-      if(openPopup){
-        window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
-      }
     }else{
-      map.entities=[];
-      if("editableLocations" in map)this.__applyPublicMapLocations(contacts);
       map.setView?.(coords,12);
     }
+    if(openPopup)window.setTimeout(()=>this.__openPersistentNodePopup(contact),80);
   }
 
     __settingsSelect(label, options, value) {
