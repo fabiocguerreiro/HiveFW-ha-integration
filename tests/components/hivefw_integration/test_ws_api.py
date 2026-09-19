@@ -3858,3 +3858,96 @@ async def test_ws_set_device_config_path_hash_mode_ok_counts_success(
     assert len(conn.results) == 1
     _, result = conn.results[0]
     assert "path_hash_mode" in result["changed"]
+
+
+
+# ─── HiveFW Console WebSocket API ───────────────────────────────────────
+
+
+async def test_ws_console_get_returns_history(
+    hass: HomeAssistant, coordinator: MagicMock
+) -> None:
+    """Console history comes directly from the selected HiveFW coordinator."""
+    coordinator.cli_console_history = [
+        {
+            "timestamp": 123,
+            "command": "get_bat",
+            "response": {"level": 4104},
+            "is_error": False,
+        }
+    ]
+    conn = _Connection()
+    await _call_ws(
+        ws_api.ws_console_get,
+        hass,
+        conn,
+        {"id": 1, "entry_id": "meshcore_entry"},
+    )
+
+    assert conn.errors == []
+    assert conn.results == [
+        (
+            1,
+            {
+                "history": [
+                    {
+                        "timestamp": 123,
+                        "command": "get_bat",
+                        "response": {"level": 4104},
+                        "is_error": False,
+                    }
+                ]
+            },
+        )
+    ]
+
+
+async def test_ws_console_execute_uses_hivefw_service(
+    hass: HomeAssistant, coordinator: MagicMock
+) -> None:
+    """Free-form Console commands route through HiveFW execute_command."""
+    async_call = AsyncMock(return_value={"level": 4104})
+
+    with patch(
+        "homeassistant.core.ServiceRegistry.async_call",
+        async_call,
+    ):
+        conn = _Connection()
+        await _call_ws(
+            ws_api.ws_console_execute,
+            hass,
+            conn,
+            {"id": 1, "entry_id": "meshcore_entry", "command": "get_bat"},
+        )
+
+    assert conn.errors == []
+    assert conn.results[0][1]["success"] is True
+    assert conn.results[0][1]["response"] == {"level": 4104}
+    call_args = async_call.call_args
+    assert call_args.args[0] == DOMAIN
+    assert call_args.args[1] == "execute_command"
+    assert call_args.args[2] == {
+        "command": "get_bat",
+        "record_to_console": True,
+        "entry_id": "meshcore_entry",
+    }
+    assert call_args.kwargs["blocking"] is True
+    assert call_args.kwargs["return_response"] is True
+
+
+async def test_ws_console_clear_clears_selected_history(
+    hass: HomeAssistant, coordinator: MagicMock
+) -> None:
+    """Console clear calls the coordinator-owned transcript reset."""
+    coordinator.clear_cli_console = MagicMock()
+    conn = _Connection()
+    await _call_ws(
+        ws_api.ws_console_clear,
+        hass,
+        conn,
+        {"id": 1, "entry_id": "meshcore_entry"},
+    )
+
+    coordinator.clear_cli_console.assert_called_once_with()
+    assert conn.errors == []
+    assert conn.results == [(1, {"success": True})]
