@@ -530,6 +530,8 @@ def _get_runtime_data(
 
 async def _save_runtime_aux(runtime: HiveFWRuntimeData) -> None:
     """Persist node metadata and trace history in one auxiliary store."""
+    if runtime.node_meta_store is None:
+        return
     await runtime.node_meta_store.async_save(
         {
             "nodes": runtime.node_meta,
