@@ -2697,7 +2697,7 @@ class HiveFWPanel extends BasePanel {
 
     const summary = document.createElement("div");
     summary.style.cssText = "display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px;";
-    const online = devices.filter((d) => d.connected || d.status === "online").length;
+    const online = devices.filter((d) => d.status === "online").length;
     for (const text of [
       `${devices.length} equipamentos`,
       `${repeaters.length} repeaters`,
@@ -2716,7 +2716,7 @@ class HiveFWPanel extends BasePanel {
       "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:9px;";
 
     for (const device of devices) {
-      const isOnline = device.connected || device.status === "online";
+      const isOnline = device.status === "online";
       const row = document.createElement("div");
       row.style.cssText =
         "display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--primary-background-color);";
