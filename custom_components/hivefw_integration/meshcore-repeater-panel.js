@@ -1715,6 +1715,34 @@ class MeshCoreRepeaterPanel extends BasePanel {
       hero.appendChild(makeTile("RF Health",primary,details?"· "+details:"",100,0,100,rfBand,"rf-health"));
     }
 
+    const airtimeUtil=metric("airtime_utilization");
+    const rxAirtimeUtil=metric("rx_airtime_utilization");
+    const txAirtime=metric("tx_airtime");
+    const rxAirtime=metric("rx_airtime");
+    if(
+      Number.isFinite(airtimeUtil.value)||Number.isFinite(rxAirtimeUtil.value)||
+      Number.isFinite(txAirtime.value)||Number.isFinite(rxAirtime.value)
+    ){
+      const utilParts=[
+        Number.isFinite(airtimeUtil.value)?"TX "+airtimeUtil.value.toFixed(1)+"%":null,
+        Number.isFinite(rxAirtimeUtil.value)?"RX "+rxAirtimeUtil.value.toFixed(1)+"%":null,
+      ].filter(Boolean);
+      const timeParts=[
+        Number.isFinite(txAirtime.value)?"TX "+txAirtime.value.toFixed(1)+" min":null,
+        Number.isFinite(rxAirtime.value)?"RX "+rxAirtime.value.toFixed(1)+" min":null,
+      ].filter(Boolean);
+      const primary=utilParts.length?utilParts.join(" · "):(timeParts[0]||"—");
+      const secondary=timeParts.length?"· "+timeParts.join(" · "):"";
+      const maxUtil=Math.max(
+        Number.isFinite(airtimeUtil.value)?airtimeUtil.value:0,
+        Number.isFinite(rxAirtimeUtil.value)?rxAirtimeUtil.value:0
+      );
+      hero.appendChild(makeTile(
+        "Airtime",primary,secondary,Math.min(maxUtil,100),0,100,
+        maxUtil>=50?"warn":"info","airtime-health"
+      ));
+    }
+
     const successMetric=metric("request_successes");
     const failMetric=metric("request_failures");
     if(Number.isFinite(successMetric.value)||Number.isFinite(failMetric.value)){
@@ -1793,6 +1821,19 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
     const alerts=[];
     if(Number.isFinite(noiseValue)&&noiseValue>-105)alerts.push("noise floor alto");
+
+    // meshcore-ha exposes STATS_CORE radio faults as latching problem
+    // binary sensors when Self Diagnostics is enabled. "on" means the
+    // fault has occurred at least once since the radio last booted.
+    for(const [key,label] of [
+      ["err_pool_full","packet pool esgotado"],
+      ["err_cad_timeout","CAD timeout"],
+      ["err_rx_timeout","RX timeout"],
+    ]){
+      const entityId=this.__findDeviceMetricEntity(summary,key);
+      const state=entityId?this.hass?.states?.[entityId]:null;
+      if(state?.state==="on")alerts.push(label);
+    }
     const queueValue=Number(status.stats?.core?.queue_len);
     if(Number.isFinite(queueValue)&&queueValue>5)alerts.push("TX queue "+Math.round(queueValue));
     const driftAbs=Math.abs(Number(status.clock?.drift_seconds||0));
@@ -3129,7 +3170,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
 
   __traceMonitorChart(samples,key) {
     const values=samples
-      .filter((sample)=>!sample.error&&Number.isFinite(Number(sample?.[key])))
+      .filter((sample)=>!sample.error&&sample?.[key]!=null&&Number.isFinite(Number(sample[key])))
       .map((sample)=>({t:sample.timestamp,v:Number(sample[key])}));
     return this.__sparklineSvg(values);
   }
@@ -3196,7 +3237,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const charts=document.createElement("div");
       charts.style.cssText="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 10px;";
       for(const [label,key,unit] of [["RTT","round_trip_ms","ms"],["SNR final","final_snr","dB"]]){
-        const valid=good.filter((sample)=>Number.isFinite(Number(sample[key])));
+        const valid=good.filter((sample)=>sample[key]!=null&&Number.isFinite(Number(sample[key])));
         if(!valid.length)continue;
         const card=document.createElement("div");card.style.cssText="padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);";
         const latest=Number(valid[valid.length-1][key]);
@@ -3215,7 +3256,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
       const value=document.createElement("span");
       value.textContent=sample.error
         ? "Erro: "+sample.error
-        : String(sample.round_trip_ms)+" ms · "+String(sample.hops)+" hops"+(Number.isFinite(Number(sample.final_snr))?" · SNR "+Number(sample.final_snr).toFixed(1)+" dB":"");
+        : String(sample.round_trip_ms)+" ms · "+String(sample.hops)+" hops"+(sample.final_snr!=null&&Number.isFinite(Number(sample.final_snr))?" · SNR "+Number(sample.final_snr).toFixed(1)+" dB":"");
       if(sample.error)value.style.color="var(--error-color,#db4437)";
       row.append(when,value);list.appendChild(row);
     }
