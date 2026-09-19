@@ -528,6 +528,44 @@ def _get_runtime_data(
     return None
 
 
+async def _save_runtime_aux(runtime: HiveFWRuntimeData) -> None:
+    """Persist node metadata and trace history in one auxiliary store."""
+    await runtime.node_meta_store.async_save(
+        {
+            "nodes": runtime.node_meta,
+            "traces": runtime.trace_history[-100:],
+        }
+    )
+
+
+async def _record_trace_history(
+    hass: HomeAssistant,
+    entry_id: str | None,
+    target_prefix: str,
+    trace_result: dict,
+    *,
+    source: str = "manual",
+) -> None:
+    """Append one successful trace result to the per-entry history."""
+    runtime = _get_runtime_data(hass, entry_id)
+    if runtime is None:
+        return
+
+    record = {
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "target_prefix": str(target_prefix or ""),
+        "source": source,
+        "round_trip_ms": int(trace_result.get("round_trip_ms") or 0),
+        "hops": int(trace_result.get("hops") or 0),
+        "final_snr": trace_result.get("final_snr"),
+        "path": trace_result.get("path") or [],
+    }
+    runtime.trace_history.append(record)
+    if len(runtime.trace_history) > 100:
+        runtime.trace_history[:] = runtime.trace_history[-100:]
+    await _save_runtime_aux(runtime)
+
+
 def _contact_meta_key(contact: dict) -> str:
     """Return stable lower-case public-key identity for local node metadata."""
     raw = contact.get("public_key") or ""
@@ -631,6 +669,9 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_blocked_contacts)
     websocket_api.async_register_command(hass, ws_set_contact_blocked)
     websocket_api.async_register_command(hass, ws_set_node_meta)
+    websocket_api.async_register_command(hass, ws_get_trace_history)
+    websocket_api.async_register_command(hass, ws_clear_trace_history)
+    websocket_api.async_register_command(hass, ws_get_peer_activity)
 
     # Paginated contacts & counts
     websocket_api.async_register_command(hass, ws_get_contacts_paginated)
@@ -752,11 +793,68 @@ async def ws_set_node_meta(hass, connection, msg):
     else:
         runtime.node_meta.pop(key, None)
 
-    await runtime.node_meta_store.async_save(runtime.node_meta)
+    await _save_runtime_aux(runtime)
     connection.send_result(
         msg["id"],
         {"favorite": favorite, "tags": tags},
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/get_trace_history",
+        vol.Optional("entry_id"): str,
+        vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
+    }
+)
+@callback
+def ws_get_trace_history(hass, connection, msg):
+    """Return persisted successful Trace results, newest first."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_result(msg["id"], {"traces": []})
+        return
+    limit = msg["limit"]
+    connection.send_result(
+        msg["id"],
+        {"traces": list(reversed(runtime.trace_history[-limit:]))},
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/clear_trace_history",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_clear_trace_history(hass, connection, msg):
+    """Clear persisted Trace history for one HiveFW entry."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_result(msg["id"], {"cleared": 0})
+        return
+    cleared = len(runtime.trace_history)
+    runtime.trace_history.clear()
+    await _save_runtime_aux(runtime)
+    connection.send_result(msg["id"], {"cleared": cleared})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/get_peer_activity",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_peer_activity(hass, connection, msg):
+    """Return peer RX/TX and path-link volume derived from stored messages."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_result(msg["id"], {"peers": {}, "links": {}})
+        return
+    result = await runtime.store.get_peer_activity()
+    connection.send_result(msg["id"], result)
 
 
 # ─── meshcore/get_contacts_paginated ─────────────────────────────────
@@ -3865,13 +3963,21 @@ async def ws_trace(
     # final_snr/tag at trace.* — the WS contract is the same fields at
     # top level plus a formatted response_time string.
     rtt = int(trace.get("round_trip_ms", 0))
-    connection.send_result(msg["id"], {
+    trace_result = {
         "round_trip_ms": rtt,
         "response_time": f"{rtt}ms",
         "hops": trace.get("hops", 0),
         "final_snr": trace.get("final_snr"),
         "path": trace.get("path", []),
-    })
+    }
+    await _record_trace_history(
+        hass,
+        msg.get("entry_id"),
+        msg.get("pubkey_prefix", ""),
+        trace_result,
+        source="manual",
+    )
+    connection.send_result(msg["id"], trace_result)
 
 
 async def _ws_trace_explicit(
@@ -3998,13 +4104,21 @@ async def _ws_trace_explicit(
                 if path and "snr" in path[-1]:
                     final_snr = path[-1]["snr"]
 
-                connection.send_result(msg["id"], {
+                trace_result = {
                     "round_trip_ms": round_trip_ms,
                     "response_time": f"{round_trip_ms}ms",
                     "hops": response_data.get("path_len", 0),
                     "final_snr": final_snr,
                     "path": path,
-                })
+                }
+                await _record_trace_history(
+                    hass,
+                    msg.get("entry_id"),
+                    pubkey_prefix,
+                    trace_result,
+                    source="explicit",
+                )
+                connection.send_result(msg["id"], trace_result)
             except asyncio.TimeoutError:
                 connection.send_error(
                     msg["id"], "timeout",
