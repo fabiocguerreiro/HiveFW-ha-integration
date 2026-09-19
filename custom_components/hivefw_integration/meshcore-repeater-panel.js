@@ -67,6 +67,13 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__lastTrace = null;
     this.__lastTraceLoadedEntry = null;
     this.__traceRouteLayer = null;
+    this.__traceMonitorOverlay = null;
+    this.__traceMonitorTimer = null;
+    this.__traceMonitorRunning = false;
+    this.__traceMonitorBusy = false;
+    this.__traceMonitorContact = null;
+    this.__traceMonitorSamples = [];
+    this.__traceMonitorInterval = 300;
 
     this.__hiveNeighbors = null;
     this.__hiveNeighborsLoading = false;
@@ -2768,6 +2775,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   __cleanupNodesSplit() {
+    this.__closeTraceMonitor();
     const root=this.shadowRoot;
     const container=root?.querySelector(".page-container");
     container?.classList.remove("hive-nodes-split");
@@ -3026,6 +3034,184 @@ class MeshCoreRepeaterPanel extends BasePanel {
     return !!(map.leafletMap && map.Leaflet);
   }
 
+  __stopTraceMonitor() {
+    if(this.__traceMonitorTimer){
+      window.clearInterval(this.__traceMonitorTimer);
+      this.__traceMonitorTimer=null;
+    }
+    this.__traceMonitorRunning=false;
+    this.__traceMonitorBusy=false;
+  }
+
+  __closeTraceMonitor() {
+    this.__stopTraceMonitor();
+    this.__traceMonitorOverlay?.remove();
+    this.__traceMonitorOverlay=null;
+  }
+
+  async __runTraceMonitorSample() {
+    const contact=this.__traceMonitorContact;
+    if(!this.hass||!contact||this.__traceMonitorBusy)return;
+    if(!contact.added_to_node){
+      this.__traceMonitorSamples.push({timestamp:Date.now(),error:"Contacto não adicionado"});
+      this.__renderTraceMonitorOverlay();
+      return;
+    }
+    const prefix=String(contact.pubkey_prefix||String(contact.public_key||"").slice(0,12));
+    if(!prefix)return;
+    this.__traceMonitorBusy=true;
+    this.__renderTraceMonitorOverlay();
+    try{
+      const msg={type:"hivefw_integration/trace",pubkey_prefix:prefix};
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__traceMonitorSamples.push({
+        timestamp:Date.now(),
+        round_trip_ms:Number(result?.round_trip_ms||0),
+        hops:Number(result?.hops||0),
+        final_snr:result?.final_snr==null?null:Number(result.final_snr),
+        result,
+      });
+      if(this.__traceMonitorSamples.length>100)this.__traceMonitorSamples=this.__traceMonitorSamples.slice(-100);
+      this.__recordTraceResult(result,contact,"monitor");
+    }catch(error){
+      this.__traceMonitorSamples.push({
+        timestamp:Date.now(),
+        error:error?.message||error?.code||String(error),
+      });
+      if(this.__traceMonitorSamples.length>100)this.__traceMonitorSamples=this.__traceMonitorSamples.slice(-100);
+    }finally{
+      this.__traceMonitorBusy=false;
+      this.__renderTraceMonitorOverlay();
+    }
+  }
+
+  __startTraceMonitor() {
+    if(this.__traceMonitorRunning||!this.__traceMonitorContact)return;
+    this.__traceMonitorRunning=true;
+    void this.__runTraceMonitorSample();
+    const ms=Math.max(120,Number(this.__traceMonitorInterval)||300)*1000;
+    this.__traceMonitorTimer=window.setInterval(()=>void this.__runTraceMonitorSample(),ms);
+    this.__renderTraceMonitorOverlay();
+  }
+
+  __traceMonitorChart(samples,key) {
+    const values=samples
+      .filter((sample)=>!sample.error&&Number.isFinite(Number(sample?.[key])))
+      .map((sample)=>({t:sample.timestamp,v:Number(sample[key])}));
+    return this.__sparklineSvg(values);
+  }
+
+  __renderTraceMonitorOverlay() {
+    const overlay=this.__traceMonitorOverlay;
+    if(!overlay)return;
+    const dialog=overlay.querySelector(".hive-trace-monitor-dialog");
+    if(!dialog)return;
+    dialog.replaceChildren();
+    const contact=this.__traceMonitorContact;
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--divider-color,#ddd);";
+    const title=document.createElement("div");
+    title.textContent="Trace Monitor · "+String(contact?.adv_name||contact?.pubkey_prefix||"Nó");
+    title.style.cssText="flex:1;font-size:16px;font-weight:700;";
+    const close=document.createElement("button");
+    close.type="button";close.textContent="✕";close.title="Fechar";
+    close.style.cssText="width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:inherit;font-size:17px;cursor:pointer;";
+    close.addEventListener("click",()=>this.__closeTraceMonitor());
+    header.append(title,close);dialog.appendChild(header);
+
+    const note=document.createElement("div");
+    note.style.cssText="padding:10px 16px 4px;font-size:10px;line-height:1.45;color:var(--secondary-text-color,#777);";
+    note.textContent="On-demand: cada amostra executa um Trace MeshCore e pode usar path discovery/flood. O monitor só corre enquanto esta janela estiver aberta; mínimo 2 minutos.";
+    dialog.appendChild(note);
+
+    const controls=document.createElement("div");
+    controls.style.cssText="display:flex;align-items:center;gap:8px;padding:8px 16px 11px;";
+    const select=document.createElement("select");
+    select.style.cssText="padding:7px 9px;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:inherit;font:inherit;font-size:12px;";
+    for(const [seconds,label] of [[120,"2 min"],[300,"5 min"],[600,"10 min"],[1800,"30 min"]]){
+      const option=document.createElement("option");option.value=String(seconds);option.textContent=label;option.selected=Number(seconds)===Number(this.__traceMonitorInterval);select.appendChild(option);
+    }
+    select.disabled=this.__traceMonitorRunning;
+    select.addEventListener("change",()=>{this.__traceMonitorInterval=Number(select.value)||300;});
+    const toggle=document.createElement("button");
+    toggle.type="button";toggle.textContent=this.__traceMonitorRunning?"Parar":"Iniciar";
+    toggle.style.cssText="padding:7px 12px;border:1px solid var(--primary-color,#03a9f4);border-radius:7px;background:var(--primary-color,#03a9f4);color:#fff;font-size:12px;font-weight:700;cursor:pointer;";
+    toggle.addEventListener("click",()=>{
+      if(this.__traceMonitorRunning){this.__stopTraceMonitor();this.__renderTraceMonitorOverlay();}
+      else this.__startTraceMonitor();
+    });
+    const one=document.createElement("button");
+    one.type="button";one.textContent=this.__traceMonitorBusy?"A medir…":"Medir agora";one.disabled=this.__traceMonitorBusy;
+    one.style.cssText="padding:7px 12px;border:1px solid var(--divider-color,#ccc);border-radius:7px;background:var(--card-background-color,#fff);color:inherit;font-size:12px;font-weight:600;cursor:pointer;";
+    one.addEventListener("click",()=>void this.__runTraceMonitorSample());
+    const count=document.createElement("span");
+    count.textContent=this.__traceMonitorSamples.length+" amostras";
+    count.style.cssText="margin-left:auto;font-size:10px;color:var(--secondary-text-color,#777);";
+    controls.append(select,toggle,one,count);dialog.appendChild(controls);
+
+    if(!contact?.added_to_node){
+      const warning=document.createElement("div");
+      warning.textContent="Este nó precisa de estar Adicionado antes de poder executar Trace Monitor.";
+      warning.style.cssText="margin:0 16px 10px;padding:9px;border-radius:7px;background:rgba(255,152,0,.12);font-size:11px;";
+      dialog.appendChild(warning);
+      toggle.disabled=true;one.disabled=true;
+    }
+
+    const good=this.__traceMonitorSamples.filter((sample)=>!sample.error);
+    if(good.length){
+      const charts=document.createElement("div");
+      charts.style.cssText="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 10px;";
+      for(const [label,key,unit] of [["RTT","round_trip_ms","ms"],["SNR final","final_snr","dB"]]){
+        const valid=good.filter((sample)=>Number.isFinite(Number(sample[key])));
+        if(!valid.length)continue;
+        const card=document.createElement("div");card.style.cssText="padding:9px;border-radius:8px;background:var(--secondary-background-color,#f5f5f5);";
+        const latest=Number(valid[valid.length-1][key]);
+        const head=document.createElement("div");head.textContent=label+" · "+latest.toFixed(key==="round_trip_ms"?0:1)+" "+unit;head.style.cssText="font-size:11px;font-weight:650;";
+        card.append(head,this.__traceMonitorChart(valid,key));charts.appendChild(card);
+      }
+      dialog.appendChild(charts);
+    }
+
+    const list=document.createElement("div");
+    list.style.cssText="overflow:auto;max-height:330px;padding:0 16px 14px;";
+    for(const sample of [...this.__traceMonitorSamples].reverse()){
+      const row=document.createElement("div");
+      row.style.cssText="display:grid;grid-template-columns:145px 1fr;gap:8px;padding:7px 4px;border-top:1px solid var(--divider-color,#e5e5e5);font-size:11px;";
+      const when=document.createElement("span");when.textContent=new Date(sample.timestamp).toLocaleString();when.style.color="var(--secondary-text-color,#777)";
+      const value=document.createElement("span");
+      value.textContent=sample.error
+        ? "Erro: "+sample.error
+        : String(sample.round_trip_ms)+" ms · "+String(sample.hops)+" hops"+(Number.isFinite(Number(sample.final_snr))?" · SNR "+Number(sample.final_snr).toFixed(1)+" dB":"");
+      if(sample.error)value.style.color="var(--error-color,#db4437)";
+      row.append(when,value);list.appendChild(row);
+    }
+    if(!this.__traceMonitorSamples.length){
+      const empty=document.createElement("div");empty.textContent="Ainda sem amostras.";empty.style.cssText="padding:18px;text-align:center;color:var(--secondary-text-color,#777);font-size:11px;";list.appendChild(empty);
+    }
+    dialog.appendChild(list);
+  }
+
+  __openTraceMonitor(contact) {
+    this.__closeTraceMonitor();
+    this.__traceMonitorContact=contact;
+    this.__traceMonitorSamples=[];
+    this.__traceMonitorInterval=300;
+    const overlay=document.createElement("div");
+    overlay.id="hive-trace-monitor-overlay";
+    overlay.style.cssText="position:fixed;inset:0;z-index:10070;background:rgba(0,0,0,.48);display:grid;place-items:center;padding:18px;box-sizing:border-box;";
+    const dialog=document.createElement("div");
+    dialog.className="hive-trace-monitor-dialog";
+    dialog.style.cssText="width:min(720px,100%);max-height:min(86vh,800px);display:flex;flex-direction:column;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.28);overflow:hidden;";
+    overlay.appendChild(dialog);
+    overlay.addEventListener("click",(event)=>{if(event.target===overlay)this.__closeTraceMonitor();});
+    this.shadowRoot?.appendChild(overlay);
+    this.__traceMonitorOverlay=overlay;
+    this.__renderTraceMonitorOverlay();
+  }
+
   __nodeMapPopup(contact) {
     const root=document.createElement("div");
     root.style.minWidth="300px";
@@ -3243,6 +3429,14 @@ class MeshCoreRepeaterPanel extends BasePanel {
         }));
       });
       actions.appendChild(trace);
+
+      if(contact.added_to_node){
+        const monitor=document.createElement("button");
+        monitor.type="button";monitor.textContent="Monitor";monitor.title="Trace Monitor on-demand";
+        monitor.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:6px;background:var(--card-background-color,#fff);color:var(--primary-color,#03a9f4);font-size:12px;font-weight:650;cursor:pointer;";
+        monitor.addEventListener("click",(event)=>{event.preventDefault();event.stopPropagation();this.__openTraceMonitor(contact);});
+        actions.appendChild(monitor);
+      }
     }
 
     const copy=document.createElement("button");
