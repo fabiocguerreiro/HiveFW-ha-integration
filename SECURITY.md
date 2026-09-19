@@ -68,4 +68,4 @@ logs ou mensagens de erro além do estritamente necessário.
 ## Dependências e upstream
 
 HiveFW inclui/adapta componentes de `meshcore-dev/meshcore-ha` e usa o SDK MeshCore.
-A proveniência está documentada em [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+A proveniência e os avisos de licença upstream estão consolidados em [LICENSE](LICENSE).
