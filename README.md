@@ -280,14 +280,18 @@ Parte do motor interno foi adaptada de
 [meshcore-dev/meshcore-ha](https://github.com/meshcore-dev/meshcore-ha).
 O SDK/protocolo MeshCore continua a ser uma dependência de implementação.
 
-A proveniência e licenças estão documentadas em
-[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+A proveniência e os avisos de licença upstream estão consolidados no
+[LICENSE](LICENSE).
 
 Projetos relacionados:
 
 - [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater)
 - [MeshCore](https://github.com/meshcore-dev/MeshCore)
 - [meshcore_py](https://github.com/meshcore-dev/meshcore_py)
+
+## Histórico de alterações
+
+O histórico detalhado é mantido pelo Git e pelas releases/commits do repositório, evitando duplicar documentação de versões antigas num changelog manual.
 
 ## Disclaimer
 
