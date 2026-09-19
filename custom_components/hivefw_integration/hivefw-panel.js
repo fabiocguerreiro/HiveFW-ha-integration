@@ -2725,6 +2725,197 @@ class HiveFWPanel extends BasePanel {
     await this.__sendRemoteRegionCommand(`region ${this.__regionAction} ${name}`,sroot);
   }
 
+  async __loadPeerActivity() {
+    const entryId=this.__entryId()||null;
+    if(this.__peerActivityLoading)return;
+    if(this.__peerActivityLoadedEntry===entryId)return;
+    this.__peerActivityLoading=true;
+    try{
+      const msg={type:"hivefw_integration/get_peer_activity"};
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__peerActivity={
+        peers:result?.peers&&typeof result.peers==="object"?result.peers:{},
+        links:result?.links&&typeof result.links==="object"?result.links:{},
+      };
+      this.__peerActivityLoadedEntry=entryId;
+      const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+      const nroot=page?.shadowRoot;
+      if(nroot)this.__decorateNodeCards(nroot);
+      if(this.__nodesPersistentPopup){
+        const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
+        const selected=source.find((c)=>this.__nodeId(c)===this.__nodesPopupId);
+        if(selected)this.__openPersistentNodePopup(selected);
+      }
+    }catch(error){
+      console.warn("HiveFW peer activity load failed",error);
+      this.__peerActivity={peers:{},links:{}};
+      this.__peerActivityLoadedEntry=entryId;
+    }finally{
+      this.__peerActivityLoading=false;
+    }
+  }
+
+  __peerActivityFor(contact) {
+    const peers=this.__peerActivity?.peers||{};
+    const links=this.__peerActivity?.links||{};
+    const key=String(contact?.public_key||"").trim().toLowerCase();
+    const prefix=String(contact?.pubkey_prefix||key.slice(0,12)).trim().toLowerCase();
+    let peer=null;
+    for(const [candidate,value] of Object.entries(peers)){
+      const c=String(candidate||"").toLowerCase();
+      if((key&&key.startsWith(c))||(prefix&&prefix.startsWith(c))||(c&&c.startsWith(prefix))){
+        if(peer!==null){peer=null;break;}
+        peer=value;
+      }
+    }
+    let linkVolume=0;
+    let weightedRssi=0;
+    let weightedSnr=0;
+    let rssiN=0;
+    let snrN=0;
+    for(const [hash,value] of Object.entries(links)){
+      const resolved=this.__resolveTraceHash(hash);
+      if(!resolved||this.__nodeId(resolved)!==this.__nodeId(contact))continue;
+      const count=Number(value?.observations)||0;
+      linkVolume+=count;
+      if(Number.isFinite(Number(value?.avg_rssi))){weightedRssi+=Number(value.avg_rssi)*count;rssiN+=count;}
+      if(Number.isFinite(Number(value?.avg_snr))){weightedSnr+=Number(value.avg_snr)*count;snrN+=count;}
+    }
+    return {
+      rx:Number(peer?.rx)||0,
+      tx:Number(peer?.tx)||0,
+      messages:Number(peer?.messages)||0,
+      linkVolume,
+      avgRssi:rssiN?weightedRssi/rssiN:null,
+      avgSnr:snrN?weightedSnr/snrN:null,
+    };
+  }
+
+  async __loadTraceHistory(force=false) {
+    const entryId=this.__entryId()||null;
+    if(this.__traceHistoryLoading)return;
+    if(!force&&this.__traceHistoryLoadedEntry===entryId)return;
+    this.__traceHistoryLoading=true;
+    try{
+      const msg={type:"hivefw_integration/get_trace_history",limit:100};
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__traceHistory=Array.isArray(result?.traces)?result.traces:[];
+      this.__traceHistoryLoadedEntry=entryId;
+    }catch(error){
+      console.warn("HiveFW trace history load failed",error);
+      this.__traceHistory=[];
+      this.__traceHistoryLoadedEntry=entryId;
+    }finally{
+      this.__traceHistoryLoading=false;
+    }
+  }
+
+  async __clearTraceHistory() {
+    const msg={type:"hivefw_integration/clear_trace_history"};
+    const entryId=this.__entryId();
+    if(entryId)msg.entry_id=entryId;
+    try{await this.hass.callWS(msg);}catch(error){console.warn("HiveFW trace history clear failed",error);}
+    this.__traceHistory=[];
+    this.__traceHistoryPanel?.remove();
+    this.__traceHistoryPanel=null;
+  }
+
+  async __toggleTraceHistory() {
+    if(this.__traceHistoryPanel?.isConnected){
+      this.__traceHistoryPanel.remove();
+      this.__traceHistoryPanel=null;
+      return;
+    }
+    await this.__loadTraceHistory(true);
+    const pane=this.__nodesMapPane;
+    if(!pane)return;
+    const panel=document.createElement("div");
+    panel.className="hive-trace-history";
+    panel.style.cssText="position:absolute;left:10px;top:68px;z-index:36;width:min(390px,calc(100% - 20px));max-height:55%;overflow:auto;padding:9px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 96%,transparent);box-shadow:0 2px 8px rgba(0,0,0,.22);font-size:10px;color:var(--primary-text-color,#222);";
+    const head=document.createElement("div");
+    head.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:7px;";
+    const title=document.createElement("strong");title.textContent="Histórico de Trace";title.style.flex="1";
+    const clear=document.createElement("button");clear.type="button";clear.textContent="Limpar";clear.style.cssText="border:0;background:transparent;color:var(--error-color,#db4437);font:inherit;font-weight:700;cursor:pointer;";
+    clear.addEventListener("click",()=>void this.__clearTraceHistory());
+    const close=document.createElement("button");close.type="button";close.textContent="✕";close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color);cursor:pointer;";
+    close.addEventListener("click",()=>{panel.remove();this.__traceHistoryPanel=null;});
+    head.append(title,clear,close);panel.appendChild(head);
+    if(!this.__traceHistory.length){
+      const empty=document.createElement("div");empty.textContent="Ainda não existem traces guardados.";empty.style.color="var(--secondary-text-color)";panel.appendChild(empty);
+    }else{
+      for(const record of this.__traceHistory){
+        const row=document.createElement("button");
+        row.type="button";
+        row.style.cssText="display:block;width:100%;padding:7px 8px;margin:0 0 5px;text-align:left;border:1px solid var(--divider-color,#ddd);border-radius:7px;background:transparent;color:inherit;cursor:pointer;font:inherit;";
+        const when=document.createElement("div");
+        const dt=new Date(record.timestamp);
+        when.textContent=(Number.isNaN(dt.getTime())?String(record.timestamp||""):dt.toLocaleString())+" · "+String(record.target_prefix||"");
+        when.style.fontWeight="700";
+        const details=document.createElement("div");
+        const parts=[String(record.round_trip_ms||0)+" ms",String(record.hops||0)+" hops",String(record.source||"manual")];
+        if(Number.isFinite(Number(record.final_snr)))parts.push("SNR "+Number(record.final_snr).toFixed(1)+" dB");
+        details.textContent=parts.join(" · ");details.style.cssText="margin-top:2px;color:var(--secondary-text-color);";
+        row.append(when,details);
+        row.addEventListener("click",()=>{
+          this.__lastTrace={
+            timestamp:record.timestamp,
+            source:"history",
+            target:{pubkey_prefix:String(record.target_prefix||""),adv_name:String(record.target_prefix||"Nó")},
+            result:{
+              round_trip_ms:Number(record.round_trip_ms)||0,
+              response_time:String(Number(record.round_trip_ms)||0)+"ms",
+              hops:Number(record.hops)||0,
+              final_snr:record.final_snr,
+              path:Array.isArray(record.path)?record.path:[],
+            },
+          };
+          this.__lastTraceLoadedEntry=String(this.__entryId()||"default");
+          panel.remove();this.__traceHistoryPanel=null;
+          this.__drawLastTraceRoute();
+        });
+        panel.appendChild(row);
+      }
+    }
+    pane.appendChild(panel);
+    this.__traceHistoryPanel=panel;
+  }
+
+  async __showMessageRouteOnMap(message) {
+    const observations=Array.isArray(message?.rxLogData)?message.rxLogData:[];
+    if(!observations.length)return;
+    const best=observations[observations.length-1]||{};
+    const nodes=Array.isArray(best.path_nodes)?best.path_nodes.map(String).filter(Boolean):[];
+    if(!nodes.length&&Number(best.hop_count||0)<=0)return;
+    const path=nodes.map((hash)=>({hash,snr:null}));
+    this.__lastTrace={
+      timestamp:message?.timestamp instanceof Date?message.timestamp.toISOString():new Date().toISOString(),
+      source:"message",
+      target:{pubkey_prefix:"",adv_name:String(message?.sender||"Mensagem")},
+      result:{
+        round_trip_ms:0,
+        response_time:"mensagem",
+        hops:Number(best.hop_count)||nodes.length,
+        final_snr:Number.isFinite(Number(best.snr))?Number(best.snr):null,
+        path,
+      },
+    };
+    this.__lastTraceLoadedEntry=String(this.__entryId()||"default");
+    this._activeTab="nodes";
+    this.requestUpdate?.();
+    try{await this.updateComplete;}catch{}
+    this.__enhanceRepeaterUi();
+    window.setTimeout(()=>{
+      this.__drawLastTraceRoute();
+      const data=this.__traceRouteData();
+      if(data?.points?.length){
+        const map=this.__nodesMapElement?.leafletMap;
+        try{map?.fitBounds?.(data.points,{padding:[40,40],maxZoom:12});}catch{}
+      }
+    },120);
+  }
+
   __lastTraceStorageKey() {
     const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
     return "hivefw.last_trace.v1."+entry;
