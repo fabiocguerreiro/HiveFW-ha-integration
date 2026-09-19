@@ -69,6 +69,13 @@ class HiveFWPanel extends BasePanel {
     this.__lastTrace = null;
     this.__lastTraceLoadedEntry = null;
     this.__traceRouteLayer = null;
+    this.__traceHistory = [];
+    this.__traceHistoryLoadedEntry = null;
+    this.__traceHistoryLoading = false;
+    this.__traceHistoryPanel = null;
+    this.__peerActivity = { peers: {}, links: {} };
+    this.__peerActivityLoadedEntry = null;
+    this.__peerActivityLoading = false;
     this.__traceMonitorOverlay = null;
     this.__traceMonitorTimer = null;
     this.__traceMonitorRunning = false;
@@ -256,6 +263,14 @@ class HiveFWPanel extends BasePanel {
     const chat = this.shadowRoot?.querySelector("hivefw-integration-page");
     const croot = chat?.shadowRoot;
     if (!croot) return;
+
+    if (!chat.__hiveMessageRouteBound) {
+      chat.__hiveMessageRouteBound = true;
+      chat.addEventListener("show-message-route", (event) => {
+        const message = event?.detail?.message;
+        if (message) void this.__showMessageRouteOnMap(message);
+      });
+    }
 
     if (this.__chatObservedRoot !== croot) {
       this.__chatObserver?.disconnect();
@@ -3282,6 +3297,9 @@ class HiveFWPanel extends BasePanel {
     nroot.querySelectorAll(".map-selection").forEach((el)=>{
       el.remove();
     });
+    if(this.__peerActivityLoadedEntry!==this.__entryId()&&!this.__peerActivityLoading){
+      void this.__loadPeerActivity();
+    }
     this.__decorateNodeCards(nroot);
     window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
 
@@ -3310,6 +3328,8 @@ class HiveFWPanel extends BasePanel {
     container?.classList.remove("hive-nodes-split");
     if(this.__nodesMapPane?.isConnected)this.__nodesMapPane.remove();
     this.__removeTraceRouteLayer();
+    this.__traceHistoryPanel?.remove();
+    this.__traceHistoryPanel=null;
     this.__nodesMapPane=null;
     this.__closePersistentNodePopup();
     this.__nodesMapElement=null;
