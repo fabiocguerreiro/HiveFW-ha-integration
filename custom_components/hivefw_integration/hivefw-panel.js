@@ -80,6 +80,7 @@ class HiveFWPanel extends BasePanel {
     this.__topologyOverlay = null;
     this.__activityHeatmapVisible = false;
     this.__activityHeatmapLayer = null;
+    this.__losOverlay = null;
     this.__traceMonitorOverlay = null;
     this.__traceMonitorTimer = null;
     this.__traceMonitorRunning = false;
@@ -446,6 +447,17 @@ class HiveFWPanel extends BasePanel {
 
     const actions=document.createElement("div");
     actions.style.cssText="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;";
+    const localForLos=this.__localRepeaterMapContact();
+    if(!contact.__hivefw_local__ && this.__nodeCoords(contact) && this.__nodeCoords(localForLos)){
+      const los=document.createElement("button");
+      los.type="button";
+      los.textContent="LOS";
+      los.title="Perfil de terreno e 60% da primeira zona de Fresnel";
+      los.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--divider-color,#bbb);border-radius:6px;background:var(--card-background-color,#fff);color:var(--primary-color,#03a9f4);font-size:12px;font-weight:650;cursor:pointer;";
+      los.addEventListener("click",(event)=>{event.preventDefault();event.stopPropagation();this.__openLosDialog(contact);});
+      actions.appendChild(los);
+    }
+
     const copy=document.createElement("button");
     copy.type="button";
     copy.textContent="Copiar URI";
@@ -4464,6 +4476,7 @@ class HiveFWPanel extends BasePanel {
   __cleanupNodesSplit() {
     this.__closeTraceMonitor();
     this.__closeBulkDialog();
+    this.__closeLosDialog();
     this.__bulkMode=false;
     this.__bulkSelection.clear();
     this.__closeTopologyOverlay();
@@ -5051,6 +5064,147 @@ class HiveFWPanel extends BasePanel {
     this.shadowRoot?.appendChild(overlay);
     this.__traceMonitorOverlay=overlay;
     this.__renderTraceMonitorOverlay();
+  }
+
+  __closeLosDialog() {
+    if(this.__losOverlay?.isConnected)this.__losOverlay.remove();
+    this.__losOverlay=null;
+  }
+
+  __openLosDialog(contact) {
+    const local=this.__localRepeaterMapContact();
+    const start=this.__nodeCoords(local);
+    const end=this.__nodeCoords(contact);
+    if(!start||!end)return;
+    this.__closeLosDialog();
+
+    const overlay=document.createElement("div");
+    overlay.style.cssText="position:fixed;inset:0;z-index:10040;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.52);";
+    overlay.addEventListener("click",(event)=>{if(event.target===overlay)this.__closeLosDialog();});
+    const dialog=document.createElement("div");
+    dialog.style.cssText="width:min(920px,100%);max-height:min(90vh,850px);overflow:auto;padding:16px;box-sizing:border-box;border-radius:14px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 14px 40px rgba(0,0,0,.38);";
+
+    const head=document.createElement("div");
+    head.style.cssText="display:flex;align-items:center;gap:10px;";
+    const title=document.createElement("strong");
+    title.style.cssText="flex:1;font-size:17px;";
+    title.textContent="LOS / Fresnel · "+String(contact.adv_name||contact.pubkey_prefix||"Nó");
+    const close=document.createElement("button");
+    close.type="button";close.textContent="✕";close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color,#666);font-size:18px;cursor:pointer;";
+    close.addEventListener("click",()=>this.__closeLosDialog());
+    head.append(title,close);
+    dialog.appendChild(head);
+
+    const controls=document.createElement("div");
+    controls.style.cssText="display:grid;grid-template-columns:repeat(4,minmax(100px,1fr));gap:8px;margin:12px 0;";
+    const makeField=(label,value,step)=>{
+      const wrap=document.createElement("label");
+      wrap.style.cssText="display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--secondary-text-color,#666);";
+      const input=document.createElement("input");
+      input.type="number";input.step=step;input.value=String(value);
+      input.style.cssText="padding:7px;border:1px solid var(--divider-color,#bbb);border-radius:7px;background:var(--primary-background-color,#fff);color:var(--primary-text-color,#222);";
+      wrap.append(document.createTextNode(label),input);
+      controls.appendChild(wrap);
+      return input;
+    };
+    const currentFreq=Number(this.__repeaterStatus?.radio?.frequency);
+    const freq=makeField("Frequência (MHz)",Number.isFinite(currentFreq)?currentFreq:433.375,"0.001");
+    const localHeight=makeField("Antena local AGL (m)",2,"0.1");
+    const remoteHeight=makeField("Antena remota AGL (m)",2,"0.1");
+    const samples=makeField("Amostras",60,"1");
+    dialog.appendChild(controls);
+
+    const note=document.createElement("div");
+    note.style.cssText="padding:8px 10px;border-radius:8px;background:var(--secondary-background-color,#f3f3f3);font-size:10px;color:var(--secondary-text-color,#666);";
+    note.textContent="Elevação: Open-Meteo / Copernicus DEM 2021 GLO-90 (90 m). Análise on-demand; não gera tráfego RF. O cálculo usa raio terrestre efetivo 4/3 e verifica 60% da primeira zona de Fresnel.";
+    dialog.appendChild(note);
+
+    const result=document.createElement("div");
+    result.style.cssText="margin-top:10px;";
+    dialog.appendChild(result);
+
+    const run=document.createElement("button");
+    run.type="button";run.textContent="Calcular LOS";run.className="action-btn";run.style.cssText+=";margin-top:10px;width:100%;";
+    dialog.appendChild(run);
+
+    const renderProfile=(data)=>{
+      result.replaceChildren();
+      const summary=document.createElement("div");
+      summary.style.cssText="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;";
+      const chip=(text,ok=null)=>{
+        const el=document.createElement("span");
+        el.textContent=text;
+        el.style.cssText="padding:5px 8px;border-radius:999px;font-size:11px;font-weight:650;background:var(--secondary-background-color,#eee);";
+        if(ok===true)el.style.color="#2e7d32";
+        if(ok===false)el.style.color="var(--error-color,#db4437)";
+        return el;
+      };
+      summary.append(
+        chip((data.distance_km||0).toFixed(2)+" km"),
+        chip(data.line_of_sight_clear?"LOS livre":"LOS obstruída",!!data.line_of_sight_clear),
+        chip(data.fresnel_60_clear?"Fresnel 60% livre":"Fresnel 60% obstruída",!!data.fresnel_60_clear),
+        chip("mín. "+Number(data.minimum?.fresnel_clearance_m||0).toFixed(1)+" m")
+      );
+      result.appendChild(summary);
+
+      const profile=Array.isArray(data.profile)?data.profile:[];
+      if(profile.length<2)return;
+      const ns="http://www.w3.org/2000/svg";
+      const svg=document.createElementNS(ns,"svg");
+      svg.setAttribute("viewBox","0 0 820 360");
+      svg.style.cssText="width:100%;height:auto;border:1px solid var(--divider-color,#ddd);border-radius:9px;background:var(--primary-background-color,#fafafa);";
+      const values=[];
+      for(const p of profile){
+        values.push(Number(p.elevation_m)+Number(p.curvature_m||0),Number(p.line_m),Number(p.line_m)-0.6*Number(p.fresnel_m||0));
+      }
+      let minY=Math.min(...values),maxY=Math.max(...values);
+      const pad=Math.max(10,(maxY-minY)*0.12);minY-=pad;maxY+=pad;
+      const maxX=Number(data.distance_km)||1;
+      const xy=(x,y)=>[40+(Number(x)/maxX)*750,320-((Number(y)-minY)/(maxY-minY||1))*280];
+      const poly=(points,stroke,width=2)=>{
+        const el=document.createElementNS(ns,"polyline");
+        el.setAttribute("points",points.map(([x,y])=>x.toFixed(1)+","+y.toFixed(1)).join(" "));
+        el.setAttribute("fill","none");el.setAttribute("stroke",stroke);el.setAttribute("stroke-width",String(width));
+        return el;
+      };
+      const terrain=profile.map((p)=>xy(p.distance_km,Number(p.elevation_m)+Number(p.curvature_m||0)));
+      const los=profile.map((p)=>xy(p.distance_km,p.line_m));
+      const fresnel=profile.map((p)=>xy(p.distance_km,Number(p.line_m)-0.6*Number(p.fresnel_m||0)));
+      svg.append(poly(terrain,"#795548",3),poly(los,"#1565c0",2),poly(fresnel,"#ef6c00",2));
+      const legend=document.createElementNS(ns,"text");
+      legend.setAttribute("x","42");legend.setAttribute("y","22");legend.setAttribute("font-size","11");legend.setAttribute("fill","var(--secondary-text-color,#666)");
+      legend.textContent="castanho terreno+curvatura · azul LOS · laranja limite inferior 60% Fresnel";
+      svg.appendChild(legend);
+      result.appendChild(svg);
+    };
+
+    const calculate=async()=>{
+      run.disabled=true;run.textContent="A obter elevação…";
+      result.textContent="A calcular perfil de terreno e Fresnel…";
+      try{
+        const msg={
+          type:"hivefw_integration/get_los_profile",
+          start_lat:Number(start[0]),start_lon:Number(start[1]),
+          end_lat:Number(end[0]),end_lon:Number(end[1]),
+          frequency_mhz:Number(freq.value),
+          start_height_m:Number(localHeight.value),
+          end_height_m:Number(remoteHeight.value),
+          samples:Math.max(10,Math.min(100,Number(samples.value)||60)),
+        };
+        const data=await this.hass.callWS(msg);
+        renderProfile(data);
+      }catch(error){
+        result.textContent="Não foi possível calcular LOS: "+String(error);
+      }finally{
+        run.disabled=false;run.textContent="Calcular LOS";
+      }
+    };
+    run.addEventListener("click",()=>void calculate());
+
+    overlay.appendChild(dialog);
+    this.shadowRoot?.appendChild(overlay);
+    this.__losOverlay=overlay;
+    void calculate();
   }
 
   __nodeMapPopup(contact) {
