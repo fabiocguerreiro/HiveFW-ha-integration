@@ -3365,6 +3365,15 @@ class HiveFWPanel extends BasePanel {
   }
 
   __nodeMeta(contact) {
+    const directTags=Array.isArray(contact?.tags)
+      ? contact.tags.map(String).filter(Boolean).slice(0,8)
+      : [];
+    if(contact?.favorite!==undefined || directTags.length){
+      return {favorite:!!contact?.favorite,tags:directTags};
+    }
+
+    // One-release fallback for metadata created before it moved from browser
+    // localStorage into Home Assistant storage.
     const key=String(contact?.public_key||"").trim().toLowerCase();
     if(!/^[0-9a-f]{64}$/.test(key))return {favorite:false,tags:[]};
     const value=this.__loadNodeMetaMap()[key]||{};
@@ -3374,24 +3383,57 @@ class HiveFWPanel extends BasePanel {
     };
   }
 
-  __setNodeMeta(contact,patch) {
+  async __setNodeMeta(contact,patch) {
     const key=String(contact?.public_key||"").trim().toLowerCase();
-    if(!/^[0-9a-f]{64}$/.test(key))return;
-    const map=this.__loadNodeMetaMap();
-    const previous=map[key]||{};
+    if(!/^[0-9a-f]{6,64}$/.test(key))return;
+
+    const previous=this.__nodeMeta(contact);
     const next={
       favorite:patch.favorite!==undefined?!!patch.favorite:!!previous.favorite,
-      tags:Array.isArray(patch.tags)?patch.tags.slice(0,8):(Array.isArray(previous.tags)?previous.tags.slice(0,8):[]),
+      tags:Array.isArray(patch.tags)
+        ? patch.tags.map(String).filter(Boolean).slice(0,8)
+        : previous.tags,
     };
-    if(!next.favorite&&!next.tags.length)delete map[key];
-    else map[key]=next;
-    this.__saveNodeMetaMap(map);
+
+    // Optimistic local update keeps popup/map interactions instant.
+    contact.favorite=next.favorite;
+    contact.tags=next.tags;
     this.__nodesMapSignature="";
+
+    try{
+      const msg={
+        type:"hivefw_integration/set_node_meta",
+        public_key:key,
+        favorite:next.favorite,
+        tags:next.tags,
+      };
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const saved=await this.hass.callWS(msg);
+      contact.favorite=!!saved?.favorite;
+      contact.tags=Array.isArray(saved?.tags)?saved.tags:next.tags;
+
+      // Retire any pre-backend localStorage copy after a successful save.
+      const map=this.__loadNodeMetaMap();
+      if(map[key]){
+        delete map[key];
+        this.__saveNodeMetaMap(map);
+      }
+    }catch(error){
+      // Preserve the change locally if the backend is temporarily unavailable.
+      const map=this.__loadNodeMetaMap();
+      map[key]=next;
+      this.__saveNodeMetaMap(map);
+      console.warn("HiveFW node metadata save failed",error);
+    }
+
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    if(page?._loadPage)void page._loadPage(true);
     const nroot=page?.shadowRoot;
     if(nroot)this.__decorateNodeCards(nroot);
     if(this.__nodesMapPane?.isConnected){
-      void this.__ensureSplitMap(page,this.__nodesMapPane);
+      this.__nodesMapLoadedEntry=null;
+      void this.__loadNodesMapContacts().then(()=>this.__ensureSplitMap(page,this.__nodesMapPane));
     }
     if(this.__nodesPersistentPopup){
       this.__openPersistentNodePopup(contact);
@@ -4078,7 +4120,22 @@ class HiveFWPanel extends BasePanel {
       const isLocal=!!contact.__hivefw_local;
       const id=this.__nodeId(contact);
       const name=String(contact.adv_name||contact.pubkey_prefix||"Nó");
-      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0});
+      const age=String(contact?.age_bucket|| (isLocal?"lt1h":"stale"));
+      const ageColors={
+        lt1h:"#2e7d32",
+        lt6h:"#66a832",
+        lt24h:"#f9a825",
+        lt7d:"#ef6c00",
+        stale:"#757575",
+      };
+      const markerColor=ageColors[age]||ageColors.stale;
+      const markerIcon=L.divIcon?.({
+        className:"hivefw-node-age-marker",
+        html:'<span style="display:block;width:14px;height:14px;border-radius:50%;background:'+markerColor+';border:'+(isLocal?'3px solid var(--primary-color,#03a9f4)':'2px solid white')+';box-shadow:0 1px 4px rgba(0,0,0,.5)"></span>',
+        iconSize:[18,18],
+        iconAnchor:[9,9],
+      });
+      const marker=L.marker(coords,{title:name,keyboard:true,riseOnHover:true,zIndexOffset:isLocal?1000:0,...(markerIcon?{icon:markerIcon}:{})});
       const meta=this.__nodeMeta(contact);
       const tagText=meta.tags.length?" · "+meta.tags.map((tag)=>"#"+tag).join(" "):"";
       const tooltipName=(meta.favorite?"★ ":"")+name+(isLocal?" · local":"")+tagText;
