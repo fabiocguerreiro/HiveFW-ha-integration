@@ -51,7 +51,7 @@ function makeHass(): HomeAssistant {
 }
 
 function fireEvent(data: Record<string, unknown>) {
-  capturedCb?.({ event_type: 'meshcore_message', data, time_fired: '' } as HassEvent);
+  capturedCb?.({ event_type: 'hivefw_message', data, time_fired: '' } as HassEvent);
 }
 
 describe('command-dialog device response feed', () => {
@@ -79,9 +79,9 @@ describe('command-dialog device response feed', () => {
     await flush(); // allow the subscribeEvents promise to resolve
   }
 
-  it('subscribes once to meshcore_message when a remote dialog opens', async () => {
+  it('subscribes once to hivefw_message when a remote dialog opens', async () => {
     await openRemote();
-    expect(subscribeEventTypes).toEqual(['meshcore_message']);
+    expect(subscribeEventTypes).toEqual(['hivefw_message']);
   });
 
   it('appends a matching inbound device reply to the feed', async () => {
