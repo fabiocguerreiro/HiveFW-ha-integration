@@ -108,6 +108,9 @@ class HiveFWPanel extends BasePanel {
     this.__bulkMode = false;
     this.__bulkSelection = new Set();
     this.__bulkOverlay = null;
+    this.__remoteAdminOverlay = null;
+    this.__remoteAdminDevice = null;
+    this.__remoteAdminHistory = [];
 
     this.__chatObservedRoot = null;
     this.__chatObserver = null;
@@ -2597,11 +2600,280 @@ class HiveFWPanel extends BasePanel {
         `font-size:10px;font-weight:650;white-space:nowrap;color:${isOnline ? "#2e7d32" : "var(--secondary-text-color)"};`;
       state.textContent = isOnline ? "● Online" : "● Offline";
 
-      row.append(icon, info, state);
+      if(device.type==="repeater"){
+        const admin=document.createElement("button");
+        admin.type="button";
+        admin.className="action-btn";
+        admin.textContent="Admin";
+        admin.title="Administração remota on-demand";
+        admin.addEventListener("click",()=>this.__openRemoteAdmin(device));
+        const actions=document.createElement("div");
+        actions.style.cssText="display:flex;align-items:center;gap:7px;";
+        actions.append(state,admin);
+        row.append(icon,info,actions);
+      }else{
+        row.append(icon,info,state);
+      }
       list.appendChild(row);
     }
 
     card.appendChild(list);
+  }
+
+  __closeRemoteAdmin() {
+    if(this.__remoteAdminOverlay?.isConnected)this.__remoteAdminOverlay.remove();
+    this.__remoteAdminOverlay=null;
+    this.__remoteAdminDevice=null;
+  }
+
+  async __remoteAdminCommand(command,output) {
+    const device=this.__remoteAdminDevice;
+    if(!device||!this.hass||!command?.trim())return null;
+    const row={timestamp:new Date().toISOString(),command:command.trim(),response:"A executar…",pending:true};
+    this.__remoteAdminHistory.push(row);
+    const render=()=> {
+      if(!output?.isConnected)return;
+      output.replaceChildren();
+      for(const item of this.__remoteAdminHistory.slice(-30)){
+        const line=document.createElement("div");
+        line.style.cssText="padding:5px 0;border-top:1px solid color-mix(in srgb,var(--divider-color,#ddd) 65%,transparent);";
+        const cmd=document.createElement("div");
+        cmd.textContent="> "+item.command;
+        cmd.style.cssText="font-weight:650;color:var(--primary-color,#03a9f4);";
+        const resp=document.createElement("div");
+        resp.textContent=String(item.response||"");
+        resp.style.cssText="margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere;";
+        line.append(cmd,resp);
+        output.appendChild(line);
+      }
+      output.scrollTop=output.scrollHeight;
+    };
+    render();
+    try{
+      const msg={
+        type:"hivefw_integration/execute_remote",
+        target_prefix:String(device.pubkey_prefix||""),
+        command:command.trim(),
+      };
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      row.response=result?.response||"OK";
+      row.pending=false;
+      row.success=result?.success!==false;
+      render();
+      return result;
+    }catch(error){
+      row.response="Erro: "+String(error);
+      row.pending=false;
+      row.success=false;
+      render();
+      return null;
+    }
+  }
+
+  async __remoteAdminTrace(device,resultBox) {
+    if(!this.hass||!device?.pubkey_prefix)return;
+    resultBox.textContent="A descobrir path / executar trace…";
+    try{
+      const msg={
+        type:"hivefw_integration/trace",
+        pubkey_prefix:String(device.pubkey_prefix),
+        source:"remote-admin",
+      };
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      const parts=[
+        (result?.round_trip_ms!=null?result.round_trip_ms+" ms":null),
+        (result?.hops!=null?result.hops+" hops":null),
+        (Number.isFinite(Number(result?.final_snr))?"SNR "+Number(result.final_snr).toFixed(1)+" dB":null),
+      ].filter(Boolean);
+      resultBox.textContent=parts.length?parts.join(" · "):JSON.stringify(result);
+      const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:(Array.isArray(this._contacts)?this._contacts:[]);
+      const matches=source.filter((contact)=>{
+        const prefix=String(contact?.pubkey_prefix||String(contact?.public_key||"").slice(0,12));
+        return prefix===String(device.pubkey_prefix);
+      });
+      if(matches.length===1)this.__recordTraceResult(result,matches[0],"remote-admin");
+    }catch(error){
+      resultBox.textContent="Trace falhou: "+String(error);
+    }
+  }
+
+  async __remoteAdminLoadNeighbors(device,box) {
+    if(!this.hass||!device?.pubkey_prefix)return;
+    box.textContent="A carregar vizinhos cacheados…";
+    try{
+      const msg={
+        type:"hivefw_integration/get_neighbors",
+        target_prefix:String(device.pubkey_prefix),
+      };
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      const neighbors=Array.isArray(result?.neighbors)?result.neighbors:[];
+      box.replaceChildren();
+      if(!neighbors.length){
+        box.textContent="Sem vizinhos remotos guardados. Ativa a recolha de vizinhos para este Repeater para preencher esta área.";
+        return;
+      }
+      for(const neighbor of neighbors.slice(0,30)){
+        const line=document.createElement("div");
+        const snr=Number(neighbor?.snr);
+        line.textContent=
+          String(neighbor?.name||neighbor?.pubkey||neighbor?.public_key||"Nó")+
+          (Number.isFinite(snr)?" · SNR "+snr.toFixed(1)+" dB":"")+
+          (neighbor?.secs_ago!=null?" · "+Math.round(Number(neighbor.secs_ago))+"s":"");
+        line.style.cssText="padding:5px 0;border-top:1px solid var(--divider-color,#ddd);font-size:11px;";
+        box.appendChild(line);
+      }
+    }catch(error){
+      box.textContent="Erro ao carregar vizinhos: "+String(error);
+    }
+  }
+
+  __openRemoteAdmin(device) {
+    if(!device||!this.hass)return;
+    this.__closeRemoteAdmin();
+    this.__remoteAdminDevice=device;
+    this.__remoteAdminHistory=[];
+
+    const overlay=document.createElement("div");
+    overlay.style.cssText="position:fixed;inset:0;z-index:10030;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.52);";
+    overlay.addEventListener("click",(event)=>{if(event.target===overlay)this.__closeRemoteAdmin();});
+
+    const dialog=document.createElement("div");
+    dialog.style.cssText="width:min(900px,100%);max-height:min(90vh,850px);overflow:auto;padding:16px;box-sizing:border-box;border-radius:14px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);box-shadow:0 14px 40px rgba(0,0,0,.38);";
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:10px;margin-bottom:12px;";
+    const title=document.createElement("strong");
+    title.style.cssText="flex:1;font-size:17px;";
+    title.textContent="Admin remoto · "+String(device.name||device.pubkey_prefix||"Repeater");
+    const close=document.createElement("button");
+    close.type="button";close.textContent="✕";
+    close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color,#666);font-size:18px;cursor:pointer;";
+    close.addEventListener("click",()=>this.__closeRemoteAdmin());
+    header.append(title,close);
+    dialog.appendChild(header);
+
+    const note=document.createElement("div");
+    note.style.cssText="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:var(--secondary-background-color,#f3f3f3);color:var(--secondary-text-color,#666);font-size:10px;";
+    note.textContent="A password administrativa permanece no ConfigEntry do Home Assistant e nunca é enviada para o frontend. Os comandos abaixo geram tráfego RF apenas quando os executas.";
+    dialog.appendChild(note);
+
+    const grid=document.createElement("div");
+    grid.style.cssText="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;";
+    const card=(name)=>{
+      const el=document.createElement("section");
+      el.style.cssText="padding:11px;border:1px solid var(--divider-color,#ddd);border-radius:10px;min-width:0;";
+      const h=document.createElement("strong");h.textContent=name;h.style.cssText="display:block;margin-bottom:7px;font-size:12px;";
+      el.appendChild(h);grid.appendChild(el);return el;
+    };
+
+    const status=card("Estado / firmware");
+    const stats=device.stats||{};
+    const statusLines=[
+      ["Estado",device.status|| (device.connected?"online":"offline")],
+      ["Prefix",device.pubkey_prefix||"—"],
+      ["Firmware",device.firmware_version||stats.firmware_version||"—"],
+      ["Telemetria",device.telemetry_enabled?"ativa":"inativa"],
+      ["Vizinhos",device.neighbors_enabled?"ativos":"inativos"],
+      ["Update",device.update_interval?device.update_interval+" s":"—"],
+    ];
+    for(const [label,value] of statusLines){
+      const line=document.createElement("div");
+      line.textContent=label+": "+String(value);
+      line.style.cssText="font-size:11px;margin:3px 0;";
+      status.appendChild(line);
+    }
+    if(Object.keys(stats).length){
+      const pre=document.createElement("pre");
+      pre.textContent=JSON.stringify(stats,null,2);
+      pre.style.cssText="max-height:170px;overflow:auto;margin:7px 0 0;padding:7px;background:var(--primary-background-color,#fafafa);font-size:9px;border-radius:6px;";
+      status.appendChild(pre);
+    }
+
+    const access=card("Acesso / Route Health");
+    const accessResult=document.createElement("div");
+    accessResult.style.cssText="margin-top:7px;font-size:11px;color:var(--secondary-text-color,#666);min-height:18px;";
+    const makeButton=(label)=>{
+      const button=document.createElement("button");
+      button.type="button";button.textContent=label;button.className="action-btn";button.style.margin="3px";
+      return button;
+    };
+    const login=makeButton("Testar acesso");
+    login.addEventListener("click",async()=>{
+      accessResult.textContent="A testar auto-login…";
+      const result=await this.__remoteAdminCommand("get name",consoleOut);
+      accessResult.textContent=result?.success===false?"Acesso recusado":"Comando autenticado concluído; consulta o console.";
+    });
+    const trace=makeButton("Path + Trace");
+    trace.addEventListener("click",()=>void this.__remoteAdminTrace(device,accessResult));
+    const monitor=makeButton("Route Health");
+    monitor.addEventListener("click",async()=>{
+      if(!Array.isArray(this.__nodesMapContacts))await this.__loadNodesMapContacts();
+      const source=Array.isArray(this.__nodesMapContacts)?this.__nodesMapContacts:[];
+      const matches=source.filter((contact)=>String(contact?.pubkey_prefix||"")===String(device.pubkey_prefix||""));
+      if(matches.length===1){
+        this.__closeRemoteAdmin();
+        this._activeTab="nodes";
+        this.requestUpdate();
+        window.setTimeout(()=>this.__openTraceMonitor(matches[0]),180);
+      }else{
+        accessResult.textContent="Não foi possível resolver este Repeater de forma única nos contactos.";
+      }
+    });
+    access.append(login,trace,monitor,accessResult);
+
+    const neighbors=card("Vizinhos remotos");
+    const neighborsBody=document.createElement("div");
+    neighborsBody.style.cssText="max-height:190px;overflow:auto;color:var(--secondary-text-color,#666);";
+    const refreshNeighbors=makeButton("Atualizar lista");
+    refreshNeighbors.addEventListener("click",()=>void this.__remoteAdminLoadNeighbors(device,neighborsBody));
+    neighbors.append(refreshNeighbors,neighborsBody);
+    void this.__remoteAdminLoadNeighbors(device,neighborsBody);
+
+    const quick=card("Consultas on-demand");
+    for(const command of ["get role","get radio","get tx","get repeat","get path.hash.mode"]){
+      const button=makeButton(command);
+      button.addEventListener("click",()=>void this.__remoteAdminCommand(command,consoleOut));
+      quick.appendChild(button);
+    }
+
+    dialog.appendChild(grid);
+
+    const consoleCard=document.createElement("section");
+    consoleCard.style.cssText="margin-top:10px;padding:11px;border:1px solid var(--divider-color,#ddd);border-radius:10px;";
+    const consoleTitle=document.createElement("strong");consoleTitle.textContent="Console administrativo remoto";consoleTitle.style.cssText="display:block;margin-bottom:7px;font-size:12px;";
+    const form=document.createElement("div");form.style.cssText="display:flex;gap:7px;";
+    const input=document.createElement("input");
+    input.type="text";input.placeholder="Comando CLI remoto…";
+    input.style.cssText="flex:1;min-width:0;padding:8px;border:1px solid var(--divider-color,#bbb);border-radius:7px;background:var(--primary-background-color,#fff);color:var(--primary-text-color,#222);font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;";
+    const send=makeButton("Executar");
+    const consoleOut=document.createElement("div");
+    consoleOut.style.cssText="margin-top:9px;max-height:220px;overflow:auto;font:10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;";
+    const run=()=>{
+      const command=input.value.trim();
+      if(!command)return;
+      input.value="";
+      void this.__remoteAdminCommand(command,consoleOut);
+    };
+    send.addEventListener("click",run);
+    input.addEventListener("keydown",(event)=>{if(event.key==="Enter"){event.preventDefault();run();}});
+    form.append(input,send);
+    consoleCard.append(consoleTitle,form,consoleOut);
+    dialog.appendChild(consoleCard);
+
+    const responsive=document.createElement("style");
+    responsive.textContent="@media(max-width:760px){.hivefw-remote-admin-grid{grid-template-columns:1fr!important;}}";
+    grid.className="hivefw-remote-admin-grid";
+    dialog.appendChild(responsive);
+
+    overlay.appendChild(dialog);
+    this.shadowRoot?.appendChild(overlay);
+    this.__remoteAdminOverlay=overlay;
   }
 
   async __loadScopes() {
