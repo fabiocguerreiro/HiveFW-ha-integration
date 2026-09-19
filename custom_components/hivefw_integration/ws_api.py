@@ -721,6 +721,8 @@ def ws_get_devices(hass, connection, msg):
     devices = []
     for entry_id, coordinator in _get_all_coordinators(hass):
         self_info = getattr(coordinator.api, "self_info", {}) or {}
+        if not isinstance(self_info, dict):
+            self_info = {}
         devices.append(
             {
                 "entry_id": entry_id,
