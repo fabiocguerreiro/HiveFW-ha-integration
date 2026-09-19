@@ -16,7 +16,7 @@ import {
 } from '../firmware-vocabulary';
 
 /**
- * Command dialog for issuing local or remote commands to MeshCore devices
+ * Command dialog for issuing local or remote commands to HiveFW devices
  *
  * Dispatches:
  * - 'close' event when dialog is closed
@@ -49,7 +49,7 @@ export class CommandDialog extends LitElement {
   @state() private _error: string | null = null;
 
   // Live device-response feed (remote dialogs only). Replies arrive over the
-  // mesh as ordinary meshcore_message events while the dialog is open.
+  // mesh as ordinary hivefw_message events while the dialog is open.
   @state() private _deviceResponses: Array<{ text: string; sender: string; ts: number; snr?: number }> = [];
   private _unsubMsg: (() => void) | null = null;
   private _feedActive = false;
@@ -609,7 +609,7 @@ export class CommandDialog extends LitElement {
     this._stopResponseFeed();
   }
 
-  /** Subscribe to incoming meshcore_message events while a remote device
+  /** Subscribe to incoming hivefw_message events while a remote device
    *  dialog is open and show the device's replies as a live feed. Mesh
    *  replies are ordinary inbound messages with no protocol-level
    *  request/response correlation, so this surfaces "responses from the
@@ -639,7 +639,7 @@ export class CommandDialog extends LitElement {
             snr: typeof d.snr === 'number' ? (d.snr as number) : undefined,
           },
         ];
-      }, 'meshcore_message');
+      }, 'hivefw_message');
       // The dialog may have closed while subscribeEvents was awaiting.
       if (!this.open || this.isLocal) {
         unsub();
