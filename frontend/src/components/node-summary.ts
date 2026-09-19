@@ -99,37 +99,46 @@ export class NodeSummary extends LitElement {
     /* ─── Hero row ─── */
     .hero-row {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       grid-auto-flow: dense;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 7px;
+      margin-bottom: 10px;
       align-items: stretch;
     }
-    .hero-row > .hero-tile { grid-column: span 2; min-width: 0; }
-    .hero-row > .hero-tile.hive-metric-compact { grid-column: span 1; }
+    .hero-row > .hero-tile,
+    .hero-row > .hero-tile.hive-metric-compact {
+      grid-column: span 1;
+      min-width: 0;
+    }
+    .hero-row > .hero-tile[data-repeater-extra="repeat-frequencies"] {
+      grid-column: span 2;
+    }
     .hero-tile {
       background: var(--secondary-background-color, #f0f0f0);
-      border-radius: 13px;
-      padding: 12px 13px;
+      border-radius: 10px;
+      padding: 8px 9px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
+      gap: 4px;
       cursor: pointer;
       border: 1px solid transparent;
       transition: border-color 0.15s, transform 0.15s;
-      min-height: 96px;
+      min-height: 70px;
       height: 100%;
       box-sizing: border-box;
     }
-    @container (max-width: 900px) {
-      .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .hero-row > .hero-tile { grid-column: span 2; }
-      .hero-row > .hero-tile.hive-metric-compact { grid-column: span 1; }
+    @container (max-width: 1050px) {
+      .hero-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
-    @container (max-width: 520px) {
+    @container (max-width: 650px) {
+      .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-row > .hero-tile[data-repeater-extra="repeat-frequencies"] { grid-column: span 2; }
+    }
+    @container (max-width: 390px) {
       .hero-row { grid-template-columns: 1fr; }
       .hero-row > .hero-tile,
-      .hero-row > .hero-tile.hive-metric-compact { grid-column: 1; }
+      .hero-row > .hero-tile.hive-metric-compact,
+      .hero-row > .hero-tile[data-repeater-extra="repeat-frequencies"] { grid-column: 1; }
     }
     .hero-tile:hover { border-color: var(--primary-color, #03a9f4); }
     .hero-tile-head {
@@ -137,7 +146,7 @@ export class NodeSummary extends LitElement {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 10px;
+      font-size: 8px;
       text-transform: uppercase;
       letter-spacing: 0.4px;
       color: var(--secondary-text-color);
@@ -145,17 +154,17 @@ export class NodeSummary extends LitElement {
     .hero-tile-value {
       display: flex;
       align-items: baseline;
-      gap: 6px;
+      gap: 3px;
       flex-wrap: wrap;
     }
     .hero-tile-value .primary {
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 600;
       color: var(--primary-text-color);
       line-height: 1;
     }
     .hero-tile-value .secondary {
-      font-size: 11px;
+      font-size: 8px;
       color: var(--secondary-text-color);
     }
     .hero-tile-value .compact {
