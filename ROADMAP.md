@@ -1,6 +1,6 @@
 # HiveFW Home Assistant — Estado de implementação
 
-A fase funcional planeada para a integração standalone **HiveFW 1.1.0** está implementada.
+A fase funcional planeada para a integração standalone **HiveFW 1.1.1** está implementada.
 Este ficheiro fica temporariamente como checklist de validação pós-HACS. Depois da
 validação em hardware pode ser removido e o histórico passa a viver nas releases/commits.
 
@@ -32,7 +32,7 @@ validação em hardware pode ser removido e o histórico passa a viver nas relea
 - [x] Python compile/test em CI.
 - [x] Frontend typecheck/build/test em CI.
 - [x] Hassfest e HACS validation em CI.
-- [x] Versão preparada como HiveFW 1.1.0.
+- [x] Versão preparada como HiveFW 1.1.1.
 
 ## Trabalho de firmware — fora deste repositório
 
