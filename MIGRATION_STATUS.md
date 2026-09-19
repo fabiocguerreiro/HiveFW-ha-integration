@@ -39,12 +39,12 @@ What it already did:
 
 ## Known incomplete areas after 0ca7224
 
-- Embedded engine still needs a full audit for stale imports and user-visible “MeshCore integration” naming.
-- HA platform modules are inside `engine/`, but the HiveFW integration still needs explicit forwarding/wrappers so HA loads them under the HiveFW config entry.
-- `services.yaml` must be copied/adapted to HiveFW and all services must be registered under `hivefw_integration`.
-- Strings/translations must be merged with the embedded config/options flow.
+- [x] Embedded engine audited: no stale `custom_components.meshcore` imports or old public service/helper/event IDs remain.
+- [x] HA platform wrappers exist at the HiveFW top level for sensor, binary_sensor, device_tracker, button, select and text.
+- [x] `services.yaml` and runtime service registration use `hivefw_integration`.
+- [x] Public strings/translations no longer require or advertise a second integration.
 - Existing HiveFW code that previously looked for external coordinators must be simplified to use its own embedded coordinator.
-- Attribution/upstream SHA has not yet been committed.
+- [x] Attribution is in `THIRD_PARTY_LICENSES.md`; upstream SHA is pinned in `engine/UPSTREAM_SHA`.
 - Console tab has not yet been implemented.
 - End-to-end compile/build validation is not yet complete.
 
@@ -54,29 +54,16 @@ Public surface naming converted to HiveFW: services domain, service descriptions
 
 ## NEXT STEP
 
-**Next commit: validate/finish embedded engine wiring and attribution.**
+**Next commit: remove the remaining external-integration assumptions from the HiveFW backend/WS layer.**
 
 Specifically:
 
-1. Audit every file in `custom_components/hivefw_integration/engine/` for:
-   - `custom_components.meshcore` imports;
-   - stale external-domain assumptions;
-   - services/events/entity IDs that still expose the old integration name.
-2. Add top-level HiveFW platform wrappers for:
-   - `sensor.py`
-   - `binary_sensor.py`
-   - `device_tracker.py`
-   - `button.py`
-   - `select.py`
-   - `text.py`
-3. Forward those platforms from the HiveFW engine setup.
-4. Commit.
-5. Update this status with the new commit SHA and next step.
+1. Replace stale “upstream/external MeshCore coordinator” helper names and repair logic with internal HiveFW-engine checks.
+2. Make WS/data lookup paths use the embedded HiveFW coordinator directly.
+3. Remove repair flows that tell the user to install/configure another integration.
+4. Commit and update this status.
 
 After that:
 
-- Commit 3: services + service YAML + HiveFW naming.
-- Commit 4: config/options strings/translations + attribution.
-- Commit 5: remove external-integration assumptions from HiveFW backend/WS.
-- Commit 6: Console tab.
-- Commit 7+: roadmap features in small functional commits.
+- Next commit: Console tab.
+- Following commits: roadmap features in small functional commits.
