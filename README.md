@@ -12,6 +12,22 @@ de mensagens e interface lateral. **Não é necessário instalar a integração 
 `meshcore-ha` em separado.** O protocolo/SDK MeshCore continua a ser usado internamente,
 mas a superfície pública no Home Assistant pertence ao HiveFW.
 
+## HiveFW 1.1.0
+
+A versão 1.1.0 consolida a integração como painel de operação completo do
+Companion-Repeater. Entre as principais adições:
+
+- topologia observada e heatmap de atividade a partir do histórico local;
+- distâncias de rota hop-to-hop e acumuladas;
+- análise LOS, elevação e 60% da primeira zona de Fresnel on-demand;
+- QR/URI para partilha de contactos e canais;
+- seleção e ações em massa, incluindo cleanup protegido com dry-run;
+- administração remota consolidada de Repeaters;
+- tendências de atividade 7/30 dias por peer;
+- thresholds de saúde configuráveis, evento `hivefw_health_transition` e
+  notificações persistentes opcionais.
+
+
 ## Arquitetura
 
 ```text
@@ -103,10 +119,41 @@ Funcionalidades principais:
 - Favorites e Tags locais;
 - importação e exportação de contactos no formato compatível com a app MeshCore;
 - Trace e Route Health;
-- Trace Monitor on-demand.
+- Trace Monitor on-demand;
+- Route History e rota de mensagens no mapa;
+- distância hop-to-hop e distância total da rota;
+- grafo de topologia baseado apenas em caminhos realmente observados;
+- heatmap de atividade baseado em RX/TX e aparições em paths;
+- análise **LOS / Fresnel** entre o rádio local e um nó com GPS;
+- seleção múltipla e ações em massa;
+- cleanup por idade com pré-visualização e proteções para Favorites, contactos adicionados,
+  Repeaters configurados e tags protegidas.
 
 A resolução de hashes é conservadora: quando um hash é ambíguo, o HiveFW não inventa
 uma correspondência.
+
+Contactos e canais podem ser partilhados por **QR/URI MeshCore**. Para canais, o URI
+contém a chave necessária à importação e deve ser tratado como credencial.
+
+A análise LOS é executada apenas quando pedida. As coordenadas interpoladas do percurso
+são enviadas à API pública de elevação Open-Meteo, que fornece o modelo
+Copernicus DEM GLO-90. Não existe consulta de elevação em background e esta função não
+gera tráfego RF.
+
+### Administração remota de Repeaters
+
+Os Repeaters configurados aparecem no **Dispositivo** com acesso a uma janela
+administrativa dedicada. A partir daí é possível, on-demand:
+
+- consultar estado, firmware e telemetria já disponível;
+- consultar vizinhos remotos;
+- testar o acesso administrativo;
+- executar Path + Trace;
+- abrir Route Health;
+- executar comandos CLI no console remoto.
+
+A password administrativa fica exclusivamente no `ConfigEntry` do backend. O frontend
+recebe apenas indicação de que existe uma credencial configurada e nunca recebe o valor.
 
 ### Vizinhos
 
@@ -131,6 +178,29 @@ Console administrativo integrado para o rádio selecionado:
 
 Comandos de configuração são executados exatamente como indicados e podem alterar
 estado persistente do rádio.
+
+## Alertas e automações
+
+O HiveFW avalia localmente as entidades de diagnóstico e pode detetar transições de
+saúde sem gerar tráfego LoRa adicional.
+
+Os thresholds configuráveis incluem:
+
+- noise floor;
+- TX queue;
+- taxa de RX errors;
+- fiabilidade mínima e tamanho mínimo da amostra.
+
+Uma mudança de estado dispara o evento:
+
+```text
+hivefw_health_transition
+```
+
+O payload inclui `entry_id`, nome do dispositivo, estado atual, alertas ativos,
+alertas que entraram/saíram e os thresholds usados. Isto permite criar automações
+Home Assistant sem depender de polling RF. Notificações persistentes do Home Assistant
+podem ser ativadas opcionalmente na página **Dispositivo**.
 
 ## Identidade no Home Assistant
 
@@ -203,6 +273,9 @@ Normalmente locais ao Home Assistant/Companion:
 - RX Log já armazenado;
 - histórico de mensagens;
 - mapa baseado em contactos já conhecidos;
+- topologia e heatmap derivados de histórico já guardado;
+- tendências 7/30 dias por peer;
+- avaliação de thresholds e eventos de saúde;
 - leitura de configuração local.
 
 Podem gerar tráfego RF:
@@ -211,10 +284,15 @@ Podem gerar tráfego RF:
 - Flood Advert;
 - Trace / path discovery;
 - comandos remotos;
-- leitura/alteração de configuração de Repeaters remotos.
+- leitura/alteração de configuração de Repeaters remotos;
+- ações de administração remota executadas explicitamente.
 
 Operações RF periódicas não são iniciadas automaticamente quando podem ser feitas
 on-demand.
+
+A função LOS/Fresnel é uma exceção à operação exclusivamente local: quando acionada,
+faz uma consulta HTTPS on-demand ao serviço de elevação Open-Meteo com as coordenadas
+do perfil. Esta consulta não usa LoRa.
 
 ## Segurança
 
@@ -271,7 +349,7 @@ tests/
     testes backend
 
 ROADMAP.md
-    funcionalidades implementadas e próximas fases
+    estado de implementação e checklist temporário de validação pós-HACS
 ```
 
 ## Código upstream e licenças
@@ -291,7 +369,7 @@ Projetos relacionados:
 
 ## Histórico de alterações
 
-O histórico detalhado é mantido pelo Git e pelas releases/commits do repositório, evitando duplicar documentação de versões antigas num changelog manual.
+O histórico detalhado é mantido pelo Git e pelas releases/commits do repositório, evitando duplicar documentação de versões antigas num changelog manual. A release 1.1.0 corresponde à conclusão da fase funcional descrita no ROADMAP; depois da validação em hardware esse ficheiro pode ser removido.
 
 ## Disclaimer
 
