@@ -176,7 +176,7 @@ class MeshCoreGPSTracker(CoordinatorEntity, TrackerEntity):
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{pubkey_prefix}_gps_tracker"
         
         if node_type == "root":
-            device_name = "meshcore"
+            device_name = "hivefw"
             entity_key = "gps"
             self.entity_id = format_entity_id("device_tracker", device_name, entity_key)
         else:
