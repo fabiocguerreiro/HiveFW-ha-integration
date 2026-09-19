@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_BAUDRATE,
     DEFAULT_TCP_PORT,
     DOMAIN,
+    PUBLIC_EVENT_PREFIX,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -184,7 +185,7 @@ class MeshCoreAPI:
             
             # Fire HA event for successful connection
             if self.hass:
-                self.hass.bus.async_fire(f"{DOMAIN}_connected", {
+                self.hass.bus.async_fire(f"{PUBLIC_EVENT_PREFIX}_connected", {
                     "connection_type": self.connection_type
                 })
                 
@@ -192,7 +193,7 @@ class MeshCoreAPI:
             # Cancel any existing reconnect task since we're now connected
             if self._reconnect_task and not self._reconnect_task.done():
                 self._reconnect_task.cancel()
-            _LOGGER.info("Successfully connected to MeshCore device with auto-reconnect enabled")
+            _LOGGER.info("Successfully connected to HiveFW radio with auto-reconnect enabled")
             return True
             
         except Exception as ex:
@@ -217,7 +218,7 @@ class MeshCoreAPI:
 
             # Trigger device disconnected event
             if self.hass:
-                self.hass.bus.async_fire(f"{DOMAIN}_disconnected", {})
+                self.hass.bus.async_fire(f"{PUBLIC_EVENT_PREFIX}_disconnected", {})
 
             # Properly disconnect using the MeshCore instance
             if self._mesh_core:
@@ -268,7 +269,7 @@ class MeshCoreAPI:
         self._connected = False
         
         if self.hass:
-            self.hass.bus.async_fire(f"{DOMAIN}_disconnected", {
+            self.hass.bus.async_fire(f"{PUBLIC_EVENT_PREFIX}_disconnected", {
                 "unexpected": True
             })
         
