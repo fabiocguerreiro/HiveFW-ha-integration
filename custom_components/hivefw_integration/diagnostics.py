@@ -4,13 +4,13 @@ Provides a redacted snapshot of integration state via Settings → Devices
 & Services → ⋮ → Download diagnostics. The snapshot includes:
 
 - Companion entry shape (redacted entry_id, title, options).
-- Detected upstream meshcore service surface (which services HA has
+- Detected HiveFW service surface (which services HA has
   registered right now — informs degraded-behavior diagnosis).
 - Per-entry message-index summary (conversation count, total message
   count, per-conversation last_message_ts).
 - Process-global UnreadTracker state (entity_id → count, redacted to
   stable hash prefixes).
-- Upstream meshcore coordinator presence (count, connected flags, name,
+- HiveFW coordinator presence (count, connected flags, name,
   max_channels — no config secrets).
 - Process-global flag state (panel registration, WS registration, etc.).
 
