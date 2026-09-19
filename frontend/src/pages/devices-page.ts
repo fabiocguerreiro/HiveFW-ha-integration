@@ -1438,8 +1438,8 @@ export class DevicesPage extends LitElement {
     const rShort = repeaterPubkey.substring(0, 10).toLowerCase();
     const nShort = neighborPubkey.substring(0, 6).toLowerCase();
     const entityId = type === 'snr'
-      ? `sensor.meshcore_${rShort}_neighbor_${nShort}`
-      : `sensor.meshcore_${rShort}_neighbor_${nShort}_seen`;
+      ? `sensor.hivefw_${rShort}_neighbor_${nShort}`
+      : `sensor.hivefw_${rShort}_neighbor_${nShort}_seen`;
 
     // Only open if the entity actually exists in HA
     if (this.hass?.states[entityId]) {
