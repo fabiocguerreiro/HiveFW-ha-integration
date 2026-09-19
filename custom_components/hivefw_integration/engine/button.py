@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Button platform for MeshCore integration."""
+"""Button platform for the unified HiveFW integration."""
 from __future__ import annotations
 
 import logging
@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up MeshCore button entities from a config entry."""
+    """Set up HiveFW button entities from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities: list[ButtonEntity] = []
@@ -68,7 +68,7 @@ class _MeshCoreCLIButton(CoordinatorEntity, ButtonEntity):
 
 
 class MeshCoreCLIRunButton(_MeshCoreCLIButton):
-    """Runs the command in text.meshcore_command through the CLI Console."""
+    """Run the HiveFW Console command helper."""
 
     _attr_name = "CLI Run Command"
     _attr_icon = "mdi:play"
@@ -145,7 +145,7 @@ class MeshCoreRepeaterFirmwareRefreshButton(CoordinatorEntity, ButtonEntity):
         """Query the repeater and persist its reported firmware version."""
         meshcore = self.coordinator.api.mesh_core
         if not meshcore:
-            raise HomeAssistantError("MeshCore device is not connected")
+            raise HomeAssistantError("HiveFW radio is not connected")
 
         try:
             await async_refresh_repeater_firmware(

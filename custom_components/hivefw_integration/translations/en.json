@@ -2,13 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "HiveFW HA Integration",
-        "description": "Add the HiveFW HA Integration for HiveFW Companion-Repeater management, chat, channels, nodes and diagnostics. The core meshcore integration must also be installed for the panel to receive messages."
+        "title": "HiveFW",
+        "description": "Configure HiveFW directly with your Companion/Repeater over TCP/Wi-Fi, BLE or USB. HiveFW owns the radio connection, Home Assistant entities, services, chat, channels, nodes, telemetry and diagnostics; no separate MeshCore Home Assistant integration is required."
       }
     },
     "abort": {
-      "single_instance_allowed": "HiveFW HA Integration is already configured.",
-      "meshcore_not_installed": "The MeshCore integration is not installed. Install it from HACS first, then add HiveFW."
+      "single_instance_allowed": "HiveFW is already configured."
     }
   },
   "options": {
@@ -29,19 +28,19 @@
   },
   "issues": {
     "upstream_meshcore_unavailable": {
-      "title": "MeshCore integration is not configured",
+      "title": "HiveFW radio connection is unavailable",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "HiveFW HA Integration needs the MeshCore integration",
-            "description": "HiveFW HA Integration uses the core meshcore integration, but no MeshCore device is currently configured. Install and configure the meshcore integration first (Settings → Devices & Services → Add Integration → MeshCore), or remove HiveFW if you no longer need it.\n\nClick Submit to acknowledge this issue. It will clear automatically once a MeshCore device is configured."
+            "title": "HiveFW cannot reach the configured radio",
+            "description": "HiveFW owns the radio connection directly. Check the configured TCP/Wi-Fi, BLE or USB connection and reload the integration. No separate MeshCore Home Assistant integration is required."
           }
         }
       }
     },
     "name_changed": {
-      "title": "MeshCore device renamed",
-      "description": "The MeshCore device was renamed from `{old_name}` to `{new_name}`. {count} entity IDs were automatically migrated from the `_{old_suffix}` suffix to `_{new_suffix}`.\n\n**Renamed entities:**\n\n{entity_list}\n\nIf you have automations, scripts, or dashboards referencing the old entity IDs, you will need to update them manually to use the new suffix.\n\nThis issue can be dismissed once you have verified your configuration."
+      "title": "HiveFW device renamed",
+      "description": "The HiveFW device was renamed from `{old_name}` to `{new_name}`. {count} entity IDs were automatically migrated from the `_{old_suffix}` suffix to `_{new_suffix}`.\n\n**Renamed entities:**\n\n{entity_list}\n\nIf you have automations, scripts, or dashboards referencing the old entity IDs, you will need to update them manually to use the new suffix.\n\nThis issue can be dismissed once you have verified your configuration."
     }
   },
   "exceptions": {
@@ -58,7 +57,7 @@
       "message": "Invalid request parameters"
     },
     "no_meshcore_coordinator": {
-      "message": "No active MeshCore coordinator"
+      "message": "No active HiveFW radio coordinator"
     },
     "invalid_key_length": {
       "message": "Private key must be 64 or 128 hex characters"

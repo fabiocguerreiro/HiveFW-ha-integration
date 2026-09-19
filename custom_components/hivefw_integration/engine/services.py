@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Services for the MeshCore integration."""
+"""Services for the unified HiveFW integration."""
 import ast
 import asyncio
 import inspect
@@ -146,19 +146,19 @@ def _resolve_ui_entry_id(hass: HomeAssistant, entry_id: str | None) -> tuple[str
         if entry_id not in coordinators:
             return None, _ui_service_error(
                 "config_entry_not_found",
-                f"MeshCore config entry not found: {entry_id}",
+                f"HiveFW config entry not found: {entry_id}",
                 entry_id=entry_id,
             )
         return entry_id, None
     if not coordinators:
         return None, _ui_service_error(
             "config_entry_not_found",
-            "No MeshCore config entry is available",
+            "No HiveFW config entry is available",
         )
     if len(coordinators) > 1:
         return None, _ui_service_error(
             "ambiguous_config_entry",
-            "Multiple MeshCore config entries are available; entry_id is required",
+            "Multiple HiveFW config entries are available; entry_id is required",
             entry_ids=sorted(coordinators),
         )
     return next(iter(coordinators)), None
@@ -557,7 +557,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not message:
             return _ui_service_error(
                 "message_empty",
-                f"MeshCore message helper is empty for config entry {entry_id}",
+                f"HiveFW message helper is empty for config entry {entry_id}",
                 entry_id=entry_id,
                 entity_id=message_entity_id,
             )
@@ -576,7 +576,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if channel_idx is None:
                 return _ui_service_error(
                     "helper_value_missing",
-                    f"MeshCore channel helper has no channel index for config entry {entry_id}",
+                    f"HiveFW channel helper has no channel index for config entry {entry_id}",
                     entry_id=entry_id,
                     helper="channel",
                 )
@@ -605,7 +605,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if not pubkey_prefix:
                 return _ui_service_error(
                     "helper_value_missing",
-                    f"MeshCore contact helper has no public key for config entry {entry_id}",
+                    f"HiveFW contact helper has no public key for config entry {entry_id}",
                     entry_id=entry_id,
                     helper="contact",
                 )
@@ -1134,7 +1134,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not command:
             return _ui_service_error(
                 "command_empty",
-                f"MeshCore command helper is empty for config entry {entry_id}",
+                f"HiveFW command helper is empty for config entry {entry_id}",
                 entry_id=entry_id,
                 entity_id=command_entity_id,
             )

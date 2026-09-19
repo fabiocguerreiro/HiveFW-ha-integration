@@ -48,9 +48,13 @@ What it already did:
 - Console tab has not yet been implemented.
 - End-to-end compile/build validation is not yet complete.
 
+## Latest completed step
+
+Public surface naming converted to HiveFW: services domain, service descriptions, helper names/IDs, config/help strings and coordinator-facing errors.
+
 ## NEXT STEP
 
-**Commit 2: finish embedded engine wiring.**
+**Next commit: validate/finish embedded engine wiring and attribution.**
 
 Specifically:
 
