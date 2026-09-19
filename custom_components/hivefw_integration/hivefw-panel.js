@@ -78,6 +78,8 @@ class HiveFWPanel extends BasePanel {
     this.__peerActivityLoading = false;
     this.__topologyVisible = false;
     this.__topologyOverlay = null;
+    this.__activityHeatmapVisible = false;
+    this.__activityHeatmapLayer = null;
     this.__traceMonitorOverlay = null;
     this.__traceMonitorTimer = null;
     this.__traceMonitorRunning = false;
@@ -2753,6 +2755,7 @@ class HiveFWPanel extends BasePanel {
         if(selected)this.__openPersistentNodePopup(selected);
       }
       if(this.__topologyVisible)this.__renderTopologyOverlay();
+      if(this.__activityHeatmapVisible)this.__drawActivityHeatmap();
     }catch(error){
       console.warn("HiveFW peer activity load failed",error);
       this.__peerActivity={peers:{},links:{},edges:{}};
@@ -3582,6 +3585,21 @@ class HiveFWPanel extends BasePanel {
           font-size:10px;
           flex:0 0 auto;
         }
+        .hive-activity-legend{
+          position:absolute;
+          left:10px;
+          bottom:10px;
+          z-index:34;
+          max-width:min(420px,calc(100% - 20px));
+          padding:7px 9px;
+          border:1px solid var(--divider-color,#ccc);
+          border-radius:9px;
+          background:color-mix(in srgb,var(--card-background-color,#fff) 92%,transparent);
+          color:var(--secondary-text-color,#666);
+          box-shadow:0 1px 4px rgba(0,0,0,.18);
+          font-size:10px;
+          pointer-events:none;
+        }
         @media(max-width:870px){
           .page-container.hive-nodes-split{
             grid-template-columns:1fr!important;
@@ -3645,6 +3663,7 @@ class HiveFWPanel extends BasePanel {
   __cleanupNodesSplit() {
     this.__closeTraceMonitor();
     this.__closeTopologyOverlay();
+    this.__removeActivityHeatmapLayer();
     const root=this.shadowRoot;
     const container=root?.querySelector(".page-container");
     container?.classList.remove("hive-nodes-split");
@@ -4594,6 +4613,108 @@ class HiveFWPanel extends BasePanel {
     return true;
   }
 
+  __removeActivityHeatmapLayer() {
+    const map=this.__nodesMapElement?.leafletMap;
+    if(this.__activityHeatmapLayer&&map){
+      if(Array.isArray(this.__activityHeatmapLayer.__hiveLayers)){
+        for(const layer of this.__activityHeatmapLayer.__hiveLayers){
+          try{map.removeLayer(layer);}catch{}
+        }
+      }else{
+        try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
+      }
+    }
+    this.__activityHeatmapLayer=null;
+    this.__nodesMapPane?.querySelector(".hive-activity-legend")?.remove();
+    this.__activityHeatmapVisible=false;
+  }
+
+  __toggleActivityHeatmap() {
+    if(this.__activityHeatmapVisible){
+      this.__removeActivityHeatmapLayer();
+    }else{
+      this.__activityHeatmapVisible=true;
+      this.__drawActivityHeatmap();
+    }
+    // Re-render the map toolbar so the button reflects the current state.
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    if(page&&this.__nodesMapPane?.isConnected)void this.__ensureSplitMap(page,this.__nodesMapPane);
+  }
+
+  __drawActivityHeatmap() {
+    if(!this.__activityHeatmapVisible)return;
+    const pane=this.__nodesMapPane;
+    const mapEl=this.__nodesMapElement;
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
+    if(!pane||!map||!L)return;
+
+    if(this.__activityHeatmapLayer){
+      try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
+      this.__activityHeatmapLayer=null;
+    }
+    pane.querySelector(".hive-activity-legend")?.remove();
+
+    const source=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+    const points=[];
+    let maxScore=0;
+    for(const contact of source){
+      const coords=this.__nodeCoords(contact);
+      if(!coords)continue;
+      const activity=this.__peerActivityFor(contact);
+      const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
+      if(score<=0)continue;
+      maxScore=Math.max(maxScore,score);
+      points.push({contact,coords,activity,score});
+    }
+
+    const layers=[];
+    for(const point of points){
+      const ratio=maxScore?Math.sqrt(point.score/maxScore):0;
+      const radius=7+ratio*22;
+      const marker=L.circleMarker(point.coords,{
+        radius,
+        weight:1,
+        color:"#1565c0",
+        fillColor:"#ef6c00",
+        fillOpacity:0.14+ratio*0.48,
+        opacity:0.38+ratio*0.42,
+        interactive:true,
+      });
+      const name=String(point.contact.adv_name||point.contact.pubkey_prefix||"Nó");
+      const details=[
+        "atividade "+point.score,
+        "RX "+(point.activity.rx||0),
+        "TX "+(point.activity.tx||0),
+        "paths "+(point.activity.linkVolume||0),
+      ];
+      if(Number.isFinite(point.activity.avgSnr))details.push("SNR "+point.activity.avgSnr.toFixed(1)+" dB");
+      marker.bindTooltip?.(name+" · "+details.join(" · "),{direction:"top"});
+      marker.on?.("click",()=>this.__focusNodeOnMap(point.contact,true));
+      layers.push(marker);
+    }
+
+    this.__activityHeatmapLayer=L.layerGroup?L.layerGroup(layers):null;
+    if(this.__activityHeatmapLayer){
+      this.__activityHeatmapLayer.addTo(map);
+    }else{
+      for(const layer of layers)layer.addTo(map);
+      // Minimal compatibility wrapper so cleanup can remove all layers.
+      this.__activityHeatmapLayer={
+        __hiveLayers:layers,
+      };
+    }
+
+    const legend=document.createElement("div");
+    legend.className="hive-activity-legend";
+    legend.textContent=points.length
+      ? "Heatmap de atividade · intensidade = RX + TX + aparições em paths · origem: histórico local HiveFW de mensagens e RX_LOG · não gera tráfego RF"
+      : "Heatmap de atividade · ainda sem nós GPS com atividade no histórico local de mensagens/RX_LOG";
+    pane.appendChild(legend);
+  }
+
   __resolveTopologyHash(hash) {
     const wanted=String(hash||"").trim().replace(/^0x/i,"").toLowerCase();
     if(!wanted)return null;
@@ -4933,7 +5054,17 @@ class HiveFWPanel extends BasePanel {
         event.stopPropagation();
         this.__toggleTopologyOverlay();
       });
-      count.append(label,center,routes,topology);
+      const activity=document.createElement("button");
+      activity.type="button";
+      activity.textContent=this.__activityHeatmapVisible?"ATIVIDADE ✓":"ATIVIDADE";
+      activity.title="Heatmap derivado do histórico local de mensagens e RX_LOG";
+      activity.style.marginLeft="8px";
+      activity.addEventListener("click",(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        this.__toggleActivityHeatmap();
+      });
+      count.append(label,center,routes,topology,activity);
     }
 
     // Home Assistant 2026.9's ha-map has no editableLocations API yet.
@@ -4959,6 +5090,7 @@ class HiveFWPanel extends BasePanel {
       }
     }
     this.__drawLastTraceRoute();
+    if(this.__activityHeatmapVisible)this.__drawActivityHeatmap();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
