@@ -895,7 +895,7 @@ export class MeshCorePanel extends LitElement {
       this._devices = devices;
 
       if (devices.length === 0) {
-        this._error = 'No MeshCore devices found';
+        this._error = 'No HiveFW devices found';
         this._loading = false;
         return;
       }
@@ -904,7 +904,7 @@ export class MeshCorePanel extends LitElement {
       const connected = devices.find((d) => d.connected);
       this._selectedEntryId = (connected || devices[0]).entry_id;
 
-      // Build config from device info + MeshCore preset defaults
+      // Build config from device info + HiveFW preset defaults
       const device = connected || devices[0];
       this._config = {
         node_name: device.name,
@@ -920,7 +920,7 @@ export class MeshCorePanel extends LitElement {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this._error = `Failed to load: ${message}`;
-      console.error('MeshCore panel load error:', err);
+      console.error('HiveFW panel load error:', err);
     } finally {
       this._loading = false;
     }
