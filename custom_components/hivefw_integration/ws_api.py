@@ -512,6 +512,74 @@ def _get_store(
     return None
 
 
+def _get_runtime_data(
+    hass: HomeAssistant, entry_id: str | None = None
+) -> HiveFWRuntimeData | None:
+    """Return HiveFW per-entry runtime data."""
+    if entry_id:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        runtime = getattr(entry, "runtime_data", None) if entry else None
+        return runtime if isinstance(runtime, HiveFWRuntimeData) else None
+
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        runtime = getattr(entry, "runtime_data", None)
+        if isinstance(runtime, HiveFWRuntimeData):
+            return runtime
+    return None
+
+
+def _contact_meta_key(contact: dict) -> str:
+    """Return stable lower-case public-key identity for local node metadata."""
+    raw = contact.get("public_key") or ""
+    if isinstance(raw, dict):
+        raw = raw.get("hex") or ""
+    key = str(raw).strip().lower()
+    if key:
+        return key
+    return str(contact.get("pubkey_prefix") or "").strip().lower()
+
+
+def _node_age(contact: dict, now: float | None = None) -> tuple[str, int | None]:
+    """Return (bucket, age_seconds) from the freshest known contact timestamp."""
+    stamps: list[float] = []
+    for field in ("lastmod", "last_advert", "last_modified"):
+        try:
+            value = float(contact.get(field) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            stamps.append(value)
+
+    if not stamps:
+        return "stale", None
+
+    current = now if now is not None else time.time()
+    age = max(0, int(current - max(stamps)))
+    if age < 3600:
+        return "lt1h", age
+    if age < 6 * 3600:
+        return "lt6h", age
+    if age < 24 * 3600:
+        return "lt24h", age
+    if age < 7 * 24 * 3600:
+        return "lt7d", age
+    return "stale", age
+
+
+def _enrich_contact_meta(contact: dict, runtime: HiveFWRuntimeData | None) -> dict:
+    """Attach Home Assistant-owned metadata used by the Nodes UI."""
+    result = dict(contact)
+    key = _contact_meta_key(contact)
+    raw_meta = runtime.node_meta.get(key, {}) if runtime and key else {}
+    tags = raw_meta.get("tags", []) if isinstance(raw_meta, dict) else []
+    bucket, age_seconds = _node_age(contact)
+    result["favorite"] = bool(raw_meta.get("favorite")) if isinstance(raw_meta, dict) else False
+    result["tags"] = [str(tag) for tag in tags if str(tag).strip()][:8]
+    result["age_bucket"] = bucket
+    result["age_seconds"] = age_seconds
+    return result
+
+
 def _get_channel_scopes(hass: HomeAssistant):
     """Return the process-wide ChannelScopeStore (None before setup).
 
@@ -562,6 +630,7 @@ def async_register_ws_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_trace)
     websocket_api.async_register_command(hass, ws_get_blocked_contacts)
     websocket_api.async_register_command(hass, ws_set_contact_blocked)
+    websocket_api.async_register_command(hass, ws_set_node_meta)
 
     # Paginated contacts & counts
     websocket_api.async_register_command(hass, ws_get_contacts_paginated)
@@ -626,11 +695,68 @@ async def ws_get_contacts(hass, connection, msg):
     coordinator.get_all_contacts() for users on older meshcore — see
     _get_contacts_via_service.
     """
-    contacts = await _get_contacts_via_service(hass, msg.get("entry_id"))
+    entry_id = msg.get("entry_id")
+    contacts = await _get_contacts_via_service(hass, entry_id)
     if contacts is None:
-        connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
+        connection.send_error(msg["id"], "not_found", "No HiveFW coordinator found")
         return
-    connection.send_result(msg["id"], {"contacts": contacts})
+    runtime = _get_runtime_data(hass, entry_id)
+    connection.send_result(
+        msg["id"],
+        {"contacts": [_enrich_contact_meta(contact, runtime) for contact in contacts]},
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hivefw_integration/set_node_meta",
+        vol.Optional("entry_id"): str,
+        vol.Required("public_key"): str,
+        vol.Optional("favorite"): bool,
+        vol.Optional("tags"): [str],
+    }
+)
+@websocket_api.async_response
+async def ws_set_node_meta(hass, connection, msg):
+    """Persist local Favorite/Tags metadata for one mesh node."""
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    if runtime is None:
+        connection.send_error(msg["id"], "not_found", "No HiveFW runtime found")
+        return
+
+    key = str(msg["public_key"]).strip().lower()
+    if not (6 <= len(key) <= 64) or any(ch not in "0123456789abcdef" for ch in key):
+        connection.send_error(msg["id"], "invalid", "Invalid node public key")
+        return
+
+    previous = runtime.node_meta.get(key, {})
+    if not isinstance(previous, dict):
+        previous = {}
+
+    favorite = (
+        bool(msg["favorite"])
+        if "favorite" in msg
+        else bool(previous.get("favorite"))
+    )
+    tags_raw = msg.get("tags", previous.get("tags", []))
+    tags: list[str] = []
+    for raw_tag in tags_raw if isinstance(tags_raw, list) else []:
+        tag = str(raw_tag).strip().lstrip("#")[:24]
+        if tag and tag not in tags:
+            tags.append(tag)
+        if len(tags) >= 8:
+            break
+
+    if favorite or tags:
+        runtime.node_meta[key] = {"favorite": favorite, "tags": tags}
+    else:
+        runtime.node_meta.pop(key, None)
+
+    await runtime.node_meta_store.async_save(runtime.node_meta)
+    connection.send_result(
+        msg["id"],
+        {"favorite": favorite, "tags": tags},
+    )
 
 
 # ─── meshcore/get_contacts_paginated ─────────────────────────────────
@@ -670,6 +796,9 @@ def _compute_type_counts(contacts: list) -> dict:
         ),
         vol.Optional("node_type"): int,
         vol.Optional("search"): str,
+        vol.Optional("activity", default="all"): vol.In(
+            ["all", "active24h", "favorites", "gps", "stale"]
+        ),
         vol.Optional("limit", default=50): int,
         vol.Optional("offset", default=0): int,
         vol.Optional("sort_by", default="last_heard"): vol.In(
@@ -691,9 +820,13 @@ async def ws_get_contacts_paginated(hass, connection, msg):
         connection.send_error(msg["id"], "not_found", "No MeshCore coordinator found")
         return
 
+    runtime = _get_runtime_data(hass, msg.get("entry_id"))
+    all_contacts = [_enrich_contact_meta(contact, runtime) for contact in all_contacts]
+
     category = msg["category"]
     node_type = msg.get("node_type")
     search = msg.get("search")
+    activity = msg["activity"]
     limit = msg["limit"]
     offset = msg["offset"]
     sort_by = msg["sort_by"]
@@ -710,14 +843,34 @@ async def ws_get_contacts_paginated(hass, connection, msg):
     # category badges remain stable as the user types in the search box.
     type_counts = _compute_type_counts(filtered)
 
-    # Search filter (substring match against adv_name and pubkey_prefix)
+    # Search filter: node name, public key/prefix and Home Assistant tags.
     if search:
         search_lower = search.lower()
         filtered = [
             c for c in filtered
             if search_lower in (c.get("adv_name") or "").lower()
             or search_lower in (c.get("pubkey_prefix") or "").lower()
+            or search_lower in str(c.get("public_key") or "").lower()
+            or any(search_lower in str(tag).lower() for tag in c.get("tags", []))
         ]
+
+    # Activity/GPS/favorite filters operate on the complete contact set before
+    # pagination, so results are correct even with thousands of discovered nodes.
+    if activity == "active24h":
+        filtered = [
+            c for c in filtered
+            if c.get("age_seconds") is not None and int(c["age_seconds"]) < 86400
+        ]
+    elif activity == "favorites":
+        filtered = [c for c in filtered if c.get("favorite")]
+    elif activity == "gps":
+        filtered = [
+            c for c in filtered
+            if abs(float(c.get("adv_lat") or 0)) > 0.000001
+            and abs(float(c.get("adv_lon") or 0)) > 0.000001
+        ]
+    elif activity == "stale":
+        filtered = [c for c in filtered if c.get("age_bucket") == "stale"]
 
     # Type filter — clients are 0 OR 1 (firmware-emitted ambiguity).
     if node_type is not None:
