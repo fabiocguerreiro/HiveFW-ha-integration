@@ -81,24 +81,19 @@ export class NodesPage extends LitElement {
     }
 
     .nodes-layout {
+      --nodes-list-width: 340px;
       display: grid;
-      grid-template-columns: minmax(340px, 1fr) minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
+      grid-template-columns: var(--nodes-list-width) minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      width: 100%;
       height: 100%;
       min-height: 0;
       overflow: hidden;
     }
 
-    .nodes-list-pane {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-      border-right: 1px solid var(--divider-color, #e0e0e0);
-    }
-
     .nodes-header {
+      grid-column: 1 / -1;
+      grid-row: 1;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -109,11 +104,14 @@ export class NodesPage extends LitElement {
     }
 
     .nodes-map-pane {
+      grid-column: 2;
+      grid-row: 2;
       position: relative;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
       background: var(--card-background-color, #fff);
+      border-left: 1px solid var(--divider-color, #e0e0e0);
     }
 
     .nodes-map-pane ha-map {
@@ -346,6 +344,16 @@ export class NodesPage extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .header-actions .search-bar {
+      flex: 0 1 var(--nodes-list-width);
+      width: min(var(--nodes-list-width), 100%);
+      max-width: var(--nodes-list-width);
+      min-width: 220px;
+      box-sizing: border-box;
     }
 
     .export-btn {
@@ -384,7 +392,10 @@ export class NodesPage extends LitElement {
     /* ─── Content area ──────────────────────────────────────────────── */
 
     .content-area {
-      flex: 1;
+      grid-column: 1;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
       padding: 12px;
@@ -400,7 +411,7 @@ export class NodesPage extends LitElement {
 
     .nodes-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
@@ -467,13 +478,24 @@ export class NodesPage extends LitElement {
     :host([narrow]) .l2-btn { font-size: 11px; padding: 5px 10px; }
     :host([narrow]) .nodes-grid { grid-template-columns: 1fr; }
     :host([narrow]) .nodes-layout {
+      --nodes-list-width: 100%;
       grid-template-columns: 1fr;
-      grid-template-rows: minmax(360px, 55%) minmax(300px, 45%);
+      grid-template-rows: auto minmax(300px, 45%) minmax(300px, 55%);
       overflow-y: auto;
     }
-    :host([narrow]) .nodes-list-pane {
-      border-right: none;
+    :host([narrow]) .nodes-header {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    :host([narrow]) .content-area {
+      grid-column: 1;
+      grid-row: 2;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
+    :host([narrow]) .nodes-map-pane {
+      grid-column: 1;
+      grid-row: 3;
+      border-left: none;
     }
   `;
 
@@ -528,8 +550,7 @@ export class NodesPage extends LitElement {
   render() {
     return html`
       <div class="nodes-layout">
-        <section class="nodes-list-pane">
-          <div class="nodes-header">
+        <div class="nodes-header">
             <div class="l1-filters">
               ${this._renderL1Button('all', 'All')}
               ${this._renderL1Button('added', '★ Added')}
@@ -587,11 +608,11 @@ export class NodesPage extends LitElement {
             </div>
           </div>
 
-          <div class="content-area">
-            ${this._renderContactsContent()}
-          </div>
-        </section>
+        <div class="content-area">
+          ${this._renderContactsContent()}
+        </div>
 
+        <section class="nodes-map-pane" aria-label="Mapa de nós"></section>
       </div>
 
       <meshcore-node-detail-dialog
