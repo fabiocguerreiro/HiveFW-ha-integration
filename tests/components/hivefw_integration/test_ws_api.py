@@ -35,7 +35,7 @@ from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.hivefw_integration import (
-    MeshCoreChatRuntimeData,
+    HiveFWRuntimeData,
 )
 from custom_components.hivefw_integration.channel_scopes import ChannelScopeStore
 from custom_components.hivefw_integration.const import DOMAIN, MESHCORE_DOMAIN
@@ -173,7 +173,7 @@ def companion_entry(hass: HomeAssistant) -> MockConfigEntry:
     store.get_message_index = MagicMock(return_value={})
     store.get_messages = AsyncMock(return_value=[])
     store._load_for_search = AsyncMock(return_value=[])
-    entry.runtime_data = MeshCoreChatRuntimeData(store=store)
+    entry.runtime_data = HiveFWRuntimeData(store=store)
     return entry
 
 
@@ -3053,7 +3053,7 @@ async def _seed_companion_with_messages(
             },
         )
 
-    entry.runtime_data = MeshCoreChatRuntimeData(store=real_store)
+    entry.runtime_data = HiveFWRuntimeData(store=real_store)
     return entry, entity_id, message_ids
 
 
