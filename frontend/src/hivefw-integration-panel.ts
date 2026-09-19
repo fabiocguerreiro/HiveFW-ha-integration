@@ -122,9 +122,38 @@ export class MeshCorePanel extends LitElement {
       }
 
       .panel-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
         font-size: 18px;
         font-weight: 500;
         color: var(--primary-text-color);
+        min-width: 0;
+      }
+
+      .hivefw-header-brand-white {
+        display: inline-block;
+        width: 112px;
+        height: 28px;
+        flex: 0 0 auto;
+        border-radius: 8px;
+        background: rgba(17, 17, 17, .92);
+        position: relative;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+      }
+
+      .hivefw-header-brand-white::before {
+        content: '';
+        position: absolute;
+        inset: 6px 9px;
+        background: #fff;
+        -webkit-mask: url('/hivefw_integration_panel/hivefw-wordmark.png') center / contain no-repeat;
+        mask: url('/hivefw_integration_panel/hivefw-wordmark.png') center / contain no-repeat;
+      }
+
+      :host([narrow]) .hivefw-header-brand-white {
+        width: 82px;
+        height: 26px;
       }
 
       .device-info {
@@ -722,7 +751,7 @@ export class MeshCorePanel extends LitElement {
               : html``}
             <div class="panel-title" aria-label=${device?.name || 'HiveFW'}>
               <span class="panel-product-name">${device?.name || 'HiveFW'}</span>
-            </div>
+              </div>
           </div>
           <div class="header-right">
             ${device && this._getNodeStatus(device) !== null
