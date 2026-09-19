@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import timedelta
 from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.components import persistent_notification
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -53,6 +57,8 @@ class HiveFWRuntimeData:
     node_meta_store: Store | None = None
     node_meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     trace_history: list[dict[str, Any]] = field(default_factory=list)
+    observability_settings: dict[str, Any] = field(default_factory=dict)
+    health_state: dict[str, Any] = field(default_factory=dict)
 
 
 # Type alias for ConfigEntry parameterized with our runtime data shape.
@@ -119,6 +125,154 @@ from .engine.integration import async_setup_entry as async_setup_engine_entry  #
 from .engine.integration import async_unload_entry as async_unload_engine_entry  # noqa: E402
 
 
+DEFAULT_OBSERVABILITY_SETTINGS: dict[str, Any] = {
+    "noise_floor_warn": -105.0,
+    "tx_queue_warn": 5.0,
+    "recv_errors_rate_warn": 0.5,
+    "reliability_warn": 70.0,
+    "reliability_min_requests": 20,
+    "persistent_notifications": False,
+}
+
+
+def _observability_settings(runtime: HiveFWRuntimeData) -> dict[str, Any]:
+    """Return defaults merged with persisted per-entry thresholds."""
+    result = dict(DEFAULT_OBSERVABILITY_SETTINGS)
+    result.update(runtime.observability_settings or {})
+    return result
+
+
+def _numeric_state_for_unique_key(
+    hass: HomeAssistant,
+    entry_id: str,
+    key: str,
+) -> float | None:
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, entry_id):
+        unique_id = str(entity.unique_id or "")
+        if f"_{key}_" not in unique_id and not unique_id.endswith(f"_{key}"):
+            continue
+        state = hass.states.get(entity.entity_id)
+        if state is None:
+            continue
+        try:
+            return float(state.state)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _binary_state_for_unique_key(
+    hass: HomeAssistant,
+    entry_id: str,
+    key: str,
+) -> bool:
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, entry_id):
+        unique_id = str(entity.unique_id or "")
+        if f"_{key}_" not in unique_id and not unique_id.endswith(f"_{key}"):
+            continue
+        state = hass.states.get(entity.entity_id)
+        if state is not None and state.state == "on":
+            return True
+    return False
+
+
+async def _async_evaluate_health(
+    hass: HomeAssistant,
+    entry: HiveFWConfigEntry,
+) -> None:
+    """Evaluate cached HA diagnostics and emit events only on transitions."""
+    runtime = entry.runtime_data
+    if not isinstance(runtime, HiveFWRuntimeData):
+        return
+    settings = _observability_settings(runtime)
+
+    alerts: dict[str, str] = {}
+    noise = _numeric_state_for_unique_key(hass, entry.entry_id, "noise_floor")
+    if noise is not None and noise > float(settings["noise_floor_warn"]):
+        alerts["noise_floor"] = f"Noise floor {noise:.1f} dBm"
+
+    queue = _numeric_state_for_unique_key(hass, entry.entry_id, "tx_queue_len")
+    if queue is not None and queue > float(settings["tx_queue_warn"]):
+        alerts["tx_queue"] = f"TX queue {queue:.0f}"
+
+    recv_errors = _numeric_state_for_unique_key(
+        hass, entry.entry_id, "recv_errors_rate"
+    )
+    if recv_errors is not None and recv_errors > float(
+        settings["recv_errors_rate_warn"]
+    ):
+        alerts["recv_errors"] = f"RX errors {recv_errors:.2f}/min"
+
+    successes = _numeric_state_for_unique_key(
+        hass, entry.entry_id, "request_successes"
+    )
+    failures = _numeric_state_for_unique_key(
+        hass, entry.entry_id, "request_failures"
+    )
+    if successes is not None and failures is not None:
+        total = successes + failures
+        if total >= int(settings["reliability_min_requests"]) and total > 0:
+            reliability = successes / total * 100.0
+            if reliability < float(settings["reliability_warn"]):
+                alerts["reliability"] = f"Reliability {reliability:.0f}%"
+
+    for key, label in (
+        ("err_pool_full", "Packet pool exhausted"),
+        ("err_cad_timeout", "CAD timeout"),
+        ("err_rx_timeout", "RX timeout"),
+    ):
+        if _binary_state_for_unique_key(hass, entry.entry_id, key):
+            alerts[key] = label
+
+    previous = runtime.health_state.get("active", {})
+    if not isinstance(previous, dict):
+        previous = {}
+    if previous == alerts:
+        return
+
+    entered = {key: value for key, value in alerts.items() if key not in previous}
+    cleared = {key: value for key, value in previous.items() if key not in alerts}
+    runtime.health_state = {
+        "active": alerts,
+        "updated_at": __import__("datetime").datetime.now().astimezone().isoformat(),
+    }
+
+    event_data = {
+        "entry_id": entry.entry_id,
+        "device_name": entry.data.get("name") or entry.title or "HiveFW",
+        "state": "alert" if alerts else "ok",
+        "active_alerts": alerts,
+        "entered": entered,
+        "cleared": cleared,
+        "thresholds": settings,
+    }
+    hass.bus.async_fire("hivefw_health_transition", event_data)
+
+    if settings.get("persistent_notifications") and entered:
+        persistent_notification.async_create(
+            hass,
+            "\n".join(entered.values()),
+            title=f"HiveFW health alert · {event_data['device_name']}",
+            notification_id=f"hivefw_health_{entry.entry_id}",
+        )
+    elif not alerts:
+        persistent_notification.async_dismiss(
+            hass, f"hivefw_health_{entry.entry_id}"
+        )
+
+    if runtime.node_meta_store is not None:
+        await runtime.node_meta_store.async_save(
+            {
+                "nodes": runtime.node_meta,
+                "traces": runtime.trace_history[-100:],
+                "observability": runtime.observability_settings,
+                "health_state": runtime.health_state,
+            }
+        )
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: HiveFWConfigEntry
 ) -> bool:
@@ -172,10 +326,16 @@ async def async_setup_entry(
         node_meta = raw_node_meta["nodes"]
         raw_traces = raw_node_meta.get("traces", [])
         trace_history = raw_traces if isinstance(raw_traces, list) else []
+        raw_observability = raw_node_meta.get("observability", {})
+        observability_settings = raw_observability if isinstance(raw_observability, dict) else {}
+        raw_health_state = raw_node_meta.get("health_state", {})
+        health_state = raw_health_state if isinstance(raw_health_state, dict) else {}
     else:
         # v1 migration: the old store was the node map itself.
         node_meta = raw_node_meta if isinstance(raw_node_meta, dict) else {}
         trace_history = []
+        observability_settings = {}
+        health_state = {}
 
     # Per-entry runtime state lives on entry.runtime_data.
     entry.runtime_data = HiveFWRuntimeData(
@@ -183,7 +343,22 @@ async def async_setup_entry(
         node_meta_store=node_meta_store,
         node_meta=node_meta,
         trace_history=trace_history[-100:],
+        observability_settings=observability_settings,
+        health_state=health_state,
     )
+
+    async def _scheduled_health_check(_now) -> None:
+        await _async_evaluate_health(hass, entry)
+
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass,
+            _scheduled_health_check,
+            timedelta(minutes=1),
+        )
+    )
+    # Seed transition state immediately from the currently available entities.
+    hass.async_create_task(_async_evaluate_health(hass, entry))
 
     # Best-effort retention pass at startup. Failures here must not block
     # setup — they are logged and we continue.
