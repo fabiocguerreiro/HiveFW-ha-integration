@@ -663,8 +663,8 @@ async def async_setup_entry(
     async_add_entities(entities)
 
     # Set up listeners for outgoing message events to update the delivery sensor.
-    # - meshcore_message_sent: fires immediately when a message is sent (from services.py)
-    # - meshcore_delivery_update: fires on each intermediate collection pass (sensor only)
+    # - hivefw_message_sent: fires immediately when a message is sent (from services.py)
+    # - hivefw_delivery_update: fires on each intermediate collection pass (sensor only)
     # - meshcore_message: fires once on the final pass (logbook + sensor)
     from .logbook import EVENT_MESHCORE_MESSAGE, EVENT_MESHCORE_DELIVERY_UPDATE
 
@@ -689,7 +689,7 @@ async def async_setup_entry(
         if data.get("outgoing") and data.get("message_type"):
             delivery_sensor.update_from_event(data)
 
-    unsub_sent = hass.bus.async_listen(f"{DOMAIN}_message_sent", _handle_message_sent)
+    unsub_sent = hass.bus.async_listen("hivefw_message_sent", _handle_message_sent)
     unsub_delivery = hass.bus.async_listen(EVENT_MESHCORE_DELIVERY_UPDATE, _handle_delivery_update)
     unsub_logbook = hass.bus.async_listen(EVENT_MESHCORE_MESSAGE, _handle_message_event)
     entry.async_on_unload(unsub_sent)
