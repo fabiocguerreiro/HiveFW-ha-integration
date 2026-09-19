@@ -136,6 +136,33 @@ class HiveFWPanel extends BasePanel {
     return this._selectedEntryId || this._config?.entry_id || undefined;
   }
 
+  __headerPathHash() {
+    const rawMode=
+      this.__repeaterStatus?.radio?.path_hash_mode ??
+      this.__repeaterStatus?.device_info?.path_hash_mode ??
+      this.__repeaterEdit?.path_hash_mode;
+    const mode=Number(rawMode);
+    if(!Number.isInteger(mode)||mode<0||mode>2)return "";
+
+    const chars=(mode+1)*2;
+    const local=this.__localRepeaterMapContact?.();
+    const candidates=[
+      this._selectedDevice?.pubkey,
+      this._selectedDevice?.public_key,
+      this._selectedDevice?.pubkey_prefix,
+      this._config?.pubkey,
+      this._config?.public_key,
+      local?.public_key,
+      local?.pubkey_prefix,
+    ];
+
+    for(const value of candidates){
+      const key=String(value||"").replace(/[^0-9a-f]/gi,"").toLowerCase();
+      if(key.length>=chars)return key.slice(0,chars);
+    }
+    return "";
+  }
+
   __enhanceRepeaterUi() {
     const root = this.shadowRoot;
     if (!root) return;
@@ -151,6 +178,17 @@ class HiveFWPanel extends BasePanel {
       product.className = "hivefw-header-product";
       product.textContent = radioName;
       title.appendChild(product);
+
+      const pathHash=this.__headerPathHash();
+      if(pathHash){
+        const hash=document.createElement("span");
+        hash.className="hivefw-header-path-hash";
+        hash.textContent="("+pathHash+")";
+        const bytes=Math.max(1,pathHash.length/2);
+        hash.title="Path Hash · "+bytes+" byte"+(bytes===1?"":"s");
+        title.appendChild(hash);
+      }
+
       const brand = document.createElement("span");
       brand.className = "hivefw-header-brand-white";
       brand.setAttribute("aria-label", "HiveFW");
@@ -677,6 +715,19 @@ class HiveFWPanel extends BasePanel {
       }
       .hivefw-header-product {
         font-weight:600;
+        white-space:nowrap;
+      }
+      .hivefw-header-path-hash {
+        display:inline-flex;
+        align-items:center;
+        flex:0 0 auto;
+        padding:3px 7px;
+        border:1px solid var(--divider-color,#ddd);
+        border-radius:999px;
+        background:var(--secondary-background-color,#f3f3f3);
+        color:var(--secondary-text-color,#666);
+        font:600 11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        letter-spacing:.02em;
         white-space:nowrap;
       }
       .panel-title {
