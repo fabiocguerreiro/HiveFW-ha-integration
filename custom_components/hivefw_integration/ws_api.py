@@ -207,7 +207,7 @@ def _get_all_coordinators(hass: HomeAssistant) -> list:
 
 
 def _integration_supports_routed_contact_cleanup(hass: HomeAssistant) -> bool:
-    """True when the installed meshcore integration owns the routed contact
+    """True when the embedded HiveFW engine owns the routed contact
     cleanup — i.e. its ``remove_contact`` handler also removes the per-contact
     ``binary_sensor`` (and discards the pubkey) on large-mesh installs.
 
@@ -471,7 +471,7 @@ def _get_store(
     materialises ``runtime_data`` on the entry whose setup populated it,
     so a direct attribute read on a non-companion entry raises
     AttributeError. Frontend call sites occasionally pass the parent
-    ``meshcore`` integration's entry_id (rather than the chat
+    HiveFW integration entry_id (rather than a UI-only entry
     companion's) — bringing that down the same code path was the source
     of a runtime crash; ``getattr`` collapses the miss to a clean None.
 
@@ -1058,7 +1058,7 @@ def ws_get_flood_scopes(hass, connection, msg):
     """Return the embedded HiveFW radio engine's configured region-scope names.
 
     Reads the comma-separated allowlist the user maintains in the
-    meshcore integration's Global Settings (config-entry data key
+    HiveFW Global Settings (config-entry data key
     ``flood_scopes``, added by meshcore-dev/meshcore-ha#250). Returns
     ``{"scopes": [...named regions...], "global": <bool>}``. The
     ``global`` flag is true when the allowlist contains the ``*``
@@ -2791,7 +2791,7 @@ async def ws_mark_read(hass, connection, msg):
 
     The ``entry_id`` field on the inbound WS message is intentionally
     NOT forwarded to ``_get_store``: the chat panel's frontend often
-    populates that field with the parent ``meshcore`` integration's
+    populates that field with the HiveFW integration's
     entry id (the panel was originally configured against that), but
     this handler needs the chat companion's store. The chat companion
     is single-instance per its config flow, so the ``None``-fallback
@@ -3349,7 +3349,7 @@ async def ws_remove_contact(hass, connection, msg):
             return
 
         # Route the node mutation + coordinator sync + (large-mesh) entity
-        # cleanup through the meshcore integration WHEN it owns the routed
+        # cleanup through the HiveFW engine WHEN it owns the routed
         # cleanup; otherwise fall back to the existing inlined block below
         # (correct for integrations without large-mesh — no entity to orphan).
         if _integration_supports_routed_contact_cleanup(hass):
@@ -3563,8 +3563,7 @@ async def ws_trace(
         connection.send_error(
             msg["id"],
             "service_unavailable",
-            "Upstream meshcore.trace service not registered — "
-            "requires meshcore>=2.6.0. Update the meshcore integration.",
+            "HiveFW trace service is not registered. Reload or reinstall the HiveFW integration.",
         )
         return
 
@@ -3956,7 +3955,7 @@ async def ws_get_stored_messages(
     but the handler always uses the ``None``-fallback branch. Same
     reason as ``ws_mark_read`` / ``ws_get_messages_around``: the chat
     panel's frontend forwards ``this.config?.entry_id`` to every WS
-    handler, and that resolves to the parent ``meshcore`` integration's
+    handler, and that resolves to the HiveFW integration's
     entry id rather than the chat companion's. The chat companion is
     single-instance per its config flow, so the fallback resolves
     deterministically.
@@ -4003,7 +4002,7 @@ def ws_get_stored_message_count(
     ``_get_store`` — it stays on the schema for backwards compatibility
     but the handler always uses the ``None``-fallback branch. Same
     reason as ``ws_mark_read`` / ``ws_get_messages_around``: the chat
-    panel's frontend forwards the parent ``meshcore`` integration's
+    panel's frontend forwards the HiveFW integration's
     entry id, not the chat companion's. The chat companion is single-
     instance per its config flow, so the fallback resolves
     deterministically.
@@ -4048,7 +4047,7 @@ async def ws_search_stored_messages(
     ``_get_store`` — it stays on the schema for backwards compatibility
     but the handler always uses the ``None``-fallback branch. Same
     reason as ``ws_mark_read`` / ``ws_get_messages_around``: the chat
-    panel's frontend forwards the parent ``meshcore`` integration's
+    panel's frontend forwards the HiveFW integration's
     entry id, not the chat companion's. The chat companion is single-
     instance per its config flow, so the fallback resolves
     deterministically.
@@ -4138,7 +4137,7 @@ async def ws_get_messages_around(
     but the handler always uses the ``None``-fallback branch. Same
     reason as ``ws_mark_read``: the chat panel's frontend forwards
     ``this.config?.entry_id`` to every WS handler, and that resolves to
-    the parent ``meshcore`` integration's entry id rather than the chat
+    the HiveFW integration's entry id rather than the chat
     companion's. The chat companion is single-instance per its config
     flow, so the fallback resolves deterministically.
     """
