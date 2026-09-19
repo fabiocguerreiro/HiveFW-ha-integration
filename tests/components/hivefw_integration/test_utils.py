@@ -27,6 +27,7 @@ from custom_components.hivefw_integration.const import (
     MESHCORE_DOMAIN,
 )
 from custom_components.hivefw_integration.utils import (
+    format_entity_id,
     derive_flood_scope,
     hoist_flood_scope,
     parse_flood_scope_allowlist,
@@ -183,3 +184,14 @@ def test_wildcard_allowlisted_absent_key() -> None:
 def test_wildcard_allowlisted_no_coordinator() -> None:
     """No upstream coordinator registered → False (not an error)."""
     assert wildcard_global_allowlisted(SimpleNamespace(data={})) is False
+
+
+# ─── public entity identity ─────────────────────────────────────────────
+
+
+def test_format_entity_id_uses_hivefw_prefix() -> None:
+    """Public entity IDs use hivefw, never meshcore or hivefw_integration."""
+    entity_id = format_entity_id("binary_sensor", "abc123", "ch_1", "messages")
+    assert entity_id == "binary_sensor.hivefw_abc123_ch_1_messages"
+    assert ".meshcore_" not in entity_id
+    assert ".hivefw_integration_" not in entity_id
