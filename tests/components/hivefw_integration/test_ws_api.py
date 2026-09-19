@@ -358,12 +358,14 @@ def test_get_store_falls_back_when_foreign_entry_id_passed(
 async def test_ws_get_devices_happy(
     hass: HomeAssistant, coordinator: MagicMock
 ) -> None:
+    coordinator.api.self_info = {"path_hash_mode": 1}
     conn = _Connection()
     await _call_ws(ws_api.ws_get_devices, hass, conn, {"id": 1})
     assert conn.results
     payload = conn.results[0][1]
     assert "devices" in payload
     assert payload["devices"][0]["entry_id"] == "meshcore_entry"
+    assert payload["devices"][0]["path_hash_mode"] == 1
 
 
 async def test_ws_get_devices_empty_when_no_coordinator(
