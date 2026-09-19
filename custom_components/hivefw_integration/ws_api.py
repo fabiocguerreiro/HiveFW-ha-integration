@@ -3888,6 +3888,9 @@ def _trace_error_for(
         vol.Required("type"): "hivefw_integration/trace",
         vol.Required("pubkey_prefix"): str,
         vol.Optional("entry_id"): str,
+        vol.Optional("source", default="manual"): vol.In(
+            ["manual", "monitor", "explicit"]
+        ),
         # Optional comma-separated hex hops, e.g. "86,AE".  When provided,
         # backend skips path discovery and calls send_trace() with this
         # path directly.  Absent/empty → HiveFW trace service.
