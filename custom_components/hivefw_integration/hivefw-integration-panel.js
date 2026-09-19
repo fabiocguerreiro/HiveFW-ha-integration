@@ -1590,15 +1590,10 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
           <option selected>All regions (global flood)</option>
         </select>
         <div class="form-description scope-empty-hint">
-          No region scopes are configured yet. Add scope names in the
-          <a
-            href="/config/integrations/integration/hivefw_integration"
-            target="_blank"
-            rel="noopener">HiveFW integration</a>
-          first (Configure → Global Settings → Flood Scope Allowlist),
-          then reopen this dialog. Region names are agreed within your
-          local mesh community — check your community's reference, or
-          scan for nearby regions from the MeshCore mobile app.
+          No region scopes are configured yet. Add them in HiveFW
+          (Dispositivo → Global Settings → Flood Scope Allowlist), then
+          reopen this dialog. Region names are agreed within your local
+          mesh community.
         </div>
       `))}async _onSave(){if(this.hass&&this._channelName){this._saving=!0,this._error=null;try{(await async function(e,t,i,o,r,a){try{const s={type:"hivefw_integration/set_channel",channel_idx:t,name:i};return o&&(s.key=o),r&&(s.entry_id=r),void 0!==a&&(s.scope=a),await e.callWS(s)}catch(e){return{success:!1}}}(this.hass,this._channelIdx,this._channelName,this._autoKey?void 0:this._customKey,this.entryId,this._scope)).success?(this.dispatchEvent(new CustomEvent("channel-saved",{detail:{channelIdx:this._channelIdx,name:this._channelName,scope:this._scope},bubbles:!0})),this._reset()):this._error="Failed to save channel"}catch(e){this._error=`Error: ${String(e)}`}finally{this._saving=!1}}}_onCancel(){this._reset(),this.dispatchEvent(new CustomEvent("close",{bubbles:!0}))}_onOverlayClick(e){e.target===e.currentTarget&&this._onCancel()}_reset(){this._channelIdx=0,this._channelName="",this._customKey="",this._autoKey=!0,this._scope="",this._availableScopes=null,this._globalAllowed=!1,this._error=null}};Rl.styles=[Zn,Hs(C||(C=Fs`
       :host {
@@ -8240,8 +8235,8 @@ let e,t,i,o,r,a,s,n,l,d,c,p,h,u,g,m,v,f,y,b,_,x,w,$,k,C,S,M,A,D,z,R,O,I,T,F,E,N,
           </div>
         </div>
       `),this._error,e?Mn(vs||(vs=Fs`Open <a href="/config/repairs">Settings &rarr; System &rarr; Repairs</a>
-                         for setup guidance, or add the HiveFW integration via
-                         <a href="/config/integrations">Settings &rarr; Devices &amp; Services</a>.`)):"Check that the HiveFW integration is loaded and connected.")}const o=this._selectedDevice;return Mn(fs||(fs=Fs`
+                         for setup guidance, or reconfigure HiveFW via
+                         <a href="/config/integrations">Settings &rarr; Devices &amp; Services</a>.`)):"Check that HiveFW is configured and the radio is connected.")}const o=this._selectedDevice;return Mn(fs||(fs=Fs`
       <div class="panel">
         <div class="panel-header">
           <div class="header-left">
