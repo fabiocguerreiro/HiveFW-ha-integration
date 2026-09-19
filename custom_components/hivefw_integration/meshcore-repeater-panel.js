@@ -966,52 +966,55 @@ class MeshCoreRepeaterPanel extends BasePanel {
   }
 
   __ensureMetricEditor(summary,nroot,hero) {
-    let style=nroot.querySelector("#hive-metric-editor-style");
-    if(!style){
-      style=document.createElement("style");
-      style.id="hive-metric-editor-style";
-      style.textContent=`
-        .hive-metric-toolbar{
-          display:flex;
-          justify-content:flex-end;
-          align-items:center;
-          margin:-3px 0 5px;
-          min-height:28px;
-        }
-        .hive-metric-edit-btn{
-          width:28px;height:28px;padding:0;border:1px solid var(--divider-color,#d0d0d0);
-          border-radius:7px;background:var(--card-background-color,#fff);
-          color:var(--secondary-text-color,#666);font-size:15px;cursor:pointer;
-          display:grid;place-items:center;
-        }
-        .hive-metric-edit-btn:hover{
-          color:var(--primary-color,#03a9f4);
-          border-color:var(--primary-color,#03a9f4);
-        }
-      `;
-      nroot.appendChild(style);
-    }
-
-    let toolbar=nroot.querySelector(".hive-metric-toolbar");
-    if(!toolbar){
-      toolbar=document.createElement("div");
-      toolbar.className="hive-metric-toolbar";
-      const edit=document.createElement("button");
-      edit.type="button";
-      edit.className="hive-metric-edit-btn";
-      edit.textContent="✎";
-      edit.title="Editar ordem e visibilidade das métricas";
-      edit.setAttribute("aria-label","Editar métricas");
-      edit.addEventListener("click",(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-        this.__openMetricEditor(summary,nroot,hero);
-      });
-      toolbar.appendChild(edit);
-      hero.parentNode?.insertBefore(toolbar,hero);
-    }
-
+    // Layout is always applied here. The editor itself is opened from the
+    // existing Companion gear menu via "Editar Menu".
+    nroot.querySelector(".hive-metric-toolbar")?.remove();
+    nroot.querySelector("#hive-metric-editor-style")?.remove();
     this.__applyMetricLayout(hero);
+  }
+
+  __ensureMetricSettingsMenu(settingsPage,sroot) {
+    const modal=sroot.querySelector('.modal-card[data-a11y="companion-settings"]');
+    const body=modal?.querySelector(".modal-body");
+    if(!body)return;
+
+    let edit=body.querySelector(".hive-edit-menu-action");
+    if(edit)return;
+
+    edit=document.createElement("button");
+    edit.type="button";
+    edit.className="modal-action hive-edit-menu-action";
+    edit.innerHTML=`
+      <span class="modal-action-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25M20.71 7.04c.39-.39.39-1.03 0-1.42l-2.34-2.34a.9959.995 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.82z"/>
+        </svg>
+      </span>
+      Editar Menu
+    `;
+
+    edit.addEventListener("click",(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Close the native gear modal first.
+      settingsPage._settingsModalOpen=false;
+      settingsPage.requestUpdate?.();
+
+      // Open our metric editor once Lit has removed the settings modal.
+      window.setTimeout(()=>{
+        const summary=sroot.querySelector("meshcore-node-summary");
+        const nroot=summary?.shadowRoot;
+        const hero=nroot?.querySelector(".hero-row");
+        if(summary&&nroot&&hero){
+          this.__openMetricEditor(summary,nroot,hero);
+        }
+      },40);
+    });
+
+    // Put Editar Menu first: it edits the visible dashboard rather than
+    // device/radio state, so it is the most discoverable presentation action.
+    body.prepend(edit);
   }
 
   __enhanceSettingsPage() {
@@ -1066,6 +1069,7 @@ class MeshCoreRepeaterPanel extends BasePanel {
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
+    this.__ensureMetricSettingsMenu(settingsPage,sroot);
     this.__ensureRebootAction(sroot);
 
     this.__settingsObserver?.takeRecords();
@@ -2642,7 +2646,21 @@ class MeshCoreRepeaterPanel extends BasePanel {
       center.addEventListener("click",(event)=>{
         event.preventDefault();
         event.stopPropagation();
-        this.__resetNodesMapView();
+
+        const local=this.__localRepeaterMapContact();
+        if(!local)return;
+
+        const localId=this.__nodeId(local);
+        const marker=this.__nodesLeafletMarkers.get(localId);
+
+        // Use exactly the same path as a real click on our local repeater pin.
+        // Leaflet's fire("click") invokes the marker handler installed in
+        // __legacyLeafletLayers; the fallback covers newer HA map APIs.
+        if(marker?.fire){
+          marker.fire("click");
+        }else{
+          this.__focusNodeOnMap(local,true);
+        }
       });
       count.append(label,center);
     }

@@ -4,6 +4,13 @@ All notable changes to **HiveFW for Home Assistant** are documented here. The fo
 
 ## [Unreleased]
 
+## [0.10.14] - 2026-09-19
+
+- Changed **CENTRAR** to invoke the exact same handler as clicking the local HiveFW repeater marker, with direct focus fallback when the Leaflet marker is not available.
+- Removed the separate metric-edit pencil toolbar.
+- Added **Editar Menu** to the existing Companion gear/settings modal; it opens the metric order/visibility editor introduced in 0.10.13.
+- Metric layout storage, drag/drop, show/hide and **Repor padrão** behavior remain unchanged.
+
 ## [0.10.13] - 2026-09-19
 
 - Added a pencil **Edit metrics** control to the Dispositivo metric area.
