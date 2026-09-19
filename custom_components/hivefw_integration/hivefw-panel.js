@@ -4653,6 +4653,7 @@ class HiveFWPanel extends BasePanel {
       }
     }
     this.__nodesMarkerLayer=null;
+    this.__nodesBaseTileLayer=null;
     this.__nodesMapElement=null;
     this.__nodesMapSignature="";
     this.__nodesPopupId="";
@@ -5007,11 +5008,55 @@ class HiveFWPanel extends BasePanel {
     return locations;
   }
 
+  async __ensureLegacyBaseTiles(mapEl) {
+    const map=mapEl?.leafletMap;
+    const L=mapEl?.Leaflet;
+    if(!map||!L||!this.hass?.connection)return false;
+
+    let hasTiles=false;
+    try{
+      map.eachLayer?.((layer)=>{
+        if(hasTiles)return;
+        if((L.TileLayer && layer instanceof L.TileLayer) || typeof layer?._url==="string"){
+          hasTiles=true;
+        }
+      });
+    }catch{}
+    if(hasTiles)return true;
+
+    try{
+      const result=await this.hass.connection.sendMessagePromise({
+        type:"map_tiles/access_token",
+      });
+      const token=String(result?.token||"").trim();
+      if(!token||!L.tileLayer)return false;
+      const tile=L.tileLayer(
+        "/api/map_tiles/raster/{z}/{x}/{y}.png?token="+encodeURIComponent(token),
+        {
+          maxNativeZoom:19,
+          maxZoom:20,
+          attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }
+      );
+      tile.addTo(map);
+      this.__nodesBaseTileLayer=tile;
+      return true;
+    }catch(error){
+      console.warn("HiveFW map tile fallback unavailable",error);
+      return false;
+    }
+  }
+
   async __waitForLegacyLeaflet(map) {
-    if(!map || !("layers" in map))return false;
-    for(let i=0;i<40;i++){
+    if(!map)return false;
+    if(map.leafletMap && map.Leaflet)return true;
+    // Modern ha-map exposes editableLocations/panTo and has no public
+    // Leaflet object. Never wait on that implementation.
+    if("editableLocations" in map || typeof map.panTo==="function")return false;
+    if(!("layers" in map))return false;
+    for(let i=0;i<8;i++){
       if(map.leafletMap && map.Leaflet)return true;
-      await new Promise((resolve)=>setTimeout(resolve,75));
+      await new Promise((resolve)=>setTimeout(resolve,50));
       if(!map.isConnected)return false;
     }
     return !!(map.leafletMap && map.Leaflet);
@@ -5767,10 +5812,19 @@ class HiveFWPanel extends BasePanel {
   async __applyInitialNodesMapView(localRepeater) {
     const mapEl=this.__nodesMapElement;
     if(!mapEl||!localRepeater)return false;
-    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
 
     const coords=this.__nodeCoords(localRepeater);
     if(!coords)return false;
+
+    if(typeof mapEl.panTo==="function"){
+      mapEl.zoom=9;
+      mapEl.panTo(coords);
+      this.__nodesInitialViewport={lat:coords[0],lng:coords[1],zoom:9};
+      return true;
+    }
+
+    if(!await this.__waitForLegacyLeaflet(mapEl))return false;
+    await this.__ensureLegacyBaseTiles(mapEl);
 
     mapEl.leafletMap.setView(coords,9,{animate:false});
     try{mapEl.leafletMap.invalidateSize?.({pan:false,animate:false});}catch{}
@@ -6222,7 +6276,16 @@ class HiveFWPanel extends BasePanel {
     const mapChanged=this.__nodesMapSignature!==signature;
     if(mapChanged){
       const map=this.__nodesMapElement;
-      if("layers" in map && await this.__waitForLegacyLeaflet(map)){
+      if("editableLocations" in map || typeof map.panTo==="function"){
+        // Public Home Assistant map API (current frontend).
+        map.entities=this.__mapEntities(mapContacts);
+        if("editableLocations" in map){
+          map.editableLocations=this.__mapLocations(mapContacts);
+        }
+      }else if(await this.__waitForLegacyLeaflet(map)){
+        // Compatibility path for older HA versions. Keep HiveFW overlays
+        // separate from ha-map's own layers so its territory tiles survive.
+        await this.__ensureLegacyBaseTiles(map);
         if(this.__nodesMarkerLayer && map.leafletMap){
           try{map.leafletMap.removeLayer(this.__nodesMarkerLayer);}catch{}
         }
@@ -6239,10 +6302,8 @@ class HiveFWPanel extends BasePanel {
           try{map.leafletMap?.invalidateSize?.({pan:false,animate:false});}catch{}
         });
       }else{
+        // Old transitional builds with entity-only map support.
         map.entities=this.__mapEntities(mapContacts);
-        if("editableLocations" in map){
-          map.editableLocations=this.__mapLocations(mapContacts);
-        }
       }
       this.__nodesMapSignature=signature;
     }
@@ -6278,7 +6339,14 @@ class HiveFWPanel extends BasePanel {
           this.__openPersistentNodePopup(contact);
         },180);
       }
-    }else if(!("layers" in map)){
+    }else if(typeof map.panTo==="function"){
+      map.entities=this.__mapEntities(contacts);
+      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
+      map.zoom=12;
+      map.panTo(coords);
+      // Current ha-map owns its markers; selection remains visible through
+      // the highlighted marker even though Leaflet popups are unavailable.
+    }else{
       map.entities=this.__mapEntities(contacts);
       if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
       map.setView?.(coords,12);
