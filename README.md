@@ -1,304 +1,302 @@
 <p align="center">
-  <img src="custom_components/hivefw_integration/brand/hivefw-wordmark.png" alt="HiveFW" width="420">
+  <img src="custom_components/hivefw_integration/brand/logo.png" alt="HiveFW" width="420">
 </p>
 
-# HiveFW
+# HiveFW para Home Assistant
 
-**HiveFW** is a Home Assistant interface designed specifically for
+**HiveFW** é uma integração standalone para Home Assistant orientada ao
 [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
 
-HiveFW is unusual by MeshCore standards: it is a **Companion first**, with an integrated
-**Repeater mode** that can be enabled while the device continues to provide the Companion
-connection used by Home Assistant. Because of that Client-Repeater architecture, the
-normal MeshCore Repeater management interfaces do not expose everything that is useful
-for a HiveFW node.
+A integração é responsável pela ligação ao rádio, entidades, serviços, eventos, histórico
+de mensagens e interface lateral. **Não é necessário instalar a integração Home Assistant
+`meshcore-ha` em separado.** O protocolo/SDK MeshCore continua a ser usado internamente,
+mas a superfície pública no Home Assistant pertence ao HiveFW.
 
-This integration turns Home Assistant into the management and monitoring point for that
-device while keeping the MeshCore functions that still matter: **chat, channels, nodes,
-contacts, traces and direct neighbours**.
-
-## Main interface
-
-The sidebar panel is organised around four practical areas:
-
-### Dispositivo
-
-The default view and HiveFW control centre.
-
-It includes a compact cockpit with live information from both `meshcore-ha` entities and
-the Companion protocol, including, when available:
-
-- battery percentage and voltage
-- temperature
-- RSSI and SNR
-- integrated Repeater state
-- uptime
-- HiveFW internal clock and clock drift
-- noise floor
-- TX queue
-- TX/RX airtime
-- sent/received message counters
-- request-rate tokens
-- discovered contacts
-- storage usage
-- radio fault health
-- location
-- hardware model and firmware build
-- Companion protocol version
-- Path Hash mode
-- contact/channel capacity
-- allowed Repeater frequencies
-
-The same page contains the configuration that is meaningful for HiveFW:
-
-- Repeater mode on/off
-- frequency, bandwidth, spreading factor and coding rate
-- TX power
-- Path Hash mode
-- Multi ACKs
-- RX delay and airtime factor
-- advertised location
-- managed MeshCore devices exposed by the upstream integration
-
-Operational actions are intentionally limited to real actions rather than information
-queries:
-
-- **Local Advert**
-- **Flood Advert**
-- **Sync Clock**
-- **Trace**
-- **Reboot**
-
-Device information, telemetry, battery/storage and supported Repeater frequencies are
-loaded automatically and do not need separate query buttons.
-
-### Chat & Canais
-
-Keeps the original practical reason for using a Companion with Home Assistant:
-
-- channel conversations
-- direct messages
-- persistent message history
-- unread state
-- delivery information
-- message search
-- route metadata
-- channel/contact management
-
-### Nós
-
-Network contact/discovery view for the nodes known by the Companion.
-
-It remains useful for:
-
-- Added vs discovered contacts
-- Clients vs Repeaters
-- last-heard information
-- search and filtering
-- node details
-- path traces
-- contact management
-
-### Vizinhos
-
-HiveFW-oriented direct-neighbour view.
-
-The integration queries the existing Companion **Advert Path** cache and treats a
-Repeater as a direct neighbour when its last advert has `path_len == 0`.
-
-This provides a useful zero-hop view **without requiring a custom HiveFW protocol
-extension and without transmitting a LoRa packet just to refresh the page**.
-
-The current firmware/API does not expose per-neighbour SNR through this query, so the UI
-does not invent one.
-
-## Why this integration exists
-
-The upstream [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) integration is
-still the component that connects Home Assistant to MeshCore and provides the core
-entities/services.
-
-HiveFW builds on top of it and adds a UI/workflow specifically for a
-HiveFW Companion-Repeater:
+## Arquitetura
 
 ```text
 Home Assistant
       │
-      ├── meshcore-ha
-      │      │
-      │      └── Wi-Fi Companion connection
-      │
       └── HiveFW
-             │
-             ├── HiveFW device cockpit
-             ├── Repeater configuration
-             ├── Chat & channels
-             ├── Nodes / contacts
-             └── Zero-hop neighbours
-
-                    │
-                    ▼
-            HiveFW Companion-Repeater
+            ├── TCP / Wi-Fi
+            ├── BLE
+            └── USB
+                  │
+                  ▼
+        HiveFW Companion-Repeater
+                  │
+                  ▼
+             Rede MeshCore
 ```
 
-The intended primary connection for this project is **Wi-Fi**. BLE-specific information
-such as the BLE PIN is deliberately not presented in the HiveFW management UI.
+O firmware HiveFW é Companion primeiro. Quando o modo Repeater é ativado no rádio,
+continua a existir uma ligação Companion para Home Assistant enquanto o dispositivo
+participa na rede como Repeater.
 
-## Requirements
+## Interface
 
-- Home Assistant 2024.12 or newer
-- [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha) installed and configured
-- a MeshCore Companion reachable by Home Assistant
-- for the full intended feature set: **HiveFW Companion-Repeater**
+O painel **HiveFW** é registado automaticamente na barra lateral do Home Assistant.
 
-The integration can still display ordinary MeshCore data exposed by `meshcore-ha`, but
-the device-management workflow and terminology are designed around HiveFW.
+### Dispositivo
 
-## Installation with HACS
+Centro de monitorização e configuração do rádio selecionado.
 
-Add this repository as a custom HACS integration:
+Inclui, quando disponíveis:
+
+- bateria, tensão, temperatura e uptime;
+- frequência, bandwidth, spreading factor, coding rate e TX power;
+- RSSI, SNR, noise floor e TX queue;
+- TX/RX airtime e taxas de mensagens;
+- fiabilidade, integridade e erros de receção;
+- relógio interno e drift;
+- armazenamento, capacidade de contactos/canais e Path Hash;
+- estado Companion/Repeater;
+- frequências permitidas para Repeater;
+- localização;
+- radio faults reportados pelo firmware;
+- histórico de métricas via Home Assistant Recorder.
+
+A página inclui ainda:
+
+- **Local Advert**;
+- **Flood Advert**;
+- **Sync Clock**;
+- **Trace**;
+- **Reboot**;
+- **Regions & Scopes**;
+- **RX Log** integrado, com filtro, RSSI/SNR/hops/path e exportação JSON;
+- configuração do rádio e do modo Repeater.
+
+Os radio faults são indicadores acumulados pelo firmware. Por exemplo,
+`Radio Fault: CAD Timeout = Detected` significa que o evento ocorreu pelo menos uma
+vez desde o último arranque/reset das estatísticas; não significa necessariamente que
+o erro esteja ativo nesse instante.
+
+### Chat & Canais
+
+Interface de mensagens para canais e contactos:
+
+- canais e mensagens diretas;
+- histórico persistente;
+- estado unread;
+- pesquisa;
+- gestão de contactos e canais;
+- scopes por canal;
+- informação de entrega;
+- metadados RX nas mensagens recebidas, incluindo hops, RSSI e SNR quando disponíveis.
+
+Bots e automações devem ser preferencialmente **on-demand**. A rede LoRa é um recurso
+partilhado e não deve ser inundada com tráfego periódico desnecessário.
+
+### Nós
+
+Vista de descoberta/contactos com lista e mapa lado a lado.
+
+Funcionalidades principais:
+
+- Added / Discovered;
+- Clients / Repeaters / Room Servers / Sensors;
+- pesquisa e filtros;
+- mapa com nós que possuem coordenadas;
+- popup persistente no mapa;
+- adicionar/remover contactos;
+- Favorites e Tags locais;
+- importação e exportação de contactos no formato compatível com a app MeshCore;
+- Trace e Route Health;
+- Trace Monitor on-demand.
+
+A resolução de hashes é conservadora: quando um hash é ambíguo, o HiveFW não inventa
+uma correspondência.
+
+### Vizinhos
+
+Mostra Repeaters ouvidos diretamente pelo HiveFW a partir da informação já disponível
+no Companion.
+
+A leitura desta página é local ao Companion e não envia pacotes LoRa apenas para atualizar
+a interface.
+
+### Console
+
+Console administrativo integrado para o rádio selecionado:
+
+- comandos livres;
+- Enter para executar;
+- histórico de comandos com ↑ / ↓;
+- transcript com resposta, timestamp e erros;
+- limpar/atualizar histórico;
+- atalhos para comandos frequentes;
+- catálogo completo de comandos pré-definidos com parâmetros e avisos;
+- seleção do dispositivo HiveFW ativo.
+
+Comandos de configuração são executados exatamente como indicados e podem alterar
+estado persistente do rádio.
+
+## Identidade no Home Assistant
+
+A integração usa uma identidade própria e consistente:
+
+```text
+Integração / serviços: hivefw_integration
+Entidades:             sensor.hivefw_*
+                       binary_sensor.hivefw_*
+                       select.hivefw_*
+                       device_tracker.hivefw_*
+                       ...
+Eventos:               hivefw_*
+Painel:                /hivefw
+```
+
+Referências a `meshcore` que permanecem no código dizem respeito ao protocolo, SDK,
+formatos compatíveis ou atribuição de código upstream — não a uma segunda integração HA.
+
+## Requisitos
+
+- Home Assistant 2024.12 ou superior;
+- um Companion compatível acessível por TCP/Wi-Fi, BLE ou USB;
+- para todas as funcionalidades específicas de Companion-Repeater:
+  [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater).
+
+A ligação recomendada para instalações permanentes é **TCP/Wi-Fi**, especialmente quando
+Home Assistant e o rádio permanecem na mesma rede local.
+
+## Instalação com HACS
+
+Adicionar este repositório como integração personalizada:
 
 ```text
 https://github.com/fabiocguerreiro/HiveFW-ha-integration
 ```
 
-Then:
+Depois:
 
-1. HACS → Integrations → Custom repositories.
-2. Add the URL above as **Integration**.
-3. Install **HiveFW**.
-4. Restart Home Assistant when the update includes Python/backend changes.
-5. Settings → Devices & Services → Add Integration → **HiveFW**.
-6. Open **HiveFW** from the Home Assistant sidebar.
+1. Abrir **HACS → Integrations → Custom repositories**.
+2. Adicionar o URL acima como **Integration**.
+3. Instalar **HiveFW**.
+4. Reiniciar Home Assistant.
+5. Abrir **Definições → Dispositivos e Serviços → Adicionar integração**.
+6. Procurar **HiveFW**.
+7. Selecionar TCP/Wi-Fi, BLE ou USB e configurar a ligação ao rádio.
+8. Abrir **HiveFW** na barra lateral.
 
-For frontend-only releases, a browser hard refresh is normally sufficient after HACS has
-updated the files.
+O projeto assume uma instalação limpa do HiveFW. Não é mantida uma camada de migração
+para instalações antigas de `meshcore-ha-chat` ou para uma segunda integração
+`meshcore-ha`.
 
-## Existing installations
+## Atualizações
 
-The repository and visible integration were renamed, but the internal domain remains:
+Alterações Python/backend normalmente requerem reload da integração ou restart do
+Home Assistant. Alterações frontend podem necessitar de refresh completo do browser
+(`Ctrl+F5`).
 
-```text
-hivefw_integration
-```
+Quando forem alterados simultaneamente backend, painel global ou registo de recursos
+estáticos, é preferível reiniciar Home Assistant.
 
-This is intentional. Changing the domain would make Home Assistant treat it as a new
-integration and could break existing config entries, stored chat history and settings.
+## Tráfego de rede
 
-The panel URL also remains compatible with existing installations.
+Nem todas as ações da interface geram LoRa.
 
-## Path Hash accuracy
+Normalmente locais ao Home Assistant/Companion:
 
-HiveFW does not include `path_hash_mode` in `SELF_INFO`.
+- leitura de entidades;
+- cockpit de métricas;
+- RX Log já armazenado;
+- histórico de mensagens;
+- mapa baseado em contactos já conhecidos;
+- leitura de configuração local.
 
-The integration therefore reads Path Hash from `DEVICE_QUERY / DEVICE_INFO`, which is
-the protocol response where HiveFW actually reports `_prefs.path_hash_mode`.
+Podem gerar tráfego RF:
 
-This avoids the previous behaviour where the UI could incorrectly display **1 byte**
-while the radio was configured for **2 bytes**.
+- envio de mensagens;
+- Flood Advert;
+- Trace / path discovery;
+- comandos remotos;
+- leitura/alteração de configuração de Repeaters remotos.
 
-## Regions and Scopes
+Operações RF periódicas não são iniciadas automaticamente quando podem ser feitas
+on-demand.
 
-The integration exposes the parts of MeshCore Regions/Scopes that are safe and
-available through the current APIs:
+## Segurança
 
-- **Flood Scopes** are editable in **Dispositivo → Regions & Scopes**. They are
-  stored in the selected `meshcore-ha` config entry and are available to the
-  per-channel scope picker in **Chat & Canais**.
-- **Remote Repeater Regions** can be read on demand and changed with structured
-  Region commands. These operations use RF and are never polled automatically.
-- The **local HiveFW Region tree is not editable through the current Companion
-  Protocol**. HiveFW can manage Regions on-device, but exposing that tree to HA
-  would require a firmware/protocol extension; this integration does not fake it.
+Dados vindos da mesh devem ser considerados não confiáveis. Nomes de nós, mensagens e
+outros campos provenientes do rádio são renderizados como texto, e operações que alteram
+rádio/configuração são protegidas no backend por permissões de administrador do Home
+Assistant.
 
-## Nodes map
+Ver [SECURITY.md](SECURITY.md) para política de reporte e modelo de confiança.
 
-The **Nós** page is a permanent split view: the filtered/searchable node list
-stays on the left and Home Assistant's own `ha-map` stays mounted on the
-right. Nodes whose adverts contain valid coordinates are plotted automatically.
-Clicking a node in the list centres that node on the map; clicking a marker
-opens the same node details used by the list. The backend also backfills
-contact coordinates from existing Home Assistant MeshCore contact/GPS
-entities when the raw coordinator contact record does not retain
-`adv_lat/adv_lon`. Nodes with no coordinates on either data surface remain
-visible in the list and are simply omitted from the map.
-
-## Network etiquette
-
-MeshCore is a shared radio network. HiveFW and this Home Assistant integration should be
-used with that in mind.
-
-Automations and bots should preferably be **on-demand**. Avoid unnecessary periodic
-traffic, aggressive polling that results in RF transmissions, or message flooding.
-
-Most diagnostic reads used by the HiveFW cockpit are local Companion-protocol queries
-between Home Assistant and the radio and do not themselves consume LoRa airtime.
-
-## Repository layout
-
-```text
-custom_components/hivefw_integration/
-    Home Assistant backend, WebSocket API, panel wrapper and HiveFW branding
-
-frontend/
-    Lit/TypeScript source for the sidebar interface
-
-tests/
-    backend tests
-
-frontend/tests/
-    frontend tests
-```
-
-The production frontend bundle is served from:
-
-```text
-custom_components/hivefw_integration/hivefw-integration-panel.js
-```
-
-The HiveFW compatibility wrapper is:
-
-```text
-custom_components/hivefw_integration/meshcore-repeater-panel.js
-```
-
-## Development
+## Desenvolvimento
 
 Frontend:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run build
 npm test
 npm run lint
 ```
 
-Backend tests:
+Backend:
 
 ```bash
-pytest tests/
+python -m pytest tests/
 ```
 
-Frontend-only changes normally require only a browser hard refresh after deployment.
-Changes to Python modules loaded by Home Assistant can require an integration reload or,
-for setup-time code, a Home Assistant restart.
+O source TypeScript vive em `frontend/src/`. O bundle utilizado pelo Home Assistant é:
 
-## Related projects
+```text
+custom_components/hivefw_integration/hivefw-integration-panel.js
+```
+
+O wrapper HiveFW que acrescenta a UI específica do projeto é:
+
+```text
+custom_components/hivefw_integration/hivefw-panel.js
+```
+
+Uma build de frontend deve ser feita sempre que forem removidos módulos/imports do source,
+para que código morto também desapareça do bundle distribuído.
+
+## Estrutura do repositório
+
+```text
+custom_components/hivefw_integration/
+    integração Home Assistant, engine, WebSocket API, painel e branding
+
+frontend/
+    source TypeScript/Lit e testes frontend
+
+tests/
+    testes backend
+
+ROADMAP.md
+    funcionalidades implementadas e próximas fases
+```
+
+## Código upstream e licenças
+
+Parte do motor interno foi adaptada de
+[meshcore-dev/meshcore-ha](https://github.com/meshcore-dev/meshcore-ha).
+O SDK/protocolo MeshCore continua a ser uma dependência de implementação.
+
+A proveniência e licenças estão documentadas em
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+Projetos relacionados:
 
 - [HiveFW Companion-Repeater](https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater)
 - [MeshCore](https://github.com/meshcore-dev/MeshCore)
-- [meshcore-ha](https://github.com/meshcore-dev/meshcore-ha)
 - [meshcore_py](https://github.com/meshcore-dev/meshcore_py)
 
 ## Disclaimer
 
-This project is provided as an experimental/custom integration. Use it at your own risk.
+Este é um projeto custom/experimental. A utilização e configuração do rádio são da
+responsabilidade do utilizador.
 
-Radio configuration remains the responsibility of the user. Ensure that frequency,
-power and operating mode comply with local regulations and with the configuration of the
-MeshCore network you are participating in.
+Respeita os limites legais de frequência/potência aplicáveis e evita automações, bots ou
+polling RF que provoquem flood desnecessário numa rede partilhada.
 
-## License
+## Licença
 
-MIT — see [LICENSE](LICENSE).
+MIT — ver [LICENSE](LICENSE).
