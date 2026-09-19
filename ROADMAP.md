@@ -68,7 +68,7 @@ Estas funcionalidades existem e devem permanecer em qualquer refactor:
 - [x] Distância hop-to-hop e distância acumulada da rota.
 - [x] Topology graph com links baseados em SNR/atividade.
 - [x] Activity heatmap com origem dos dados claramente indicada.
-- [ ] Continuar a nunca adivinhar hashes ambíguos.
+- [x] Guardrail de resolução: nunca adivinhar hashes ambíguos; relações/rotas exigem correspondência única.
 - [ ] Ferramenta LOS/elevation/Fresnel quando existir uma fonte de elevação adequada.
 
 ## Contactos, canais e partilha
