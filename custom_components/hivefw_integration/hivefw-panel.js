@@ -3658,8 +3658,8 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeTraceRouteLayer() {
-    const map=this.__nodesMapElement?.leafletMap;
-    if(this.__traceRouteLayer&&map){try{map.removeLayer(this.__traceRouteLayer);}catch{}}
+    const map=this.__nodesMapElement;
+    if(map && "paths" in map)map.paths=[];
     this.__traceRouteLayer=null;
   }
 
@@ -3748,19 +3748,25 @@ class HiveFWPanel extends BasePanel {
 
   __drawLastTraceRoute() {
     const pane=this.__nodesMapPane;
-    const mapEl=this.__nodesMapElement;
-    const map=mapEl?.leafletMap;
-    const L=mapEl?.Leaflet;
-    if(!pane||!map||!L)return;
+    const map=this.__nodesMapElement;
+    if(!pane||!map)return;
     this.__removeTraceRouteLayer();
     pane.querySelector(".hive-trace-summary")?.remove();
     const data=this.__traceRouteData();
     if(!data)return;
 
-    if(data.points.length>=2){
-      const line=L.polyline(data.points,{weight:4,opacity:.78,dashArray:"9 6",interactive:false});
-      line.addTo(map);
-      this.__traceRouteLayer=line;
+    if(data.points.length>=2 && "paths" in map){
+      const now=Date.now();
+      map.paths=[{
+        name:"HiveFW route",
+        color:"#1565c0",
+        gradualOpacity:0,
+        points:data.points.map((point,index)=>({
+          point,
+          timestamp:new Date(now+index*1000),
+        })),
+      }];
+      this.__traceRouteLayer=true;
     }
 
     const summary=document.createElement("div");
@@ -3809,6 +3815,7 @@ class HiveFWPanel extends BasePanel {
     }
     pane.appendChild(summary);
   }
+
 
   async __ensureMapLoaded() {
     if (customElements.get("ha-map")) return true;
@@ -5051,10 +5058,9 @@ class HiveFWPanel extends BasePanel {
   }
 
   __mapLocations(contacts) {
-    const fallback=contacts.filter((c)=>!c?.map_entity_id || !this.hass?.states?.[c.map_entity_id]);
     const active=new Set();
     const selectedId=this.__nodesMapFocusId||"";
-    const locations=fallback.map((c)=>{
+    const locations=contacts.map((c)=>{
       const id=this.__nodeId(c);
       const coords=this.__nodeCoords(c);
       active.add(id);
@@ -5072,6 +5078,51 @@ class HiveFWPanel extends BasePanel {
       if(!active.has(id))this.__nodesMapMarkerElements.delete(id);
     }
     return locations;
+  }
+
+  __activityMapLocations() {
+    if(!this.__activityHeatmapVisible)return [];
+    const source=Array.isArray(this.__nodesMapContacts)
+      ? this.__nodesMapContacts
+      : (Array.isArray(this._contacts)?this._contacts:[]);
+    const points=[];
+    let maxScore=0;
+    for(const contact of source){
+      const coords=this.__nodeCoords(contact);
+      if(!coords)continue;
+      const activity=this.__peerActivityFor(contact);
+      const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
+      if(score<=0)continue;
+      maxScore=Math.max(maxScore,score);
+      points.push({contact,coords,activity,score});
+    }
+    return points.map((point)=>{
+      const ratio=maxScore?Math.sqrt(point.score/maxScore):0;
+      const center=document.createElement("div");
+      center.style.cssText="width:2px;height:2px;opacity:0;pointer-events:none;";
+      return {
+        id:"__activity__"+this.__nodeId(point.contact),
+        location:point.coords,
+        radius:Math.round(180+ratio*1100),
+        color:"#ef6c00",
+        element:center,
+        elementSize:[2,2],
+        title:String(point.contact.adv_name||point.contact.pubkey_prefix||"Nó")+" · atividade "+point.score,
+        locationEditable:false,
+        radiusEditable:false,
+        activatable:false,
+      };
+    });
+  }
+
+  __applyPublicMapLocations(contacts) {
+    const map=this.__nodesMapElement;
+    if(!map || !("editableLocations" in map))return;
+    map.entities=[];
+    map.editableLocations=[
+      ...this.__mapLocations(contacts),
+      ...this.__activityMapLocations(),
+    ];
   }
 
   async __ensureLegacyBaseTiles(mapEl) {
@@ -5904,26 +5955,18 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeActivityHeatmapLayer() {
-    const map=this.__nodesMapElement?.leafletMap;
-    if(this.__activityHeatmapLayer&&map){
-      if(Array.isArray(this.__activityHeatmapLayer.__hiveLayers)){
-        for(const layer of this.__activityHeatmapLayer.__hiveLayers){
-          try{map.removeLayer(layer);}catch{}
-        }
-      }else{
-        try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
-      }
-    }
     this.__activityHeatmapLayer=null;
-    this.__nodesMapPane?.querySelector(".hive-activity-legend")?.remove();
     this.__activityHeatmapVisible=false;
+    this.__nodesMapPane?.querySelector(".hive-activity-legend")?.remove();
+    const contacts=this.__validMapContacts();
+    this.__applyPublicMapLocations(contacts);
   }
 
   __toggleActivityHeatmap() {
-    if(this.__activityHeatmapVisible){
+    this.__activityHeatmapVisible=!this.__activityHeatmapVisible;
+    if(!this.__activityHeatmapVisible){
       this.__removeActivityHeatmapLayer();
     }else{
-      this.__activityHeatmapVisible=true;
       this.__drawActivityHeatmap();
     }
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
@@ -5933,80 +5976,14 @@ class HiveFWPanel extends BasePanel {
   __drawActivityHeatmap() {
     if(!this.__activityHeatmapVisible)return;
     const pane=this.__nodesMapPane;
-    const mapEl=this.__nodesMapElement;
-    const map=mapEl?.leafletMap;
-    const L=mapEl?.Leaflet;
-    if(!pane||!map||!L)return;
-
-    if(this.__activityHeatmapLayer){
-      if(Array.isArray(this.__activityHeatmapLayer.__hiveLayers)){
-        for(const layer of this.__activityHeatmapLayer.__hiveLayers){
-          try{map.removeLayer(layer);}catch{}
-        }
-      }else{
-        try{map.removeLayer(this.__activityHeatmapLayer);}catch{}
-      }
-      this.__activityHeatmapLayer=null;
-    }
+    if(!pane)return;
+    this.__activityHeatmapLayer=true;
+    this.__applyPublicMapLocations(this.__validMapContacts());
     pane.querySelector(".hive-activity-legend")?.remove();
-
-    const source=Array.isArray(this.__nodesMapContacts)
-      ? this.__nodesMapContacts
-      : (Array.isArray(this._contacts)?this._contacts:[]);
-    const points=[];
-    let maxScore=0;
-    for(const contact of source){
-      const coords=this.__nodeCoords(contact);
-      if(!coords)continue;
-      const activity=this.__peerActivityFor(contact);
-      const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
-      if(score<=0)continue;
-      maxScore=Math.max(maxScore,score);
-      points.push({contact,coords,activity,score});
-    }
-
-    const layers=[];
-    for(const point of points){
-      const ratio=maxScore?Math.sqrt(point.score/maxScore):0;
-      const radius=7+ratio*22;
-      const marker=L.circleMarker(point.coords,{
-        radius,
-        weight:1,
-        color:"#1565c0",
-        fillColor:"#ef6c00",
-        fillOpacity:0.14+ratio*0.48,
-        opacity:0.38+ratio*0.42,
-        interactive:true,
-      });
-      const name=String(point.contact.adv_name||point.contact.pubkey_prefix||"Nó");
-      const details=[
-        "atividade "+point.score,
-        "RX "+(point.activity.rx||0),
-        "TX "+(point.activity.tx||0),
-        "paths "+(point.activity.linkVolume||0),
-      ];
-      if(Number.isFinite(point.activity.avgSnr))details.push("SNR "+point.activity.avgSnr.toFixed(1)+" dB");
-      marker.bindTooltip?.(name+" · "+details.join(" · "),{direction:"top"});
-      marker.on?.("click",()=>this.__focusNodeOnMap(point.contact,true));
-      layers.push(marker);
-    }
-
-    this.__activityHeatmapLayer=L.layerGroup?L.layerGroup(layers):null;
-    if(this.__activityHeatmapLayer){
-      this.__activityHeatmapLayer.addTo(map);
-    }else{
-      for(const layer of layers)layer.addTo(map);
-      // Minimal compatibility wrapper so cleanup can remove all layers.
-      this.__activityHeatmapLayer={
-        __hiveLayers:layers,
-      };
-    }
 
     const legend=document.createElement("div");
     legend.className="hive-activity-legend";
-    legend.textContent=points.length
-      ? "Heatmap de atividade · intensidade = RX + TX + aparições em paths · origem: histórico local HiveFW de mensagens e RX_LOG · não gera tráfego RF"
-      : "Heatmap de atividade · ainda sem nós GPS com atividade no histórico local de mensagens/RX_LOG";
+    legend.textContent="Atividade · círculos maiores = mais RX + TX + aparições em paths · histórico local HiveFW · sem tráfego RF";
     pane.appendChild(legend);
   }
 
@@ -6284,10 +6261,19 @@ class HiveFWPanel extends BasePanel {
       pane.appendChild(count);
 
       const map=document.createElement("ha-map");
+      // Force Home Assistant's light raster Leaflet engine. MapLibre/WebGL is
+      // unnecessarily heavy for a contacts map and was the source of blank
+      // territory in this custom-panel context.
+      map._forceLeaflet=true;
+      if(this.hass?.connection)map._connection=this.hass.connection;
+      if(this.hass?.config)map._config=this.hass.config;
+      if(this.hass?.states)map._states=this.hass.states;
       map.autoFit=false;
       map.clusterMarkers=false;
       map.scaleRuler=true;
-      map.themeMode="light";
+      map.zoom=9;
+      map.themeMode="auto";
+      map.style.cssText="display:block;width:100%;height:100%;min-height:0;";
       map.addEventListener("editable-location-clicked",(e)=>{
         const id=e.detail?.id;
         const contact=this.__validMapContacts().find((c)=>this.__nodeId(c)===id);
@@ -6321,9 +6307,9 @@ class HiveFWPanel extends BasePanel {
       const map=this.__nodesMapElement;
       if("editableLocations" in map || typeof map.panTo==="function"){
         // Public Home Assistant map API (current frontend).
-        map.entities=this.__mapEntities(mapContacts);
+        map.entities=[];
         if("editableLocations" in map){
-          map.editableLocations=this.__mapLocations(mapContacts);
+          this.__applyPublicMapLocations(mapContacts);
         }
       }else if(await this.__waitForLegacyLeaflet(map)){
         // Compatibility path for older HA versions. Keep HiveFW overlays
@@ -6346,7 +6332,8 @@ class HiveFWPanel extends BasePanel {
         });
       }else{
         // Old transitional builds with entity-only map support.
-        map.entities=this.__mapEntities(mapContacts);
+        map.entities=[];
+        if("editableLocations" in map)this.__applyPublicMapLocations(mapContacts);
       }
       this.__nodesMapSignature=signature;
     }
@@ -6357,7 +6344,7 @@ class HiveFWPanel extends BasePanel {
       }
     }
     if(mapChanged || !this.__traceRouteLayer)this.__drawLastTraceRoute();
-    if(this.__activityHeatmapVisible && (mapChanged || !this.__activityHeatmapLayer))this.__drawActivityHeatmap();
+    if(this.__activityHeatmapVisible && !this.__activityHeatmapLayer)this.__drawActivityHeatmap();
   }
 
   __focusNodeOnMap(contact,openPopup=true) {
@@ -6383,15 +6370,14 @@ class HiveFWPanel extends BasePanel {
         },180);
       }
     }else if(typeof map.panTo==="function"){
-      map.entities=this.__mapEntities(contacts);
-      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
+      this.__applyPublicMapLocations(contacts);
       map.zoom=12;
       map.panTo(coords);
       // Current ha-map owns its markers; selection remains visible through
       // the highlighted marker even though Leaflet popups are unavailable.
     }else{
-      map.entities=this.__mapEntities(contacts);
-      if("editableLocations" in map)map.editableLocations=this.__mapLocations(contacts);
+      map.entities=[];
+      if("editableLocations" in map)this.__applyPublicMapLocations(contacts);
       map.setView?.(coords,12);
     }
   }
