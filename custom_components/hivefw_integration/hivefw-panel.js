@@ -87,6 +87,8 @@ class HiveFWPanel extends BasePanel {
     this.__consoleHistory = [];
     this.__consoleCommandHistory = [];
     this.__consoleHistoryIndex = -1;
+    this.__consolePresetName = "";
+    this.__consolePresetValues = {};
     this.__consoleBusy = false;
     this.__consoleError = null;
     this.__consoleLoadedEntry = null;
@@ -4455,6 +4457,190 @@ class HiveFWPanel extends BasePanel {
     }
     quickCard.append(quickTitle, quick);
     wrap.appendChild(quickCard);
+
+    // Reuse the exact command catalogue that powered the former Device
+    // "Issue Command" dialog. This keeps one source of truth for command
+    // names, categories, parameters and danger flags.
+    const presetCard = document.createElement("section");
+    presetCard.className = "hivefw-console-card";
+    const presetTitle = document.createElement("div");
+    presetTitle.className = "mcr-card-title";
+    presetTitle.textContent = "Comandos pré-definidos";
+
+    const commandElement = document.createElement("meshcore-command-dialog");
+    commandElement.isLocal = true;
+    const definitions = typeof commandElement._getCommands === "function"
+      ? commandElement._getCommands()
+      : [];
+
+    const presetSelect = document.createElement("select");
+    presetSelect.className = "hivefw-console-input";
+    presetSelect.style.flex = "1 1 100%";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Selecionar comando…";
+    presetSelect.appendChild(placeholder);
+
+    const groups = new Map();
+    for (const def of definitions) {
+      const category = String(def?.category || "Outros");
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(def);
+    }
+    for (const [category, defs] of groups) {
+      const group = document.createElement("optgroup");
+      group.label = category;
+      for (const def of defs) {
+        const option = document.createElement("option");
+        option.value = def.name;
+        option.textContent = def.name + " — " + (def.description || "");
+        option.selected = def.name === this.__consolePresetName;
+        group.appendChild(option);
+      }
+      presetSelect.appendChild(group);
+    }
+
+    const presetBody = document.createElement("div");
+    presetBody.style.marginTop = "10px";
+
+    const renderPreset = () => {
+      presetBody.replaceChildren();
+      const selected = definitions.find((def) => def.name === this.__consolePresetName);
+      if (!selected) return;
+
+      const desc = document.createElement("div");
+      desc.className = "hivefw-console-hint";
+      desc.textContent = selected.description || "";
+      desc.style.marginBottom = "10px";
+      presetBody.appendChild(desc);
+
+      if (selected.dangerous) {
+        const warning = document.createElement("div");
+        warning.className = "hivefw-console-error";
+        warning.style.cssText += "padding:8px 10px;border:1px solid currentColor;border-radius:8px;margin:0 0 10px;";
+        warning.textContent = "⚠ " + (selected.dangerMessage || "Este comando pode alterar permanentemente a configuração do rádio.");
+        presetBody.appendChild(warning);
+      }
+
+      const params = Array.isArray(selected.params) ? selected.params : [];
+      const fields = document.createElement("div");
+      fields.className = "hive-settings-controls";
+
+      for (const param of params) {
+        const field = document.createElement("label");
+        field.className = "hive-settings-field";
+        const label = document.createElement("span");
+        label.textContent = (param.label || param.name) + (param.required ? " *" : "");
+        field.appendChild(label);
+
+        let input;
+        if (param.type === "boolean") {
+          input = document.createElement("select");
+          for (const [value, text] of [["false","False"],["true","True"]]) {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = text;
+            input.appendChild(option);
+          }
+          const existing = this.__consolePresetValues[param.name];
+          input.value = String(existing ?? param.default ?? false);
+        } else if (param.type === "select") {
+          input = document.createElement("select");
+          const opts = Array.isArray(param.selectOptions) && param.selectOptions.length
+            ? param.selectOptions
+            : (param.options || []).map((value) => ({ label: String(value), value }));
+          for (const opt of opts) {
+            const option = document.createElement("option");
+            option.value = String(opt.value);
+            option.textContent = String(opt.label);
+            input.appendChild(option);
+          }
+          const existing = this.__consolePresetValues[param.name];
+          input.value = String(existing ?? param.default ?? (opts[0]?.value ?? ""));
+        } else if (param.type === "bitmask") {
+          input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.value = String(this.__consolePresetValues[param.name] ?? param.default ?? 0);
+        } else {
+          input = document.createElement("input");
+          input.type = param.type === "number" ? "number" : "text";
+          if (param.min != null) input.min = String(param.min);
+          if (param.max != null) input.max = String(param.max);
+          input.value = String(this.__consolePresetValues[param.name] ?? param.default ?? "");
+        }
+
+        input.style.cssText = "box-sizing:border-box;width:100%;min-height:38px;border:1px solid var(--divider-color);border-radius:8px;padding:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;font-size:12px;";
+        if (param.description) input.title = param.description;
+        input.addEventListener("input", () => {
+          let value = input.value;
+          if (param.type === "number" || param.type === "bitmask") {
+            value = value === "" ? "" : Number(value);
+          } else if (param.type === "boolean") {
+            value = value === "true";
+          } else if (param.type === "select" && Array.isArray(param.selectOptions)) {
+            const found = param.selectOptions.find((opt) => String(opt.value) === input.value);
+            value = found ? found.value : input.value;
+          }
+          this.__consolePresetValues[param.name] = value;
+        });
+        field.appendChild(input);
+
+        if (param.description) {
+          const help = document.createElement("span");
+          help.className = "hivefw-console-hint";
+          help.textContent = param.description;
+          field.appendChild(help);
+        }
+        fields.appendChild(field);
+      }
+
+      if (params.length) presetBody.appendChild(fields);
+
+      const runPreset = document.createElement("button");
+      runPreset.type = "button";
+      runPreset.className = "mcr-btn primary";
+      runPreset.style.marginTop = "10px";
+      runPreset.textContent = "Executar comando";
+      runPreset.disabled = this.__consoleBusy;
+      runPreset.addEventListener("click", () => {
+        const parts = [selected.name];
+        for (const param of params) {
+          let value = this.__consolePresetValues[param.name];
+          if (value === undefined) value = param.default;
+          if ((value === undefined || value === "") && param.required) {
+            this.__consoleError = "Preenche o parâmetro obrigatório: " + (param.label || param.name);
+            this.__renderConsole(container);
+            return;
+          }
+          if (value === undefined || value === "") continue;
+          if (typeof value === "string") {
+            const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+            parts.push(/[\s"']/u.test(value) ? '"' + escaped + '"' : escaped);
+          } else if (typeof value === "boolean") {
+            parts.push(value ? "true" : "false");
+          } else {
+            parts.push(String(value));
+          }
+        }
+        void this.__runConsoleCommand(parts.join(" "));
+      });
+      presetBody.appendChild(runPreset);
+    };
+
+    presetSelect.addEventListener("change", () => {
+      this.__consolePresetName = presetSelect.value;
+      this.__consolePresetValues = {};
+      const selected = definitions.find((def) => def.name === this.__consolePresetName);
+      for (const param of selected?.params || []) {
+        if (param.default !== undefined) this.__consolePresetValues[param.name] = param.default;
+      }
+      renderPreset();
+    });
+
+    presetCard.append(presetTitle, presetSelect, presetBody);
+    wrap.appendChild(presetCard);
+    renderPreset();
 
     const commandCard = document.createElement("section");
     commandCard.className = "hivefw-console-card";
