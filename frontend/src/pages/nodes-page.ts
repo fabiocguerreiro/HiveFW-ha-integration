@@ -82,8 +82,9 @@ export class NodesPage extends LitElement {
 
     .nodes-layout {
       --nodes-list-width: 340px;
+      --nodes-activity-width: 300px;
       display: grid;
-      grid-template-columns: var(--nodes-list-width) minmax(0, 1fr);
+      grid-template-columns: var(--nodes-list-width) minmax(0, 1fr) var(--nodes-activity-width);
       grid-template-rows: auto minmax(0, 1fr);
       width: 100%;
       height: 100%;
@@ -119,6 +120,18 @@ export class NodesPage extends LitElement {
       width: 100%;
       height: 100%;
       min-height: 420px;
+    }
+
+    .nodes-activity-pane {
+      grid-column: 3;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--card-background-color, #fff);
+      border-left: 1px solid var(--divider-color, #e0e0e0);
+      display: flex;
+      flex-direction: column;
     }
 
     .map-note {
@@ -479,8 +492,9 @@ export class NodesPage extends LitElement {
     :host([narrow]) .nodes-grid { grid-template-columns: 1fr; }
     :host([narrow]) .nodes-layout {
       --nodes-list-width: 100%;
+      --nodes-activity-width: 100%;
       grid-template-columns: 1fr;
-      grid-template-rows: auto minmax(300px, 45%) minmax(300px, 55%);
+      grid-template-rows: auto minmax(280px, 34%) minmax(320px, 42%) minmax(260px, 24%);
       overflow-y: auto;
     }
     :host([narrow]) .nodes-header {
@@ -496,6 +510,12 @@ export class NodesPage extends LitElement {
       grid-column: 1;
       grid-row: 3;
       border-left: none;
+    }
+    :host([narrow]) .nodes-activity-pane {
+      grid-column: 1;
+      grid-row: 4;
+      border-left: none;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
     }
   `;
 
@@ -613,6 +633,7 @@ export class NodesPage extends LitElement {
         </div>
 
         <section class="nodes-map-pane" aria-label="Mapa de nós"></section>
+        <aside class="nodes-activity-pane" aria-label="Atividade dos nós"></aside>
       </div>
 
       <meshcore-node-detail-dialog
