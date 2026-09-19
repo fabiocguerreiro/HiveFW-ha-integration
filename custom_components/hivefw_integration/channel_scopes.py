@@ -2,7 +2,7 @@
 
 MeshCore channels live on the companion radio as (index, name, key)
 slots — the device-side channel record has no field for a region scope,
-and the upstream meshcore integration treats scope as a per-send
+and the embedded HiveFW engine treats scope as a per-send
 argument (the optional ``scope`` on ``meshcore.send_channel_message``,
 added by meshcore-dev/meshcore-ha#250) rather than channel state. The
 chat panel's per-channel scope selector therefore needs its own durable
@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 
 # One process-wide file; entries are keyed inside the payload by the
-# upstream meshcore config-entry id, then by channel index, so a single
+# HiveFW config-entry id, then by channel index, so a single
 # store serves every upstream coordinator on multi-entry setups.
 STORAGE_KEY_CHANNEL_SCOPES = "hivefw_integration.channel_scopes"
 
