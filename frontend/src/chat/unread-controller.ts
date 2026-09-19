@@ -104,7 +104,7 @@ export interface ReadProgress {
  *
  * Lifetime: constructed once by `hivefw-integration-panel.ts` and owned by
  * the panel. The panel is not remounted on tab switch, so the badge
- * map and the `meshcore_unread_updated` subscription state persist
+ * map and the `hivefw_unread_updated` subscription state persist
  * correctly. `<chat-page>` (which IS remounted on tab switch)
  * `subscribe`s in `connectedCallback` and unsubscribes — but does NOT
  * destroy — in `disconnectedCallback`.
@@ -227,7 +227,7 @@ export class UnreadController {
    * seen its unread messages (they're below the viewport). The
    * heuristic also fired inconsistently: it relied on a
    * `_loadUnreadCounts` refresh running while the conversation was
-   * active, and those refreshes only happen on `meshcore_unread_updated`
+   * active, and those refreshes only happen on `hivefw_unread_updated`
    * events for *non-active* entities — so the badge zero was
    * mesh-activity-dependent, intermittently hiding genuine unread
    * state. The `activeEntityId` parameter is retained (prefixed with
@@ -488,7 +488,7 @@ export class UnreadController {
 
     const isChannel = /^\d+$/.test(idOrSelectedId);
     const channelNeedle = nodePrefix
-      ? `meshcore_${nodePrefix}_ch_${idOrSelectedId}_messages`
+      ? `hivefw_${nodePrefix}_ch_${idOrSelectedId}_messages`
       : null;
 
     for (const [entityId, count] of Object.entries(counts)) {
