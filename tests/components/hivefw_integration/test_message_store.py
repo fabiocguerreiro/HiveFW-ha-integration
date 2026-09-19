@@ -1148,3 +1148,50 @@ async def test_cleanup_save_failure_leaves_index_untouched(
     assert eid in s.get_message_index()  # index NOT mutated → retry next run
     assert "retention cleanup" in caplog.text
     await s.async_unload()
+
+
+
+async def test_get_peer_activity_aggregates_messages_and_links(
+    store: MessageStore,
+) -> None:
+    """Peer/link activity is derived from existing message history."""
+    prefix = "a1b2c3d4e5f6"
+    await store.store_message(
+        "binary_sensor.peer",
+        {
+            "id": "rx-peer",
+            "timestamp": "2026-09-19T12:00:00+00:00",
+            "sender": "Peer",
+            "text": "hello",
+            "pubkey_prefix": prefix,
+            "outgoing": False,
+            "rx_log_data": [
+                {
+                    "path_nodes": ["aa", "bb"],
+                    "rssi": -101,
+                    "snr": 4.5,
+                }
+            ],
+        },
+    )
+    await store.store_message(
+        "binary_sensor.peer",
+        {
+            "id": "tx-peer",
+            "timestamp": "2026-09-19T12:01:00+00:00",
+            "sender": "Me",
+            "text": "reply",
+            "pubkey_prefix": prefix,
+            "outgoing": True,
+        },
+    )
+
+    activity = await store.get_peer_activity()
+
+    assert activity["peers"][prefix]["rx"] == 1
+    assert activity["peers"][prefix]["tx"] == 1
+    assert activity["peers"][prefix]["messages"] == 2
+    assert activity["links"]["aa"]["observations"] == 1
+    assert activity["links"]["aa"]["avg_rssi"] == -101.0
+    assert activity["links"]["aa"]["avg_snr"] == 4.5
+    assert activity["links"]["bb"]["observations"] == 1
