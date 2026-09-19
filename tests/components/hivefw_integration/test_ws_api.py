@@ -17,7 +17,7 @@ for these tests.
 Coordinator state is supplied via ``hass.data[MESHCORE_DOMAIN][entry_id]``
 with a ``MagicMock`` carrying just the attributes the handler under
 test reads. This mirrors the handler's actual contract — ``hasattr(coord,
-"api")`` is the selector — and avoids the upstream meshcore module
+"api")`` is the selector — and avoids the embedded HiveFW engine module
 load altogether.
 """
 from __future__ import annotations
@@ -260,7 +260,7 @@ def test_get_coordinator_returns_named_entry(
 def test_get_coordinator_returns_none_when_meshcore_absent(
     hass: HomeAssistant,
 ) -> None:
-    """No upstream meshcore in hass.data → None."""
+    """No embedded HiveFW engine in hass.data → None."""
     assert ws_api._get_coordinator(hass) is None
 
 
@@ -408,7 +408,7 @@ async def test_ws_get_contacts_legacy_fallback(
 async def test_ws_get_contacts_error_no_coordinator(
     hass: HomeAssistant,
 ) -> None:
-    """No upstream meshcore in hass.data → not_found via legacy fallback."""
+    """No embedded HiveFW engine in hass.data → not_found via legacy fallback."""
     with patch(
         "homeassistant.core.ServiceRegistry.has_service", return_value=False
     ):
@@ -2053,7 +2053,7 @@ async def test_mark_read_with_foreign_entry_id_still_snapshots(
     )
 
     # Foreign entry registered alongside the companion entry — mimics the
-    # parent meshcore integration on the dev host.
+    # HiveFW embedded engine on the dev host.
     foreign = MockConfigEntry(
         domain="some_other_integration",
         entry_id="01FOREIGN_PARENT",
@@ -2874,7 +2874,7 @@ async def test_ws_search_stored_messages_error_no_store(
 # ─── Runtime upstream-removal repair-issue sync ─────────────────────────
 #
 # Phase 1 of the runtime-removal-detection proposal hooks
-# `_sync_upstream_repair_issue` into the WS coordinator-discovery path.
+# `_sync_engine_repair_issue` into the WS coordinator-discovery path.
 # These tests cover the user-visible flow: upstream present → no issue;
 # upstream removed mid-session → issue surfaces on next WS hit; upstream
 # restored → issue auto-clears on next WS hit. Plus the idempotency
@@ -2882,10 +2882,10 @@ async def test_ws_search_stored_messages_error_no_store(
 
 
 def _has_upstream_repair_issue(hass: HomeAssistant) -> bool:
-    """True iff the upstream_meshcore_unavailable issue is registered."""
+    """True iff the radio_engine_unavailable issue is registered."""
     return (
         ir.async_get(hass).async_get_issue(
-            DOMAIN, "upstream_meshcore_unavailable"
+            DOMAIN, "radio_engine_unavailable"
         )
         is not None
     )
@@ -2896,7 +2896,7 @@ async def test_ws_get_devices_runtime_removal_creates_repair_issue(
 ) -> None:
     """Upstream present → ws_get_devices clean; remove → next call surfaces issue.
 
-    Mirrors the observable bug: the user removes the upstream meshcore
+    Mirrors the observable bug: the user removes the embedded HiveFW engine
     config entry while hivefw_integration is still loaded; the chat panel's
     next backend hit should publish the repair issue rather than
     silently degrade.
@@ -2946,10 +2946,10 @@ def test_get_coordinator_clears_repair_issue_when_upstream_returns(
     """Pre-existing issue + upstream present → helper call clears it."""
     # Seed the issue.
     ir.async_create_issue(
-        hass, DOMAIN, "upstream_meshcore_unavailable",
+        hass, DOMAIN, "radio_engine_unavailable",
         is_fixable=True,
         severity=ir.IssueSeverity.ERROR,
-        translation_key="upstream_meshcore_unavailable",
+        translation_key="radio_engine_unavailable",
     )
     assert _has_upstream_repair_issue(hass)
     # Helper call with upstream present clears it.
@@ -2971,10 +2971,10 @@ def test_get_all_coordinators_clears_repair_issue_when_upstream_returns(
 ) -> None:
     """Pre-existing issue + upstream present → helper call clears it."""
     ir.async_create_issue(
-        hass, DOMAIN, "upstream_meshcore_unavailable",
+        hass, DOMAIN, "radio_engine_unavailable",
         is_fixable=True,
         severity=ir.IssueSeverity.ERROR,
-        translation_key="upstream_meshcore_unavailable",
+        translation_key="radio_engine_unavailable",
     )
     assert _has_upstream_repair_issue(hass)
     assert len(ws_api._get_all_coordinators(hass)) == 1
@@ -2999,7 +2999,7 @@ def test_get_coordinator_idempotent_under_panel_polling(
     matching = [
         i for i in registry.issues.values()
         if i.domain == DOMAIN
-        and i.issue_id == "upstream_meshcore_unavailable"
+        and i.issue_id == "radio_engine_unavailable"
     ]
     assert len(matching) == 1
 
