@@ -43,7 +43,7 @@ export interface BuiltinState {
 
 /**
  * Resolve the target entity_id based on panel configuration and current HA state.
- * The MeshCore preset always uses external mode.
+ * The HiveFW preset always uses external mode.
  */
 export function resolveEntity(hass: HomeAssistant, config: PanelConfig): ResolvedEntity {
   return resolveExternal(hass, config);
@@ -285,7 +285,7 @@ export function discoverContactEntity(
 /**
  * Discover available channels from hass states for builtin mode.
  *
- * For MeshCore preset: reads from select.meshcore_channel options, which contains
+ * For HiveFW preset: reads from select.hivefw_channel options, which contains
  * ALL configured channels immediately. Cross-references _messages entities for those
  * that have message history.
  *
@@ -295,7 +295,7 @@ export function discoverChannels(
   hass: HomeAssistant,
   config: PanelConfig,
 ): Array<{ name: string; idx: number; entityId: string | null }> {
-  // Try select-based discovery first (MeshCore preset)
+  // Try select-based discovery first (HiveFW preset)
   const selectChannels = discoverChannelsFromSelect(hass, config);
   if (selectChannels !== null) {
     return selectChannels;
@@ -306,7 +306,7 @@ export function discoverChannels(
 }
 
 /**
- * Discover channels from select.meshcore_channel options.
+ * Discover channels from select.hivefw_channel options.
  * Returns null if the select entity doesn't exist (legacy fallback needed).
  */
 function discoverChannelsFromSelect(
@@ -371,14 +371,14 @@ function discoverChannelsLegacy(
 /**
  * Discover available contacts for builtin mode.
  *
- * For MeshCore preset: reads from select.meshcore_contact options, which contains
+ * For HiveFW preset: reads from select.hivefw_contact options, which contains
  * ALL saved contacts immediately. Cross-references _messages entities for those
  * that have message history.
  *
  * Legacy fallback: scans hass states for _messages entities (old behavior).
  */
 export function discoverContacts(hass: HomeAssistant, config: PanelConfig): BuiltinContact[] {
-  // Try select-based discovery first (MeshCore preset)
+  // Try select-based discovery first (HiveFW preset)
   const selectContacts = discoverContactsFromSelect(hass, config);
   if (selectContacts !== null) {
     return selectContacts;
@@ -389,7 +389,7 @@ export function discoverContacts(hass: HomeAssistant, config: PanelConfig): Buil
 }
 
 /**
- * Discover contacts from select.meshcore_contact options.
+ * Discover contacts from select.hivefw_contact options.
  * Returns null if the select entity doesn't exist (legacy fallback needed).
  */
 function discoverContactsFromSelect(
