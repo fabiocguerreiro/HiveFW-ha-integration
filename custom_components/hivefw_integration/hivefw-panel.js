@@ -1036,6 +1036,7 @@ class HiveFWPanel extends BasePanel {
         display: flex;
         flex-direction: column;
         gap: 5px;
+        min-width: 0;
       }
       .mcr-field label {
         color: var(--secondary-text-color);
@@ -1047,6 +1048,8 @@ class HiveFWPanel extends BasePanel {
       .mcr-select {
         box-sizing: border-box;
         width: 100%;
+        max-width: 100%;
+        min-width: 0;
         min-height: 39px;
         border: 1px solid var(--divider-color);
         border-radius: 10px;
@@ -2416,7 +2419,7 @@ class HiveFWPanel extends BasePanel {
         "Repeater frequencies",
         `${values[0]} MHz`,
         values.length>1?`· ${values.slice(1).join(" · ")} MHz`:"",
-        100,0,100,"info","repeat-frequencies",clickEntity("frequency")
+        100,0,100,"info","repeat-frequencies",clickEntity("frequency"),"compact"
       ));
     }
 
