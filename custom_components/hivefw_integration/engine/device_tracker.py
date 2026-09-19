@@ -1,5 +1,5 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
-# Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
+# Upstream license: MIT (see LICENSE)
 """Device tracker platform for HiveFW."""
 from __future__ import annotations
 
