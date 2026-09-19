@@ -1,11 +1,8 @@
-"""HiveFW WebSocket API.
+"""HiveFW WebSocket API backed by the embedded radio engine.
 
-Lifted from the upstream meshcore integration's ws_api.py for the
-companion integration. All type strings are namespaced under
-hivefw_integration/* to avoid collision with upstream meshcore/* commands.
-Coordinator state lookups go via hass.data[MESHCORE_DOMAIN] because the
-chat panel acts as a consumer of the upstream meshcore integration's
-coordinator.
+All public command types use the ``hivefw_integration/*`` namespace.
+Coordinator state is owned by this integration in ``hass.data[DOMAIN]``;
+there is no external Home Assistant integration dependency.
 """
 from __future__ import annotations
 
@@ -25,7 +22,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
-from . import MeshCoreChatRuntimeData, _sync_upstream_repair_issue
+from . import MeshCoreChatRuntimeData, _sync_engine_repair_issue
 from .const import (
     CONF_FLOOD_SCOPES_UPSTREAM,
     CONF_NAME_UPSTREAM,
@@ -67,7 +64,7 @@ _EXCEPTION_FALLBACKS: dict[str, str] = {
     "device_not_connected": "Device not connected",
     "operation_timed_out": "Operation timed out",
     "invalid_request": "Invalid request parameters",
-    "no_meshcore_coordinator": "No active MeshCore coordinator",
+    "no_meshcore_coordinator": "No active HiveFW radio coordinator",
 }
 
 
@@ -113,7 +110,7 @@ def _t(key: str) -> str:
 
 
 def _resolve_coordinator(hass: HomeAssistant, entry_id: str | None = None):
-    """Discovery-only: locate the upstream meshcore coordinator.
+    """Discovery-only: locate the HiveFW embedded coordinator.
 
     Pure lookup — no side effects. The wrapper ``_get_coordinator`` is
     the public-ish entry point that adds the repair-issue sync; this
@@ -162,7 +159,7 @@ def _resolve_coordinator(hass: HomeAssistant, entry_id: str | None = None):
 
 
 def _resolve_all_coordinators(hass: HomeAssistant) -> list:
-    """Discovery-only: enumerate all active upstream coordinators.
+    """Discovery-only: enumerate all active HiveFW coordinators.
 
     Pure lookup — no side effects. See ``_resolve_coordinator`` doc for
     the inner-vs-wrapper split.
@@ -177,35 +174,35 @@ def _resolve_all_coordinators(hass: HomeAssistant) -> list:
 
 
 def _get_coordinator(hass: HomeAssistant, entry_id: str | None = None):
-    """Get the upstream meshcore coordinator for ``entry_id``, or first available.
+    """Get the HiveFW embedded coordinator for ``entry_id``, or first available.
 
-    The companion does not own a coordinator — it consumes the upstream
+    The companion does not own a coordinator — it consumes the embedded engine
     integration's coordinator via ``hass.data[MESHCORE_DOMAIN][meshcore_entry_id]``.
     The ``entry_id`` argument here, when supplied by the frontend, is the
     *upstream* meshcore config-entry id (the chat panel discovers it via the
-    ``hivefw_integration/get_devices`` command, which in turn reads upstream's
+    ``hivefw_integration/get_devices`` command, which in turn reads engine's
     coordinator registry). When omitted, the first registered upstream
     coordinator is used.
 
-    Side effect: synchronizes the ``upstream_meshcore_unavailable`` repair
+    Side effect: synchronizes the ``radio_engine_unavailable`` repair
     issue based on what discovery just observed. Idempotent (HA dedupes
     by (domain, issue_id); delete-on-non-existent is a no-op), so the
     panel-polling rate is safe.
     """
     coord = _resolve_coordinator(hass, entry_id)
-    _sync_upstream_repair_issue(hass)
+    _sync_engine_repair_issue(hass)
     return coord
 
 
 def _get_all_coordinators(hass: HomeAssistant) -> list:
-    """Get all active upstream coordinators.
+    """Get all active HiveFW coordinators.
 
-    Side effect: synchronizes the ``upstream_meshcore_unavailable`` repair
+    Side effect: synchronizes the ``radio_engine_unavailable`` repair
     issue based on what discovery just observed (see ``_get_coordinator``
     for the rationale).
     """
     coords = _resolve_all_coordinators(hass)
-    _sync_upstream_repair_issue(hass)
+    _sync_engine_repair_issue(hass)
     return coords
 
 
@@ -416,7 +413,7 @@ async def _get_contacts_via_service(
         global _LEGACY_CONTACTS_FALLBACK_LOGGED
         if not _LEGACY_CONTACTS_FALLBACK_LOGGED:
             _LOGGER.warning(
-                "meshcore.get_contacts service not registered — falling back "
+                "HiveFW get_contacts service not registered — falling back "
                 "to coordinator.get_all_contacts(). Upgrade to meshcore>=2.6.0 "
                 "for the documented public surface."
             )
@@ -441,7 +438,7 @@ async def _get_contacts_via_service(
             return_response=True,
         )
     except Exception as ex:
-        _LOGGER.error("meshcore.get_contacts service call failed: %s", ex)
+        _LOGGER.error("HiveFW get_contacts service call failed: %s", ex)
         return None
 
     if not result:
@@ -449,7 +446,7 @@ async def _get_contacts_via_service(
     # Service returns {"contacts": [...]} on success and
     # {"contacts": [], "error": "..."} on error envelopes. Treat either
     # as "no usable data" by checking for a non-empty list before the
-    # presence-of-error flag — the chat doesn't surface the upstream
+    # presence-of-error flag — the chat doesn't surface the embedded engine
     # error string today, so collapse to the existing "not_found" UX.
     if "error" in result and not result.get("contacts"):
         return None
@@ -621,7 +618,7 @@ def ws_get_devices(hass, connection, msg):
 async def ws_get_contacts(hass, connection, msg):
     """Return all contacts for the specified (or first) config entry.
 
-    Delegates to the upstream meshcore.get_contacts service (PR #216,
+    Delegates to the embedded engine meshcore.get_contacts service (PR #216,
     meshcore>=2.6.0), with a legacy fallback to
     coordinator.get_all_contacts() for users on older meshcore — see
     _get_contacts_via_service.
@@ -640,8 +637,8 @@ async def ws_get_contacts(hass, connection, msg):
 def _compute_type_counts(contacts: list) -> dict:
     """Compute per-type counts for a list of contacts.
 
-    Inlined from the upstream meshcore coordinator
-    (`_compute_type_counts` static method). The upstream coordinator this
+    Inlined from the HiveFW embedded coordinator
+    (`_compute_type_counts` static method). The HiveFW coordinator this
     companion consumes deliberately omits `get_contacts_paginated` /
     `get_node_counts`, so the companion duplicates the small amount of
     logic that operates on the public `get_all_contacts()` payload.
@@ -681,7 +678,7 @@ def _compute_type_counts(contacts: list) -> dict:
 async def ws_get_contacts_paginated(hass, connection, msg):
     """Return paginated contacts with filtering and type counts.
 
-    Filters/sorts/paginates the contact list returned by upstream's
+    Filters/sorts/paginates the contact list returned by engine's
     meshcore.get_contacts service (PR #216, meshcore>=2.6.0). The
     upstream service deliberately doesn't ship a paginated/filtered
     variant — companions own this layer.
@@ -762,7 +759,7 @@ async def ws_get_contacts_paginated(hass, connection, msg):
 async def ws_get_node_counts(hass, connection, msg):
     """Return node counts for each primary filter category.
 
-    Counts are derived from the contact list returned by upstream's
+    Counts are derived from the contact list returned by engine's
     meshcore.get_contacts service (PR #216, meshcore>=2.6.0). Like
     paginated, this filtering layer is owned by the companion.
     """
@@ -806,7 +803,7 @@ async def ws_clear_discovered_contacts(
     """Clear discovered contacts, optionally only those older than N days."""
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        connection.send_error(msg["id"], "not_found", "No active HiveFW radio coordinator")
         return
 
     days_threshold = msg.get("days_threshold")
@@ -850,7 +847,7 @@ async def ws_clear_discovered_contacts(
 # ─── hivefw/import_contacts ─────────────────────────────────────────
 # Additive import of MeshCore app discovered_contacts exports.
 # Existing public keys are NEVER modified; only previously unseen keys
-# are inserted into the upstream meshcore coordinator's discovered store.
+# are inserted into the HiveFW embedded coordinator's discovered store.
 
 
 def _meshcore_import_contact(raw: dict) -> dict | None:
@@ -937,7 +934,7 @@ async def ws_import_contacts(
     """
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        connection.send_error(msg["id"], "not_found", "No active HiveFW radio coordinator")
         return
 
     try:
@@ -1047,7 +1044,7 @@ def ws_get_channels(hass, connection, msg):
 
 
 # ─── meshcore/get_flood_scopes ──────────────────────────────────────────
-# Region-scope allowlist from the upstream integration's Global Settings
+# Region-scope allowlist from the embedded HiveFW radio engine's Global Settings
 
 
 @websocket_api.websocket_command(
@@ -1058,7 +1055,7 @@ def ws_get_channels(hass, connection, msg):
 )
 @callback
 def ws_get_flood_scopes(hass, connection, msg):
-    """Return the upstream integration's configured region-scope names.
+    """Return the embedded HiveFW radio engine's configured region-scope names.
 
     Reads the comma-separated allowlist the user maintains in the
     meshcore integration's Global Settings (config-entry data key
@@ -1103,7 +1100,7 @@ def ws_get_flood_scopes(hass, connection, msg):
 def ws_set_flood_scopes(hass, connection, msg):
     """Update meshcore-ha's flood-scope allowlist.
 
-    The upstream integration reads this config-entry field dynamically for
+    The embedded HiveFW radio engine reads this config-entry field dynamically for
     inbound scope matching. Scoped sends use the selected channel scope and
     temporarily call set_flood_scope() around the send.
     """
@@ -1690,7 +1687,7 @@ async def ws_set_device_config(hass, connection, msg):
             changed.append("name")
 
             # Run the migration only if the name actually changed and we
-            # resolved the upstream meshcore config entry. The reload at
+            # resolved the embedded engine meshcore config entry. The reload at
             # the end re-inits the coordinator with the new CONF_NAME —
             # `coordinator.name` (set-once at construction per
             # `coordinator.py:104`) ends up correct after the reload.
@@ -2573,10 +2570,10 @@ async def ws_remove_neighbor(hass, connection, msg):
 
         # Remove neighbor entities and tracking from HA.
         #
-        # Inlined from the upstream meshcore integration's
+        # Inlined from the embedded HiveFW radio engine's
         # `coordinator.remove_single_neighbor` — that method was deliberately
         # removed from upstream main in an earlier change and is therefore
-        # absent from the upstream coordinator this companion consumes. The
+        # absent from the HiveFW coordinator this companion consumes. The
         # companion still exposes a remove-neighbor flow via
         # hivefw_integration/remove_neighbor, so we duplicate the small
         # entity-cleanup + persistence sequence here.
@@ -2599,7 +2596,7 @@ async def ws_remove_neighbor(hass, connection, msg):
                     entity_registry.async_remove(entity.entity_id)
                     removed += 1
 
-            # In-memory bookkeeping mirroring the upstream method.
+            # In-memory bookkeeping mirroring the embedded engine method.
             repeater_neighbors = coordinator._repeater_neighbors.get(
                 target_prefix, {}
             )
@@ -3293,7 +3290,7 @@ async def ws_add_contact(hass, connection, msg):
             coordinator.mark_contact_dirty(prefix)
 
             # Note: companion does not directly create the binary_sensor
-            # entity for the new contact. The upstream meshcore integration
+            # entity for the new contact. The embedded HiveFW radio engine
             # has a NEW_CONTACT event handler that creates the entity when
             # the SDK fires NEW_CONTACT after add_contact succeeds.
 
@@ -3447,9 +3444,9 @@ async def ws_remove_contact(hass, connection, msg):
 
 
 # ─── meshcore/trace ─────────────────────────────────────────────────
-# Discovery-mode traces delegate to the upstream meshcore.trace service
+# Discovery-mode traces delegate to the embedded engine meshcore.trace service
 # (PR #216, meshcore>=2.6.0). Explicit-path traces (when 'path' is
-# provided) keep the original inlined SDK plumbing because the upstream
+# provided) keep the original inlined SDK plumbing because the embedded engine
 # service does not currently accept an explicit-path argument — see
 # Session 53 / Session 55 Addendum 2 in the meshcore-ha workspace log
 # for the production case the explicit-path branch protects.
@@ -3462,14 +3459,14 @@ def _trace_error_for(
     pre-migration ``(chat_code, message)`` pair the frontend has always
     seen.
 
-    Plumbs through the upstream service's optional ``reason`` field so
+    Plumbs through the embedded engine service's optional ``reason`` field so
     failures keep their diagnostic detail.
     """
     pubkey = msg.get("pubkey_prefix", "")
     reason = (result or {}).get("reason")
 
     if upstream_code == "no_coordinator":
-        return "not_found", "No active MeshCore coordinator"
+        return "not_found", "No active HiveFW radio coordinator"
     if upstream_code == "not_connected":
         return "not_connected", "Device not connected"
     if upstream_code == "contact_not_found":
@@ -3543,7 +3540,7 @@ async def ws_trace(
 ) -> None:
     """Run a trace against a contact and measure round-trip time.
 
-    Discovery-mode traces (default) delegate to the upstream
+    Discovery-mode traces (default) delegate to the embedded engine
     ``meshcore.trace`` service (PR #216, requires meshcore>=2.6.0). The
     upstream service was lifted from this exact code in PR #216, so
     behavior is identical: round-trip 1-byte-hash path construction
@@ -3639,7 +3636,7 @@ async def _ws_trace_explicit(
 
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        connection.send_error(msg["id"], "not_found", "No active HiveFW radio coordinator")
         return
 
     api = coordinator.api
@@ -3778,7 +3775,7 @@ def ws_get_blocked_contacts(
     """Return list of contacts that have been blocked locally."""
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        connection.send_error(msg["id"], "not_found", "No active HiveFW radio coordinator")
         return
 
     # _blocked_contacts is a set of pubkey prefixes
@@ -3816,7 +3813,7 @@ def ws_set_contact_blocked(
     """Set or clear the blocked flag on a contact (local UI preference)."""
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", "No active MeshCore coordinator")
+        connection.send_error(msg["id"], "not_found", "No active HiveFW radio coordinator")
         return
 
     public_key = msg["public_key"]
@@ -3858,7 +3855,7 @@ async def ws_get_rx_log(
     """Return a bounded RX-observation log derived from stored message metadata.
 
     This is not a raw-radio packet logger. It exposes rx_log_data already
-    captured by the upstream meshcore integration and persisted by HiveFW,
+    captured by the embedded HiveFW radio engine and persisted by HiveFW,
     so reading it creates no additional LoRa traffic.
     """
     store = _get_store(hass, None)
@@ -3952,7 +3949,7 @@ async def ws_get_stored_messages(
     """Get stored messages for a conversation with cursor pagination.
 
     Routes through the *companion's* MessageStore (per-entry; lives on
-    hass.data[DOMAIN]), not the upstream coordinator.
+    hass.data[DOMAIN]), not the HiveFW coordinator.
 
     The inbound ``entry_id`` field is intentionally NOT forwarded to
     ``_get_store`` — it stays on the schema for backwards compatibility

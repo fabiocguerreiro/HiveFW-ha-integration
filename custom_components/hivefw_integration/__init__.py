@@ -1,24 +1,8 @@
-"""HiveFW companion integration for Home Assistant.
+"""HiveFW standalone integration for Home Assistant.
 
-Two responsibilities at runtime:
-
-  1. Per-entry message-store backend. Subscribes to events fired by the
-     upstream ``meshcore`` integration (``meshcore_message``,
-     ``meshcore_delivery_update``, ``meshcore_connected``,
-     ``meshcore_disconnected``) and persists each chat message to a
-     per-conversation store. Exposes the ``hivefw_integration/*`` WebSocket
-     command namespace and an UnreadTracker singleton.
-
-  2. Process-global sidebar panel registration. The Lit/TypeScript
-     panel (under ``frontend/``) is served from this integration and
-     registered once per HA process; entries beyond the first re-use
-     the existing registration. The panel reads message history through
-     the WS commands above and *sends* new messages via the upstream
-     ``meshcore.send_*`` services — never via this integration.
-
-The hard manifest dependency on ``meshcore`` (since 4e65769) plus the
-config-flow abort (since 594c9aa) guarantee the upstream integration is
-present whenever ``async_setup_entry`` runs here.
+HiveFW owns the embedded MeshCore radio engine, Home Assistant entities and
+services, message history, WebSocket API and sidebar frontend. A separate
+MeshCore Home Assistant integration is neither required nor expected.
 """
 from __future__ import annotations
 
@@ -74,11 +58,11 @@ type MeshCoreChatConfigEntry = ConfigEntry[MeshCoreChatRuntimeData]
 
 # ─── Upstream-presence helpers ───────────────────────────────────────────
 #
-# ``_upstream_meshcore_present`` and ``_sync_upstream_repair_issue`` are
+# ``_internal_engine_present`` and ``_sync_engine_repair_issue`` are
 # the canonical readiness/repair surface for the upstream ``meshcore``
 # integration. They are intentionally module-level (not nested inside
 # ``async_setup_entry``) so that ``ws_api.py`` can back-import
-# ``_sync_upstream_repair_issue`` and drive the repair issue from the
+# ``_sync_engine_repair_issue`` and drive the repair issue from the
 # WS-command path (i.e. reactively whenever the chat panel discovers
 # upstream is missing or has returned at runtime, not just at HA boot).
 #
@@ -87,42 +71,41 @@ type MeshCoreChatConfigEntry = ConfigEntry[MeshCoreChatRuntimeData]
 # ``ws_api.py`` executes its top-level imports during package load.
 
 
-def _upstream_meshcore_present(hass: HomeAssistant) -> bool:
-    """Return True if the upstream meshcore integration has at least one coordinator.
+def _internal_engine_present(hass: HomeAssistant) -> bool:
+    """Return True when HiveFW's embedded radio engine owns a coordinator.
 
-    The companion uses ``hass.data[MESHCORE_DOMAIN]`` as the readiness
-    signal — upstream populates that dict on a successful coordinator
-    init. Empty dict counts as "not present" (covers the removed-at-
-    runtime case where upstream cleaned up its key on unload, as well
-    as the never-configured case).
+    The domain bucket also stores process-global panel/WebSocket state, so the
+    bucket being non-empty is not sufficient. Only a value exposing the radio
+    API counts as a live coordinator.
     """
-    return bool(hass.data.get(MESHCORE_DOMAIN))
+    bucket = hass.data.get(DOMAIN, {})
+    return any(hasattr(value, "api") for value in bucket.values())
 
 
 @callback
-def _sync_upstream_repair_issue(hass: HomeAssistant) -> None:
+def _sync_engine_repair_issue(hass: HomeAssistant) -> None:
     """Create or delete the upstream_meshcore_unavailable repair issue based on state.
 
     Idempotent — HA dedupes by (domain, issue_id), and async_delete_issue
     on a non-existent issue is a no-op. Safe to call from any code path
-    that has just observed the upstream's presence/absence (setup-time
+    that has just observed the embedded engine presence/absence (setup-time
     block in ``async_setup_entry``, WS-command discovery in ``ws_api``).
     """
-    if _upstream_meshcore_present(hass):
-        ir.async_delete_issue(hass, DOMAIN, "upstream_meshcore_unavailable")
+    if _internal_engine_present(hass):
+        ir.async_delete_issue(hass, DOMAIN, "radio_engine_unavailable")
     else:
         ir.async_create_issue(
             hass,
             DOMAIN,
-            "upstream_meshcore_unavailable",
+            "radio_engine_unavailable",
             is_fixable=True,
             severity=ir.IssueSeverity.ERROR,
-            translation_key="upstream_meshcore_unavailable",
+            translation_key="radio_engine_unavailable",
         )
 
 
 # NOTE: ws_api.py imports ``MeshCoreChatRuntimeData`` and
-# ``_sync_upstream_repair_issue`` from this module. Keep this import
+# ``_sync_engine_repair_issue`` from this module. Keep this import
 # below the dataclass + helper definitions so the symbols exist on the
 # partially-initialized package when ws_api.py executes its top-level
 # imports during package load. The deliberate-ordering noqa silences the
@@ -141,7 +124,7 @@ async def async_setup_entry(
     # panel/store layer subscribes to its events.
     if not await async_setup_engine_entry(hass, entry):
         return False
-    # Test-before-setup: refuse setup until the upstream meshcore
+    # Test-before-setup: refuse setup until the embedded HiveFW engine
     # integration has at least one coordinator. The chat companion is
     # useless without it, and HA will retry async_setup_entry
     # automatically when the dependency becomes ready.
@@ -151,15 +134,15 @@ async def async_setup_entry(
     # text. Pair it with a Repairs issue so the user gets a clickable
     # explanation of what to do (install/configure meshcore, or remove
     # hivefw_integration) on the Settings → System → Repairs page.
-    if not _upstream_meshcore_present(hass):
-        _sync_upstream_repair_issue(hass)
+    if not _internal_engine_present(hass):
+        _sync_engine_repair_issue(hass)
         raise ConfigEntryNotReady(
             "HiveFW internal radio engine did not create a coordinator."
         )
 
-    # Upstream is back (or never went away) — clear any stale repair
+    # The embedded engine is ready — clear any stale repair
     # issue so the Repairs panel doesn't show a fixed problem.
-    _sync_upstream_repair_issue(hass)
+    _sync_engine_repair_issue(hass)
 
     # Initialize the per-entry message store and load its lightweight index.
     store = MessageStore(hass, entry)
@@ -207,8 +190,8 @@ async def async_setup_entry(
         bucket["unread_tracker"] = tracker
 
     # Per-channel region-scope store is likewise a process-wide singleton.
-    # Scopes are keyed inside the store by (upstream meshcore entry_id,
-    # channel index), so one instance serves every upstream coordinator on
+    # Scopes are keyed inside the store by (embedded HiveFW engine entry_id,
+    # channel index), so one instance serves every HiveFW coordinator on
     # multi-entry setups. Hydrated here so ws_get_channels sees persisted
     # scopes on first connect.
     if "channel_scopes" not in bucket:
@@ -223,7 +206,7 @@ async def async_setup_entry(
         async_register_ws_commands(hass)
         bucket["_ws_registered"] = True
 
-    # One-shot detection of the upstream meshcore service surface this
+    # One-shot detection of the embedded HiveFW engine service surface this
     # companion depends on. Surfaces an INFO line per-process so support
     # requests on degraded behavior (older meshcore) are diagnosable from
     # the HA log without re-running anything.
@@ -237,7 +220,7 @@ async def async_setup_entry(
             hass.services.has_service(MESHCORE_DOMAIN, "trace"),
         )
 
-    # Subscribe to upstream meshcore events. ``entry.async_on_unload``
+    # Subscribe to embedded HiveFW engine events. ``entry.async_on_unload``
     # tracks each unsub callback and invokes it on unload — no manual
     # listener-list bookkeeping needed.
     entry.async_on_unload(hass.bus.async_listen(
@@ -356,7 +339,7 @@ def _make_message_handler(hass: HomeAssistant, entry_id: str):
         entity_id = data.get("entity_id")
         if not entity_id:
             # Without an entity_id we don't know which conversation to write
-            # to. The upstream meshcore integration always sets this; bail
+            # to. The embedded HiveFW radio engine always sets this; bail
             # quietly rather than scanning.
             return
 

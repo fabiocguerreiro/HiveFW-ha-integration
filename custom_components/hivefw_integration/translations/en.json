@@ -27,7 +27,7 @@
     }
   },
   "issues": {
-    "upstream_meshcore_unavailable": {
+    "radio_engine_unavailable": {
       "title": "HiveFW radio connection is unavailable",
       "fix_flow": {
         "step": {

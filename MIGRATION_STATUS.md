@@ -27,15 +27,18 @@ What it already did:
 ## Important user requirements
 
 1. Only **HiveFW** remains installed/configured in Home Assistant.
-2. User-facing calls must be HiveFW, e.g. `hivefw_integration.send_channel_message`; do **not** keep `meshcore.send_channel_message` just for legacy compatibility.
-3. It is fine to use the MeshCore Python SDK/protocol internally.
-4. Do not lose any current HiveFW frontend or message/map functionality.
-5. New top-level **Console** tab:
+2. This is a **clean install** migration. No backward compatibility with old
+   `meshcore` / prior HiveFW installations is required.
+3. User-facing calls must be HiveFW, e.g. `hivefw_integration.send_channel_message`;
+   do not retain `meshcore.*` public aliases or legacy IDs.
+4. It is fine to use the MeshCore Python SDK/protocol internally.
+5. Do not lose any current HiveFW frontend or message/map functionality.
+6. New top-level **Console** tab:
    - remove/move console controls from Device;
    - free-form command entry;
    - transcript;
    - command history and shortcuts.
-6. All previously proposed enhancements are retained in `ROADMAP.md`.
+7. All previously proposed enhancements are retained in `ROADMAP.md`.
 
 ## Known incomplete areas after 0ca7224
 
@@ -52,16 +55,24 @@ What it already did:
 
 Public surface naming converted to HiveFW: services domain, service descriptions, helper names/IDs, config/help strings and coordinator-facing errors.
 
+## Latest completed step
+
+Removed the remaining external-integration assumption from the backend/WS
+readiness path. HiveFW now treats the embedded radio engine as its own
+coordinator source, and the repair surface uses a HiveFW-native
+`radio_engine_unavailable` issue. The project policy explicitly targets clean
+installs only; no old `meshcore.*` public compatibility surface is required.
+
 ## NEXT STEP
 
-**Next commit: remove the remaining external-integration assumptions from the HiveFW backend/WS layer.**
+**Next commit: remove obsolete install-migration/legacy-compatibility code from the embedded engine and top-level backend.**
 
 Specifically:
 
-1. Replace stale “upstream/external MeshCore coordinator” helper names and repair logic with internal HiveFW-engine checks.
-2. Make WS/data lookup paths use the embedded HiveFW coordinator directly.
-3. Remove repair flows that tell the user to install/configure another integration.
-4. Commit and update this status.
+1. Remove config-entry migrations that only exist for old meshcore-ha installs.
+2. Remove legacy service/version fallback branches that cannot occur in a clean HiveFW install.
+3. Audit public service/event/entity identifiers so only HiveFW names remain.
+4. Validate the fresh config-flow -> coordinator -> platforms -> services path.
 
 After that:
 
