@@ -64,7 +64,7 @@ _EXCEPTION_FALLBACKS: dict[str, str] = {
     "device_not_connected": "Device not connected",
     "operation_timed_out": "Operation timed out",
     "invalid_request": "Invalid request parameters",
-    "no_meshcore_coordinator": "No active HiveFW radio coordinator",
+    "no_hivefw_coordinator": "No active HiveFW radio coordinator",
 }
 
 
@@ -2200,7 +2200,7 @@ async def ws_set_channel(hass, connection, msg):
         # Without this, a panel on another tab/client stays stale until its
         # next manual reload.
         hass.bus.async_fire(
-            f"{MESHCORE_DOMAIN}_channels_updated",
+            "hivefw_channels_updated",
             {"entry_id": coordinator.config_entry.entry_id, "channel_idx": channel_idx},
         )
 
@@ -2258,7 +2258,7 @@ async def ws_remove_channel(hass, connection, msg):
 
         # Notify listeners (frontend subscribes to refresh its channel list).
         hass.bus.async_fire(
-            f"{MESHCORE_DOMAIN}_channel_removed",
+            "hivefw_channel_removed",
             {"entry_id": coordinator.config_entry.entry_id, "channel_idx": channel_idx},
         )
 
@@ -2746,13 +2746,13 @@ async def ws_get_unread_counts(hass, connection, msg):
             return
         prefix = (getattr(coord, "pubkey", "") or "")[:6]
         if prefix:
-            # Match the domain-boundary segment ".meshcore_<prefix>_"
+            # Match the domain-boundary segment ".hivefw_<prefix>_"
             # against entity_ids of the form
-            # "<domain>.meshcore_<prefix>_..._messages".
+            # "<domain>.hivefw_<prefix>_..._messages".
             # NOTE: a "_meshcore_<prefix>_" pattern would never match
             # because the character preceding "meshcore" in real
             # entity_ids is the domain separator ".", not "_".
-            needle = f".meshcore_{prefix}_"
+            needle = f".hivefw_{prefix}_"
             unread = {k: v for k, v in unread.items() if needle in k}
             last_read = {k: v for k, v in last_read.items() if needle in k}
     connection.send_result(msg["id"], {"unread": unread, "last_read": last_read})
@@ -3033,7 +3033,7 @@ async def ws_regenerate_identity(hass, connection, msg):
     """
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", _t("no_meshcore_coordinator"))
+        connection.send_error(msg["id"], "not_found", _t("no_hivefw_coordinator"))
         return
 
     meshcore_entry_id = coordinator.config_entry.entry_id
@@ -3087,7 +3087,7 @@ async def ws_import_identity(hass, connection, msg):
     """
     coordinator = _get_coordinator(hass, msg.get("entry_id"))
     if not coordinator:
-        connection.send_error(msg["id"], "not_found", _t("no_meshcore_coordinator"))
+        connection.send_error(msg["id"], "not_found", _t("no_hivefw_coordinator"))
         return
 
     # Strip whitespace anywhere in the input — paste-friendly.
@@ -3698,7 +3698,7 @@ async def _ws_trace_explicit(
             if payload.get("tag") == tag and not response_future.done():
                 response_future.set_result(payload)
 
-        unsub = hass.bus.async_listen(f"{MESHCORE_DOMAIN}_raw_event", _on_raw_event)
+        unsub = hass.bus.async_listen("hivefw_raw_event", _on_raw_event)
 
         try:
             from meshcore.events import EventType as _EventType
