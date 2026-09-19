@@ -1,11 +1,12 @@
 /*
  * HiveFW sidebar brand hook.
  *
- * Home Assistant's built-in panel API accepts an MDI icon identifier but not
- * an image URL. This tiny global module replaces the fallback MDI icon on the
- * HiveFW sidebar entry with the integration's own brand/icon.png. It observes
- * the relevant shadow roots so the logo survives frontend re-renders without
- * polling.
+ * Home Assistant's panel API accepts an MDI icon, not an image URL. This
+ * module replaces the HiveFW fallback icon with brand/icon.png.
+ *
+ * Performance note: after one initial discovery pass, mutations are handled
+ * incrementally. Only newly-added DOM/shadow-root subtrees are inspected;
+ * the complete Home Assistant DOM is not rescanned on every mutation.
  */
 (() => {
   if (window.__hivefwSidebarBrandLoaded) return;
@@ -13,9 +14,10 @@
 
   const ICON_URL = "/hivefw_integration_panel/hivefw-icon.png";
   const observed = new WeakSet();
-  let scheduled = false;
 
-  const patchItem = (item) => {
+  const patchItem = (root) => {
+    if (!root?.querySelector) return;
+    const item = root.querySelector("#sidebar-panel-hivefw");
     if (!item || item.querySelector(".hivefw-sidebar-brand")) return;
 
     const current = item.querySelector(
@@ -39,36 +41,58 @@
     else item.prepend(img);
   };
 
-  const scan = (root) => {
-    if (!root?.querySelectorAll) return;
+  const observeRoot = (root) => {
+    if (!root?.querySelectorAll || observed.has(root)) return;
+    patchItem(root);
+    try {
+      observer.observe(root, { childList: true, subtree: true });
+      observed.add(root);
+    } catch (_) {
+      return;
+    }
+  };
 
-    patchItem(root.querySelector("#sidebar-panel-hivefw"));
+  const discover = (root) => {
+    if (!root) return;
 
-    if (!observed.has(root)) {
-      try {
-        observer.observe(root, { childList: true, subtree: true });
-        observed.add(root);
-      } catch (_) {
-        // Some transient roots can disappear during a HA navigation update.
+    if (root.querySelectorAll) {
+      observeRoot(root);
+      for (const el of root.querySelectorAll("*")) {
+        if (el.shadowRoot) discover(el.shadowRoot);
       }
-    }
-
-    for (const el of root.querySelectorAll("*")) {
-      if (el.shadowRoot) scan(el.shadowRoot);
+    } else if (root.nodeType === Node.ELEMENT_NODE && root.shadowRoot) {
+      discover(root.shadowRoot);
     }
   };
 
-  const scheduleScan = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      scan(document);
-    });
+  const discoverAdded = (node) => {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = /** @type {Element} */ (node);
+
+    if (el.id === "sidebar-panel-hivefw") {
+      patchItem(el.parentNode?.getRootNode?.() || document);
+    }
+    if (el.shadowRoot) discover(el.shadowRoot);
+
+    for (const child of el.querySelectorAll?.("*") || []) {
+      if (child.shadowRoot) discover(child.shadowRoot);
+    }
+
+    const root = el.getRootNode?.();
+    if (root?.querySelector) patchItem(root);
   };
 
-  const observer = new MutationObserver(scheduleScan);
-  scan(document);
-  window.addEventListener("location-changed", scheduleScan);
-  window.addEventListener("popstate", scheduleScan);
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      const root = mutation.target?.getRootNode?.();
+      if (root?.querySelector) patchItem(root);
+      for (const node of mutation.addedNodes) discoverAdded(node);
+    }
+  });
+
+  const rediscover = () => requestAnimationFrame(() => discover(document));
+
+  discover(document);
+  window.addEventListener("location-changed", rediscover);
+  window.addEventListener("popstate", rediscover);
 })();
