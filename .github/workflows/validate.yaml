@@ -71,8 +71,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build bundle
         run: npm run build
 
       - name: Run tests
         run: npm test
+
+  backend:
+    name: Backend compile & test
+    runs-on: ubuntu-latest
+    if: github.repository == 'fabiocguerreiro/HiveFW-ha-integration'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      - name: Install test dependencies
+        run: python -m pip install -r requirements_test.txt
+
+      - name: Compile backend
+        run: python -m compileall -q custom_components/hivefw_integration
+
+      - name: Run backend tests
+        run: python -m pytest tests/ -q
