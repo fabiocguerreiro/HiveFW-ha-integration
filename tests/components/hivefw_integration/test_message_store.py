@@ -1191,6 +1191,9 @@ async def test_get_peer_activity_aggregates_messages_and_links(
     assert activity["peers"][prefix]["rx"] == 1
     assert activity["peers"][prefix]["tx"] == 1
     assert activity["peers"][prefix]["messages"] == 2
+    assert activity["peers"][prefix]["daily"]["2026-09-19"]["rx"] == 1
+    assert activity["peers"][prefix]["daily"]["2026-09-19"]["tx"] == 1
+    assert activity["peers"][prefix]["daily"]["2026-09-19"]["messages"] == 2
     assert activity["links"]["aa"]["observations"] == 1
     assert activity["links"]["aa"]["avg_rssi"] == -101.0
     assert activity["links"]["aa"]["avg_snr"] == 4.5
