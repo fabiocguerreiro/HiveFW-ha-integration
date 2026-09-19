@@ -105,7 +105,7 @@ class MeshCoreMqttUploader:
         self.api = api
         self.integration_version = (integration_version or "unknown").strip() or "unknown"
         self.settings = entry.data.get(CONF_MQTT_BROKERS, {}) or {}
-        configured_name = str(entry.data.get(CONF_NAME, "meshcore") or "meshcore").strip()
+        configured_name = str(entry.data.get(CONF_NAME, "hivefw") or "hivefw").strip()
         self.node_name = self._resolve_initial_node_name(configured_name)
         self.public_key = (entry.data.get(CONF_PUBKEY, "") or "").upper()
         self.global_iata = str(entry.data.get(CONF_MQTT_IATA, "XYZ") or "XYZ").strip().upper()
@@ -375,7 +375,7 @@ class MeshCoreMqttUploader:
         if self._status_refresh_task is None or self._status_refresh_task.done():
             self._status_refresh_task = asyncio.create_task(
                 self._async_status_refresh_loop(),
-                name="meshcore_mqtt_status_refresh",
+                name="hivefw_mqtt_status_refresh",
             )
 
     async def _async_create_client(self, broker: BrokerConfig):
