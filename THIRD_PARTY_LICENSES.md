@@ -1,9 +1,22 @@
 # Third-party notices
 
-## meshcore-dev/meshcore-ha
+## Embedded MeshCore Home Assistant engine
 
-Parts of `custom_components/hivefw_integration/engine/` are adapted from
-`meshcore-dev/meshcore-ha` at commit `0f99da64be8a0ab6eacd4e87246f2a70e624f2b6`.
+Partes de `custom_components/hivefw_integration/engine/` foram adaptadas de:
+
+- Projeto: `meshcore-dev/meshcore-ha`
+- Commit base: `0f99da64be8a0ab6eacd4e87246f2a70e624f2b6`
+- Versão upstream na importação: `2.10.0`
+- Licença: MIT
+
+O ficheiro `custom_components/hivefw_integration/engine/UPSTREAM_SHA` mantém o commit
+base de forma legível por ferramentas/processos de manutenção.
+
+HiveFW não requer a instalação dessa integração upstream no Home Assistant. O código
+adaptado faz parte do motor interno da própria integração HiveFW.
+
+Atualizações upstream devem ser integradas como alterações de vendor explícitas e
+revistas, preservando as adaptações HiveFW e esta atribuição.
 
 ```text
 MIT License
