@@ -957,8 +957,8 @@ async def test_ws_set_device_config_writes_name(
     # gets a complete search-replace target list in the repair issue.
     assert (
         placeholders["entity_list"]
-        == "- `sensor.meshcore_battery_mydevice` →"
-        " `sensor.meshcore_battery_newdev`"
+        == "- `sensor.hivefw_battery_mydevice` →"
+        " `sensor.hivefw_battery_newdev`"
     )
     reload_mock.assert_awaited_once_with("meshcore_entry")
     # Phase 2 v4: send_result now carries a `rename` block so the
