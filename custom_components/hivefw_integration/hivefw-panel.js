@@ -111,6 +111,10 @@ class HiveFWPanel extends BasePanel {
     this.__remoteAdminOverlay = null;
     this.__remoteAdminDevice = null;
     this.__remoteAdminHistory = [];
+    this.__observabilitySettings = null;
+    this.__observabilityState = {};
+    this.__observabilityLoadedEntry = null;
+    this.__observabilityLoading = false;
 
     this.__chatObservedRoot = null;
     this.__chatObserver = null;
@@ -186,6 +190,9 @@ class HiveFWPanel extends BasePanel {
       this.__closeTopologyOverlay();
       this.__removeActivityHeatmapLayer();
       this.__peerActivityLoadedEntry = null;
+      this.__observabilityLoadedEntry = null;
+      this.__observabilitySettings = null;
+      this.__observabilityState = {};
     }
 
     if (this._activeTab !== "neighbors") {
@@ -247,6 +254,9 @@ class HiveFWPanel extends BasePanel {
       }
       if (this.__scopesLoadedEntry !== entryId) {
         void this.__loadScopes();
+      }
+      if (this.__observabilityLoadedEntry !== entryId && !this.__observabilityLoading) {
+        void this.__loadObservabilitySettings();
       }
       return;
     }
@@ -1712,6 +1722,7 @@ class HiveFWPanel extends BasePanel {
     this.__renderSettingsRepeaterCard(sroot, grid);
     this.__renderRegionsScopesCard(sroot, grid);
     this.__renderRxLogCard(sroot, grid);
+    this.__renderObservabilityCard(sroot, grid);
     this.__renderManagedDevicesCard(sroot, grid);
     this.__enhanceCompanionMeta(sroot);
     this.__enhanceCompanionHero(sroot);
@@ -1720,6 +1731,126 @@ class HiveFWPanel extends BasePanel {
 
     this.__settingsObserver?.takeRecords();
     this.__settingsObserver?.observe(sroot, { childList: true, subtree: true });
+  }
+
+  async __loadObservabilitySettings() {
+    if(!this.hass||this.__observabilityLoading)return;
+    this.__observabilityLoading=true;
+    const entryId=this.__entryId()||null;
+    try{
+      const msg={type:"hivefw_integration/get_observability_settings"};
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__observabilitySettings={...(result?.settings||{})};
+      this.__observabilityState=result?.health_state||{};
+      this.__observabilityLoadedEntry=entryId;
+    }catch(error){
+      console.warn("HiveFW observability settings load failed",error);
+      this.__observabilityLoadedEntry=entryId;
+    }finally{
+      this.__observabilityLoading=false;
+      if(this._activeTab==="settings")this.__enhanceSettingsPage();
+    }
+  }
+
+  async __saveObservabilitySettings(settings,button) {
+    if(!this.hass)return;
+    const original=button?.textContent||"Guardar thresholds";
+    if(button){button.disabled=true;button.textContent="A guardar…";}
+    try{
+      const msg={type:"hivefw_integration/set_observability_settings",settings};
+      const entryId=this.__entryId();
+      if(entryId)msg.entry_id=entryId;
+      const result=await this.hass.callWS(msg);
+      this.__observabilitySettings={...(result?.settings||settings)};
+      if(button){
+        button.textContent="Guardado";
+        window.setTimeout(()=>{if(button.isConnected)button.textContent=original;},1200);
+      }
+    }catch(error){
+      console.error("HiveFW observability settings save failed",error);
+      if(button)button.textContent="Erro";
+    }finally{
+      if(button)button.disabled=false;
+    }
+  }
+
+  __renderObservabilityCard(sroot,grid) {
+    let card=sroot.querySelector("#hive-observability-settings-card");
+    if(!card){
+      card=document.createElement("div");
+      card.id="hive-observability-settings-card";
+      card.className="device-section";
+      grid.appendChild(card);
+    }
+    card.replaceChildren();
+
+    const title=document.createElement("div");
+    title.className="card-title";
+    title.textContent="Alertas & automações";
+    card.appendChild(title);
+
+    const note=document.createElement("div");
+    note.className="hive-settings-note";
+    note.textContent="Avaliação local a cada minuto, sem RF adicional. Cada mudança de estado dispara o evento HA hivefw_health_transition; notificações persistentes são opcionais.";
+    card.appendChild(note);
+
+    if(this.__observabilityLoading&&!this.__observabilitySettings){
+      card.append("A carregar thresholds…");
+      return;
+    }
+    const settings=this.__observabilitySettings||{
+      noise_floor_warn:-105,
+      tx_queue_warn:5,
+      recv_errors_rate_warn:0.5,
+      reliability_warn:70,
+      reliability_min_requests:20,
+      persistent_notifications:false,
+    };
+
+    const controls=document.createElement("div");
+    controls.className="hive-settings-controls";
+    const field=(label,value,step="1")=>{
+      const wrap=document.createElement("div");wrap.className="hive-settings-field";
+      const l=document.createElement("label");l.textContent=label;
+      const input=document.createElement("input");input.type="number";input.step=step;input.value=String(value);
+      wrap.append(l,input);controls.appendChild(wrap);return input;
+    };
+    const noise=field("Noise floor alerta (dBm)",settings.noise_floor_warn,"1");
+    const queue=field("TX queue alerta",settings.tx_queue_warn,"1");
+    const rxErrors=field("RX errors alerta (/min)",settings.recv_errors_rate_warn,"0.1");
+    const reliability=field("Fiabilidade mínima (%)",settings.reliability_warn,"1");
+    const minRequests=field("Amostra mínima de requests",settings.reliability_min_requests,"1");
+    card.appendChild(controls);
+
+    const notify=document.createElement("label");
+    notify.style.cssText="display:flex;align-items:center;gap:7px;margin:10px 0;font-size:12px;";
+    const notifyCheck=document.createElement("input");notifyCheck.type="checkbox";notifyCheck.checked=!!settings.persistent_notifications;
+    notify.append(notifyCheck,document.createTextNode("Criar notificação persistente quando entra um novo alerta"));
+    card.appendChild(notify);
+
+    const active=this.__observabilityState?.active||{};
+    const state=document.createElement("div");
+    state.className="hive-settings-note";
+    const activeValues=Object.values(active);
+    state.textContent=activeValues.length
+      ?"Ativos: "+activeValues.join(" · ")
+      :"Estado atual: sem alertas ativos";
+    card.appendChild(state);
+
+    const save=document.createElement("button");
+    save.className="action-btn";
+    save.style.width="100%";
+    save.textContent="Guardar thresholds";
+    save.addEventListener("click",()=>void this.__saveObservabilitySettings({
+      noise_floor_warn:Number(noise.value),
+      tx_queue_warn:Number(queue.value),
+      recv_errors_rate_warn:Number(rxErrors.value),
+      reliability_warn:Number(reliability.value),
+      reliability_min_requests:Number(minRequests.value),
+      persistent_notifications:notifyCheck.checked,
+    },save));
+    card.appendChild(save);
   }
 
   __renderSettingsRepeaterCard(sroot, grid) {
