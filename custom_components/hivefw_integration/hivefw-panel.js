@@ -184,6 +184,10 @@ class HiveFWPanel extends BasePanel {
 
     if (this._activeTab === "chat") {
       this.__enhanceChatUi();
+    } else if (this.__chatObserver) {
+      this.__chatObserver.disconnect();
+      this.__chatObserver = null;
+      this.__chatObservedRoot = null;
     }
 
     if (this._activeTab === "nodes") {
