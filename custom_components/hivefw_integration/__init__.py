@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN,
@@ -49,6 +50,8 @@ class HiveFWRuntimeData:
     """
 
     store: MessageStore
+    node_meta_store: Store
+    node_meta: dict[str, dict[str, Any]]
 
 
 # Type alias for ConfigEntry parameterized with our runtime data shape.
@@ -156,10 +159,22 @@ async def async_setup_entry(
     store = MessageStore(hass, entry)
     await store.async_load_index()
 
-    # Per-entry runtime state lives on entry.runtime_data (Bronze pattern,
-    # post-2024.6). Process-global singletons (panel registration, WS
-    # commands, unread tracker) continue to live on hass.data[DOMAIN].
-    entry.runtime_data = HiveFWRuntimeData(store=store)
+    # Persist local node metadata (favorites/tags) in Home Assistant instead
+    # of browser localStorage so all dashboards/users see the same state.
+    node_meta_store = Store(
+        hass,
+        1,
+        f"hivefw_integration.{entry.entry_id}.node_meta",
+    )
+    raw_node_meta = await node_meta_store.async_load()
+    node_meta = raw_node_meta if isinstance(raw_node_meta, dict) else {}
+
+    # Per-entry runtime state lives on entry.runtime_data.
+    entry.runtime_data = HiveFWRuntimeData(
+        store=store,
+        node_meta_store=node_meta_store,
+        node_meta=node_meta,
+    )
 
     # Best-effort retention pass at startup. Failures here must not block
     # setup — they are logged and we continue.
