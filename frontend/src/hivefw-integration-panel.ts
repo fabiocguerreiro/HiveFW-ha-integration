@@ -684,13 +684,13 @@ export class MeshCorePanel extends LitElement {
 
     if (this._error && !this._config) {
       // When the error is the "no devices found" empty-state, the
-      // upstream meshcore integration is most likely missing or
+      // HiveFW radio coordinator is most likely unavailable or
       // unconfigured — the companion's repair-issue plumbing
       // (radio_engine_unavailable) carries the proper remediation
       // copy, so point the user at Settings → System → Repairs.
       // Other error strings (e.g. "Failed to load: ...") keep the
       // legacy generic copy.
-      const isNoDevices = this._error === 'No MeshCore devices found';
+      const isNoDevices = this._error === 'No HiveFW devices found';
       return html`
         <div class="panel">
           <div class="center-message">
@@ -699,9 +699,9 @@ export class MeshCorePanel extends LitElement {
               <p style="font-size: 12px; margin-top: 8px;">
                 ${isNoDevices
                   ? html`Open <a href="/config/repairs">Settings &rarr; System &rarr; Repairs</a>
-                         for setup guidance, or add the MeshCore integration via
+                         for setup guidance, or reconfigure HiveFW via
                          <a href="/config/integrations">Settings &rarr; Devices &amp; Services</a>.`
-                  : 'Check that the MeshCore integration is loaded and connected.'}
+                  : 'Check that HiveFW is configured and the radio is connected.'}
               </p>
             </div>
           </div>
