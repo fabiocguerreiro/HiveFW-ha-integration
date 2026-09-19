@@ -729,7 +729,7 @@ export class MeshCorePanel extends LitElement {
               ? html`
                   <span class="connection-status ${this._getNodeStatus(device) === 'online' ? 'online' : 'offline'}">
                     <span class="status-dot ${this._getNodeStatus(device) === 'online' ? 'online' : 'offline'}"></span>
-                    ${this._getNodeStatus(device) === 'online' ? 'Connected' : 'Disconnected'}
+                    ${this._getNodeStatus(device) === 'online' ? 'Conectado' : 'Desconectado'}
                   </span>`
               : html``}
             ${device && this._getBatteryLevel(device) !== null
