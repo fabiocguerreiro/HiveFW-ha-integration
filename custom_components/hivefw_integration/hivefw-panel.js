@@ -5084,50 +5084,9 @@ class HiveFWPanel extends BasePanel {
     }).filter(Boolean);
   }
 
-  __activityMapLocations() {
-    if(!this.__activityHeatmapVisible)return [];
-    const source=Array.isArray(this.__nodesMapContacts)
-      ? this.__nodesMapContacts
-      : (Array.isArray(this._contacts)?this._contacts:[]);
-    const points=[];
-    let maxScore=0;
-    for(const contact of source){
-      const coords=this.__nodeCoords(contact);
-      if(!coords)continue;
-      const activity=this.__peerActivityFor(contact);
-      const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
-      if(score<=0)continue;
-      maxScore=Math.max(maxScore,score);
-      points.push({contact,coords,activity,score});
-    }
-    return points.map((point)=>{
-      const ratio=maxScore?Math.sqrt(point.score/maxScore):0;
-      const center=document.createElement("div");
-      center.style.cssText="width:2px;height:2px;opacity:0;pointer-events:none;";
-      return {
-        id:"__activity__"+this.__nodeId(point.contact),
-        location:point.coords,
-        radius:Math.round(180+ratio*1100),
-        color:"#ef6c00",
-        element:center,
-        elementSize:[2,2],
-        title:String(point.contact.adv_name||point.contact.pubkey_prefix||"Nó")+" · atividade "+point.score,
-        locationEditable:false,
-        radiusEditable:false,
-        activatable:false,
-      };
-    });
-  }
 
-  __applyPublicMapLocations(contacts) {
-    const map=this.__nodesMapElement;
-    if(!map || !("editableLocations" in map))return;
-    map.entities=[];
-    map.editableLocations=[
-      ...this.__mapLocations(contacts),
-      ...this.__activityMapLocations(),
-    ];
-  }
+
+
 
   __traceMonitorStorageKey(contact=this.__traceMonitorContact) {
     const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
@@ -7680,5 +7639,7 @@ class HiveFWPanel extends BasePanel {
     }
     wrap.appendChild(grid);
   }
+
+}
 
 customElements.define("hivefw-panel", HiveFWPanel);
