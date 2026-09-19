@@ -38,11 +38,11 @@ _static_path_registered = False
 
 # HTTP URL the bundle is served at; module_url below points at this path.
 PANEL_URL = "/hivefw_integration_panel/hivefw-integration-panel.js"
-PANEL_WRAPPER_URL = "/hivefw_integration_panel/meshcore-repeater-panel.js"
+PANEL_WRAPPER_URL = "/hivefw_integration_panel/hivefw-panel.js"
 PANEL_LOGO_URL = "/hivefw_integration_panel/hivefw-wordmark.png"
-# Filesystem paths to the production bundle, HiveFW wrapper and shared brand.
+# Filesystem paths to the production bundle, HiveFW panel wrapper and shared brand.
 PANEL_FRONTEND_PATH = str(Path(__file__).parent / "hivefw-integration-panel.js")
-PANEL_WRAPPER_PATH = str(Path(__file__).parent / "meshcore-repeater-panel.js")
+PANEL_WRAPPER_PATH = str(Path(__file__).parent / "hivefw-panel.js")
 PANEL_LOGO_PATH = str(Path(__file__).parent / "brand" / "hivefw-wordmark.png")
 
 PANEL_ICON = "mdi:radio-handheld"
@@ -89,7 +89,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         frontend_url_path=PANEL_URL_PATH,
         config={
             "_panel_custom": {
-                "name": "meshcore-repeater-panel",
+                "name": "hivefw-panel",
                 "module_url": PANEL_WRAPPER_URL,
             }
         },
