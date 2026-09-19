@@ -930,6 +930,13 @@ async def ws_bulk_cleanup_contacts(hass, connection, msg):
         for item in getattr(coordinator, "_tracked_repeaters", [])
         if str(item.get("pubkey_prefix") or "").strip()
     }
+    sdk_contacts = getattr(getattr(coordinator.api, "mesh_core", None), "contacts", {}) or {}
+    added_pubkeys = {
+        str(item.get("public_key") or "").strip().lower()
+        for item in list(getattr(coordinator, "_contacts", {}).values())
+        + list(sdk_contacts.values())
+        if str(item.get("public_key") or "").strip()
+    }
     now = time.time()
     threshold_seconds = (
         int(days_threshold) * 86400 if days_threshold is not None else None
@@ -951,7 +958,9 @@ async def ws_bulk_cleanup_contacts(hass, connection, msg):
             skipped["not_selected"] += 1
             continue
 
-        if msg.get("protect_added", True) and contact.get("added_to_node", False):
+        if msg.get("protect_added", True) and (
+            key in added_pubkeys or contact.get("added_to_node", False)
+        ):
             skipped["added"] += 1
             continue
 
@@ -998,21 +1007,12 @@ async def ws_bulk_cleanup_contacts(hass, connection, msg):
         )
         return
 
-    entity_registry = er.async_get(hass)
-    entry_id = coordinator.config_entry.entry_id
     removed: list[str] = []
     for public_key in candidates:
         contact = coordinator._discovered_contacts.pop(public_key, None)
         if contact is None:
             continue
-        coordinator.tracked_diagnostic_binary_contacts.discard(public_key)
-        entity_id = entity_registry.async_get_entity_id(
-            "binary_sensor",
-            DOMAIN,
-            f"{entry_id}_contact_{public_key[:12]}",
-        )
-        if entity_id:
-            entity_registry.async_remove(entity_id)
+        coordinator._remove_discovered_contact_entities(public_key)
         runtime.node_meta.pop(public_key, None)
         removed.append(public_key)
         if len(removed) % 20 == 0:
@@ -1090,7 +1090,7 @@ async def ws_get_peer_activity(hass, connection, msg):
     """Return peer RX/TX and path-link volume derived from stored messages."""
     runtime = _get_runtime_data(hass, msg.get("entry_id"))
     if runtime is None:
-        connection.send_result(msg["id"], {"peers": {}, "links": {}})
+        connection.send_result(msg["id"], {"peers": {}, "links": {}, "edges": {}})
         return
     result = await runtime.store.get_peer_activity()
     connection.send_result(msg["id"], result)
