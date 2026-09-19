@@ -379,7 +379,7 @@ export const panelStyles = css`
 
   /* === Conversation Sidebar === */
   .conversation-sidebar {
-    width: 280px;
+    width: 330px;
     border-right: 1px solid var(--divider-color, #e0e0e0);
     display: flex;
     flex-direction: column;
@@ -1169,6 +1169,12 @@ export const panelStyles = css`
     min-width: 88px;
     font-size: 12px;
     padding: 10px 12px;
+  }
+
+  @media (max-width: 900px) and (min-width: 601px) {
+    .conversation-sidebar {
+      width: 300px;
+    }
   }
 
   :host([narrow]) .conversation-sidebar {
