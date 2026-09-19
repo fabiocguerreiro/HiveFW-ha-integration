@@ -237,6 +237,10 @@ export interface Contact {
   out_path: string;
   out_path_len: number;
   out_path_hash_mode: number;
+  favorite?: boolean;
+  tags?: string[];
+  age_bucket?: 'lt1h' | 'lt6h' | 'lt24h' | 'lt7d' | 'stale';
+  age_seconds?: number | null;
   [key: string]: unknown;
 }
 
