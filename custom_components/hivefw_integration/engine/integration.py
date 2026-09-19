@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""The MeshCore integration."""
+"""Embedded radio engine for the standalone HiveFW integration."""
 from __future__ import annotations
 
 import asyncio
@@ -80,63 +80,6 @@ def _read_integration_version() -> str:
         return version or "unknown"
     except Exception:
         return "unknown"
-
-async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migrate old entry."""
-    _LOGGER.debug("Migrating configuration from version %s", config_entry.version)
-    
-    # Don't allow downgrading from future versions
-    if config_entry.version > 3:
-        _LOGGER.error("Cannot downgrade from version %s", config_entry.version)
-        return False
-    
-    # Migrate from version 1 to version 2
-    if config_entry.version == 1:
-        new_data = dict(config_entry.data)
-        
-        # Add new fields if they don't exist
-        if CONF_TRACKED_CLIENTS not in new_data:
-            new_data[CONF_TRACKED_CLIENTS] = []
-        
-        if CONF_REPEATER_SUBSCRIPTIONS not in new_data:
-            new_data[CONF_REPEATER_SUBSCRIPTIONS] = []
-        else:
-            # Update existing repeater subscriptions to include telemetry_enabled
-            for repeater in new_data[CONF_REPEATER_SUBSCRIPTIONS]:
-                if CONF_REPEATER_TELEMETRY_ENABLED not in repeater:
-                    repeater[CONF_REPEATER_TELEMETRY_ENABLED] = False
-        
-        # Update the config entry
-        hass.config_entries.async_update_entry(
-            config_entry,
-            data=new_data,
-            version=2
-        )
-        
-        _LOGGER.info("Migrated configuration from version %s to version 2", config_entry.version)
-    
-    # Migrate from version 2 to version 3: collapse the two overlapping
-    # discovery booleans into the single contact_discovery_mode tri-state.
-    # Standalone `if` (not `elif`): a v1 entry's v1->v2 block above sets
-    # version=2, so it falls into this block and chains v1->v3 in one pass.
-    if config_entry.version == 2:
-        new_data = dict(config_entry.data)
-        # Read the legacy keys as string literals so the migration is
-        # independent of the const definitions.
-        disable = new_data.pop("disable_contact_discovery", False)
-        large_mesh = new_data.pop("large_mesh_mode", False)
-        if disable:
-            mode = MODE_OFF  # "off" wins the tie-break: no discovery, nothing to be data-only
-        elif large_mesh:
-            mode = MODE_DATA_ONLY
-        else:
-            mode = MODE_FULL
-        new_data[CONF_CONTACT_DISCOVERY_MODE] = mode
-        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3)
-        _LOGGER.info("Migrated contact-discovery settings to %s (version 3)", mode)
-
-    _LOGGER.debug("Migration to configuration version %s successful", config_entry.version)
-    return True
 
 def _migrate_entity_ids(
     hass: HomeAssistant,
