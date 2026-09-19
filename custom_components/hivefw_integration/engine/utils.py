@@ -1,6 +1,6 @@
 # Vendored/adapted from meshcore-dev/meshcore-ha @ 0f99da64be8a0ab6eacd4e87246f2a70e624f2b6
 # Upstream license: MIT (see THIRD_PARTY_LICENSES.md)
-"""Utility functions for the MeshCore integration."""
+"""Utility functions for the HiveFW integration."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any, Final
 from Crypto.Cipher import AES
 from homeassistant.util import slugify
 
-from .const import BAT_VMAX, BAT_VMIN, CHANNEL_PREFIX, DOMAIN, MESSAGES_SUFFIX, NodeType
+from .const import BAT_VMAX, BAT_VMIN, CHANNEL_PREFIX, ENTITY_PREFIX, MESSAGES_SUFFIX, NodeType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def format_entity_id(
 
     # Build the entity name parts (everything after the domain)
     # Filter out empty strings to prevent double underscores
-    name_parts = [part for part in [DOMAIN, device_name, entity_key, suffix] if part]
+    name_parts = [part for part in [ENTITY_PREFIX, device_name, entity_key, suffix] if part]
 
     # Join parts with underscores and clean up any double underscores
     entity_name = "_".join(name_parts).replace("__", "_")
@@ -179,13 +179,13 @@ def build_device_name(name: str, pubkey_prefix: str, node_type: str = "unknown")
     pubkey_short = pubkey_prefix[:6] if pubkey_prefix else ""
 
     if node_type == "root":
-        return f"MeshCore {name} ({pubkey_short})"
+        return f"HiveFW {name} ({pubkey_short})"
     elif node_type == "repeater":
-        return f"MeshCore Repeater: {name} ({pubkey_short})"
+        return f"HiveFW Repeater: {name} ({pubkey_short})"
     elif node_type == "client":
-        return f"MeshCore Client: {name} ({pubkey_short})"
+        return f"HiveFW Client: {name} ({pubkey_short})"
     else:
-        return f"MeshCore Node: {name} ({pubkey_short})"
+        return f"HiveFW Node: {name} ({pubkey_short})"
 
 
 def get_device_model(node_type: str) -> str:
