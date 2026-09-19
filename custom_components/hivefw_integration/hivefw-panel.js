@@ -2921,19 +2921,36 @@ class HiveFWPanel extends BasePanel {
     },120);
   }
 
-  __lastTraceStorageKey() {
-    const entry=String(this.__entryId()||"default").replace(/[^a-zA-Z0-9_.-]/g,"_");
-    return "hivefw.last_trace.v1."+entry;
+  async __restoreLatestTraceFromHistory() {
+    const entry=String(this.__entryId()||"default");
+    this.__lastTraceLoadedEntry=entry;
+    await this.__loadTraceHistory();
+    if(this.__lastTrace || !this.__traceHistory.length)return;
+    const record=this.__traceHistory[0];
+    this.__lastTrace={
+      timestamp:record.timestamp,
+      source:"history",
+      target:{
+        pubkey_prefix:String(record.target_prefix||""),
+        adv_name:String(record.target_prefix||"Nó"),
+      },
+      result:{
+        round_trip_ms:Number(record.round_trip_ms)||0,
+        response_time:String(Number(record.round_trip_ms)||0)+"ms",
+        hops:Number(record.hops)||0,
+        final_snr:record.final_snr,
+        path:Array.isArray(record.path)?record.path:[],
+      },
+    };
+    if(this._activeTab==="nodes")this.__drawLastTraceRoute();
   }
 
   __loadLastTrace() {
     const entry=String(this.__entryId()||"default");
-    if(this.__lastTraceLoadedEntry===entry)return this.__lastTrace;
-    this.__lastTraceLoadedEntry=entry;
-    try{
-      const parsed=JSON.parse(localStorage.getItem(this.__lastTraceStorageKey())||"null");
-      this.__lastTrace=parsed&&parsed.result?parsed:null;
-    }catch{this.__lastTrace=null;}
+    if(this.__lastTraceLoadedEntry!==entry){
+      this.__lastTraceLoadedEntry=entry;
+      this.__lastTrace=null;
+    }
     return this.__lastTrace;
   }
 
@@ -2962,7 +2979,7 @@ class HiveFWPanel extends BasePanel {
     };
     this.__lastTrace=trace;
     this.__lastTraceLoadedEntry=String(this.__entryId()||"default");
-    try{localStorage.setItem(this.__lastTraceStorageKey(),JSON.stringify(trace));}catch{}
+    this.__traceHistoryLoadedEntry=null;
     this.__drawLastTraceRoute();
   }
 
@@ -2975,7 +2992,6 @@ class HiveFWPanel extends BasePanel {
   }
 
   __clearLastTrace() {
-    try{localStorage.removeItem(this.__lastTraceStorageKey());}catch{}
     this.__lastTrace=null;
     this.__removeTraceRouteLayer();
     this.__nodesMapPane?.querySelector(".hive-trace-summary")?.remove();
@@ -3505,6 +3521,9 @@ class HiveFWPanel extends BasePanel {
     });
     if(this.__peerActivityLoadedEntry!==this.__entryId()&&!this.__peerActivityLoading){
       void this.__loadPeerActivity();
+    }
+    if(this.__lastTraceLoadedEntry!==String(this.__entryId()||"default")){
+      void this.__restoreLatestTraceFromHistory();
     }
     this.__decorateNodeCards(nroot);
     window.setTimeout(()=>this.__decorateNodeCards(nroot),120);
