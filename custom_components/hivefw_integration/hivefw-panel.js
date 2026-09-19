@@ -3659,8 +3659,6 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeTraceRouteLayer() {
-    const map=this.__nodesMapElement;
-    if(map && "paths" in map)map.paths=[];
     this.__traceRouteLayer=null;
   }
 
@@ -3748,75 +3746,11 @@ class HiveFWPanel extends BasePanel {
   }
 
   __drawLastTraceRoute() {
-    const pane=this.__nodesMapPane;
-    const map=this.__nodesMapElement;
-    if(!pane||!map)return;
-    this.__removeTraceRouteLayer();
-    pane.querySelector(".hive-trace-summary")?.remove();
-    const data=this.__traceRouteData();
-    if(!data)return;
-
-    if(data.points.length>=2 && "paths" in map){
-      const now=Date.now();
-      map.paths=[{
-        name:"HiveFW route",
-        color:"#1565c0",
-        gradualOpacity:0,
-        points:data.points.map((point,index)=>({
-          point,
-          timestamp:new Date(now+index*1000),
-        })),
-      }];
-      this.__traceRouteLayer=true;
-    }
-
-    const summary=document.createElement("div");
-    summary.className="hive-trace-summary";
-    summary.style.cssText="position:absolute;left:10px;top:10px;z-index:35;max-width:min(360px,calc(100% - 20px));padding:8px 10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 93%,transparent);box-shadow:0 1px 5px rgba(0,0,0,.18);font-size:10px;color:var(--primary-text-color,#222);pointer-events:auto;";
-    const top=document.createElement("div");
-    top.style.cssText="display:flex;align-items:center;gap:8px;";
-    const label=document.createElement("strong");
-    label.style.flex="1";
-    const sourceLabel=data.trace.source==="message"?"Rota da mensagem":data.trace.source==="history"?"Trace histórico":"Último Trace";
-    label.textContent=sourceLabel+" · "+String(data.trace.target?.adv_name||data.trace.target?.pubkey_prefix||"Nó");
-    const history=document.createElement("button");
-    history.type="button";history.textContent="Histórico";
-    history.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
-    history.addEventListener("click",()=>void this.__toggleTraceHistory());
-    const clear=document.createElement("button");
-    clear.type="button";clear.textContent="Limpar";
-    clear.style.cssText="border:0;background:transparent;color:var(--primary-color,#03a9f4);font:inherit;font-weight:700;cursor:pointer;";
-    clear.addEventListener("click",()=>this.__clearLastTrace());
-    top.append(label,history,clear);
-    const detail=document.createElement("div");
-    const parts=[data.trace.result.response_time||((data.trace.result.round_trip_ms||0)+"ms"),String(data.trace.result.hops||0)+" hops"];
-    if(data.segments.length){
-      const total=data.totalDistanceKm;
-      parts.push("Distância "+(total>=10?total.toFixed(1):total.toFixed(2))+" km");
-    }
-    if(Number.isFinite(Number(data.trace.result.final_snr)))parts.push("SNR "+Number(data.trace.result.final_snr).toFixed(1)+" dB");
-    if(data.unresolved.length)parts.push(data.unresolved.length+" hash não resolvido"+(data.unresolved.length===1?"":"s"));
-    detail.textContent=parts.join(" · ");
-    detail.style.cssText="margin-top:3px;color:var(--secondary-text-color,#666);";
-    summary.append(top,detail);
-    if(data.segments.length){
-      const segmentLine=document.createElement("div");
-      segmentLine.textContent=data.segments.map((segment)=>{
-        const km=segment.km;
-        return segment.from+" → "+segment.to+" "+(km>=10?km.toFixed(1):km.toFixed(2))+" km";
-      }).join(" · ");
-      segmentLine.style.cssText="margin-top:3px;font-size:9px;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
-      summary.appendChild(segmentLine);
-    }
-    if(data.unresolved.length){
-      const hashes=document.createElement("div");
-      hashes.textContent="Sem GPS/ambíguos: "+data.unresolved.join(", ");
-      hashes.style.cssText="margin-top:3px;font:9px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--secondary-text-color,#777);overflow-wrap:anywhere;";
-      summary.appendChild(hashes);
-    }
-    pane.appendChild(summary);
+    // Route history is deliberately detached from the base map. ROTAS opens
+    // its own history UI, so no overlay can replace map layers or markers.
+    this.__traceRouteLayer=null;
+    this.__nodesMapPane?.querySelector(".hive-trace-summary")?.remove();
   }
-
 
   async __ensureMapLoaded() {
     if (customElements.get("ha-map")) return true;
@@ -5788,20 +5722,21 @@ class HiveFWPanel extends BasePanel {
   }
 
   __removeActivityHeatmapLayer() {
-    this.__activityHeatmapLayer=null;
     this.__activityHeatmapVisible=false;
-    this.__nodesMapPane?.querySelector(".hive-activity-legend")?.remove();
-    const contacts=this.__validMapContacts();
-    this.__applyPublicMapLocations(contacts);
+    if(this.__activityHeatmapLayer?.isConnected)this.__activityHeatmapLayer.remove();
+    this.__activityHeatmapLayer=null;
+    this.__nodesMapPane?.querySelector(".hive-activity-overlay")?.remove();
+    const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
+    this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
 
   __toggleActivityHeatmap() {
-    this.__activityHeatmapVisible=!this.__activityHeatmapVisible;
-    if(!this.__activityHeatmapVisible){
+    if(this.__activityHeatmapVisible){
       this.__removeActivityHeatmapLayer();
-    }else{
-      this.__drawActivityHeatmap();
+      return;
     }
+    this.__activityHeatmapVisible=true;
+    this.__drawActivityHeatmap();
     const page=this.shadowRoot?.querySelector("meshcore-nodes-page");
     this.__syncNodeMapMenuState(page?.shadowRoot?.querySelector(".header-actions"));
   }
@@ -5809,15 +5744,69 @@ class HiveFWPanel extends BasePanel {
   __drawActivityHeatmap() {
     if(!this.__activityHeatmapVisible)return;
     const pane=this.__nodesMapPane;
-    if(!pane)return;
-    this.__activityHeatmapLayer=true;
-    this.__applyPublicMapLocations(this.__validMapContacts());
-    pane.querySelector(".hive-activity-legend")?.remove();
+    if(!pane?.isConnected)return;
 
-    const legend=document.createElement("div");
-    legend.className="hive-activity-legend";
-    legend.textContent="Atividade · círculos maiores = mais RX + TX + aparições em paths · histórico local HiveFW · sem tráfego RF";
-    pane.appendChild(legend);
+    pane.querySelector(".hive-activity-overlay")?.remove();
+
+    const rows=this.__validMapContacts()
+      .map((contact)=>{
+        const activity=this.__peerActivityFor(contact);
+        const score=(activity.rx||0)+(activity.tx||0)+(activity.linkVolume||0);
+        return {contact,activity,score};
+      })
+      .filter((item)=>item.score>0)
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,24);
+
+    const overlay=document.createElement("section");
+    overlay.className="hive-activity-overlay";
+    overlay.style.cssText="position:absolute;right:12px;top:48px;z-index:44;width:min(360px,calc(100% - 24px));max-height:calc(100% - 64px);overflow:auto;padding:10px;border:1px solid var(--divider-color,#ccc);border-radius:10px;background:color-mix(in srgb,var(--card-background-color,#fff) 96%,transparent);box-shadow:0 3px 14px rgba(0,0,0,.20);font-size:11px;color:var(--primary-text-color,#222);";
+
+    const header=document.createElement("div");
+    header.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:6px;";
+    const title=document.createElement("strong");
+    title.textContent="Atividade observada";
+    title.style.flex="1";
+    const close=document.createElement("button");
+    close.type="button";
+    close.textContent="✕";
+    close.title="Fechar";
+    close.style.cssText="border:0;background:transparent;color:var(--secondary-text-color,#666);cursor:pointer;font:inherit;";
+    close.addEventListener("click",()=>this.__removeActivityHeatmapLayer());
+    header.append(title,close);
+    overlay.appendChild(header);
+
+    const hint=document.createElement("div");
+    hint.textContent="RX + TX + aparições em paths · histórico local · sem alterar o mapa";
+    hint.style.cssText="margin-bottom:6px;color:var(--secondary-text-color,#666);font-size:9px;";
+    overlay.appendChild(hint);
+
+    if(!rows.length){
+      const empty=document.createElement("div");
+      empty.textContent="Ainda sem atividade local suficiente.";
+      empty.style.color="var(--secondary-text-color,#666)";
+      overlay.appendChild(empty);
+    }else{
+      for(const item of rows){
+        const row=document.createElement("button");
+        row.type="button";
+        row.style.cssText="display:flex;width:100%;align-items:center;gap:8px;padding:7px 5px;border:0;border-top:1px solid var(--divider-color,#eee);background:transparent;color:inherit;text-align:left;cursor:pointer;";
+        const name=document.createElement("span");
+        name.style.cssText="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+        name.textContent=String(item.contact.adv_name||item.contact.pubkey_prefix||"Nó");
+        const value=document.createElement("strong");
+        value.textContent=String(item.score);
+        row.append(name,value);
+        row.addEventListener("click",()=>{
+          this.__focusNodeOnMap(item.contact,true);
+          this.__removeActivityHeatmapLayer();
+        });
+        overlay.appendChild(row);
+      }
+    }
+
+    pane.appendChild(overlay);
+    this.__activityHeatmapLayer=overlay;
   }
 
   __resolveTopologyHash(hash) {
