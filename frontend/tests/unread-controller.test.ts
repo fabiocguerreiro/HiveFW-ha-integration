@@ -19,7 +19,7 @@ function oldConvListGetUnreadCount(
   nodePrefix: string | null,
 ): number {
   const channelNeedle = nodePrefix
-    ? `meshcore_${nodePrefix}_ch_${id}_messages`
+    ? `hivefw_${nodePrefix}_ch_${id}_messages`
     : null;
   for (const [entityId, count] of Object.entries(unreadCounts)) {
     if (count <= 0) continue;
@@ -51,7 +51,7 @@ function oldChatPageGetUnreadCountForSelected(
     if (count <= 0) continue;
     if (/^\d+$/.test(selectedId)) {
       if (nodePrefix) {
-        if (entityId.endsWith(`meshcore_${nodePrefix}_ch_${selectedId}_messages`))
+        if (entityId.endsWith(`hivefw_${nodePrefix}_ch_${selectedId}_messages`))
           return count;
       } else if (entityId.endsWith(`_ch_${selectedId}_messages`)) {
         return count;
@@ -68,11 +68,11 @@ function oldChatPageGetUnreadCountForSelected(
 // different upstream entries (entry independence), a zero-count
 // channel entry, a contact entry, and an unrelated channel.
 const FIXTURE: Record<string, number> = {
-  'binary_sensor.meshcore_aa1234_ch_1_messages': 3,
-  'binary_sensor.meshcore_bb5678_ch_1_messages': 9,
-  'binary_sensor.meshcore_aa1234_ch_2_messages': 0,
-  'binary_sensor.meshcore_aa1234_deadbe_messages': 5,
-  'binary_sensor.meshcore_aa1234_ch_7_messages': 4,
+  'binary_sensor.hivefw_aa1234_ch_1_messages': 3,
+  'binary_sensor.hivefw_bb5678_ch_1_messages': 9,
+  'binary_sensor.hivefw_aa1234_ch_2_messages': 0,
+  'binary_sensor.hivefw_aa1234_deadbe_messages': 5,
+  'binary_sensor.hivefw_aa1234_ch_7_messages': 4,
 };
 
 function seeded(counts: Record<string, number> = FIXTURE): UnreadController {
@@ -140,9 +140,9 @@ describe('UnreadController — counts identity', () => {
   });
 
   it('counts identity changes on clearEntity (when it mutates)', () => {
-    const c = seeded({ 'binary_sensor.meshcore_aa1234_ch_1_messages': 3 });
+    const c = seeded({ 'binary_sensor.hivefw_aa1234_ch_1_messages': 3 });
     const before = c.counts;
-    c.clearEntity('binary_sensor.meshcore_aa1234_ch_1_messages');
+    c.clearEntity('binary_sensor.hivefw_aa1234_ch_1_messages');
     expect(c.counts).not.toBe(before);
   });
 
@@ -154,13 +154,13 @@ describe('UnreadController — counts identity', () => {
   });
 
   it('clearEntity is a no-op (no identity change, no notify) for an absent / zero entity', () => {
-    const c = seeded({ 'binary_sensor.meshcore_aa1234_ch_1_messages': 0 });
+    const c = seeded({ 'binary_sensor.hivefw_aa1234_ch_1_messages': 0 });
     const cb = vi.fn();
     c.subscribe(cb);
     const before = c.counts;
 
-    c.clearEntity('binary_sensor.meshcore_aa1234_ch_1_messages'); // zero count
-    c.clearEntity('binary_sensor.meshcore_does_not_exist_messages'); // absent
+    c.clearEntity('binary_sensor.hivefw_aa1234_ch_1_messages'); // zero count
+    c.clearEntity('binary_sensor.hivefw_does_not_exist_messages'); // absent
 
     expect(c.counts).toBe(before);
     expect(cb).not.toHaveBeenCalled();
@@ -182,30 +182,30 @@ describe('UnreadController — ingestBackendData', () => {
     c.ingestBackendData(
       {
         unread: {
-          'binary_sensor.meshcore_aa1234_ch_1_messages': 7,
-          'binary_sensor.meshcore_aa1234_ch_2_messages': 2,
+          'binary_sensor.hivefw_aa1234_ch_1_messages': 7,
+          'binary_sensor.hivefw_aa1234_ch_2_messages': 2,
         },
         last_read: {},
       },
-      'binary_sensor.meshcore_aa1234_ch_1_messages',
+      'binary_sensor.hivefw_aa1234_ch_1_messages',
     );
-    expect(c.counts['binary_sensor.meshcore_aa1234_ch_1_messages']).toBe(7);
-    expect(c.counts['binary_sensor.meshcore_aa1234_ch_2_messages']).toBe(2);
+    expect(c.counts['binary_sensor.hivefw_aa1234_ch_1_messages']).toBe(7);
+    expect(c.counts['binary_sensor.hivefw_aa1234_ch_2_messages']).toBe(2);
   });
 
   it('leaves counts untouched when the active entity is null or absent', () => {
     const c = new UnreadController();
     c.ingestBackendData(
-      { unread: { 'binary_sensor.meshcore_aa1234_ch_1_messages': 7 }, last_read: {} },
+      { unread: { 'binary_sensor.hivefw_aa1234_ch_1_messages': 7 }, last_read: {} },
       null,
     );
-    expect(c.counts['binary_sensor.meshcore_aa1234_ch_1_messages']).toBe(7);
+    expect(c.counts['binary_sensor.hivefw_aa1234_ch_1_messages']).toBe(7);
 
     c.ingestBackendData(
-      { unread: { 'binary_sensor.meshcore_aa1234_ch_1_messages': 7 }, last_read: {} },
-      'binary_sensor.meshcore_not_in_map_messages',
+      { unread: { 'binary_sensor.hivefw_aa1234_ch_1_messages': 7 }, last_read: {} },
+      'binary_sensor.hivefw_not_in_map_messages',
     );
-    expect(c.counts['binary_sensor.meshcore_aa1234_ch_1_messages']).toBe(7);
+    expect(c.counts['binary_sensor.hivefw_aa1234_ch_1_messages']).toBe(7);
   });
 
   it('does not retain a reference to the caller-supplied payload maps', () => {
@@ -266,7 +266,7 @@ describe('UnreadController — badgeCount matches the two pre-refactor impls', (
 
   it('chat-page parity — direct-key fast path hit', () => {
     const c = seeded();
-    const directKey = 'binary_sensor.meshcore_aa1234_ch_1_messages';
+    const directKey = 'binary_sensor.hivefw_aa1234_ch_1_messages';
     expect(c.badgeCount('1', 'aa1234', directKey)).toBe(
       oldChatPageGetUnreadCountForSelected(FIXTURE, '1', directKey, 'aa1234'),
     );
@@ -275,7 +275,7 @@ describe('UnreadController — badgeCount matches the two pre-refactor impls', (
 
   it('chat-page parity — direct-key present but zero falls through to the pattern loop', () => {
     const c = seeded();
-    const directKey = 'binary_sensor.meshcore_aa1234_ch_2_messages'; // count 0 in FIXTURE
+    const directKey = 'binary_sensor.hivefw_aa1234_ch_2_messages'; // count 0 in FIXTURE
     expect(c.badgeCount('2', 'aa1234', directKey)).toBe(
       oldChatPageGetUnreadCountForSelected(FIXTURE, '2', directKey, 'aa1234'),
     );
@@ -296,8 +296,8 @@ describe('UnreadController — mark-read-requested plumbing', () => {
     const c = new UnreadController();
     const handler = vi.fn();
     c.onMarkReadRequested(handler);
-    c.requestMarkRead('binary_sensor.meshcore_aa1234_ch_1_messages');
-    expect(handler).toHaveBeenCalledWith('binary_sensor.meshcore_aa1234_ch_1_messages');
+    c.requestMarkRead('binary_sensor.hivefw_aa1234_ch_1_messages');
+    expect(handler).toHaveBeenCalledWith('binary_sensor.hivefw_aa1234_ch_1_messages');
   });
 
   it('requestMarkRead is a safe no-op when no handler is registered', () => {
@@ -320,8 +320,8 @@ describe('UnreadController — mark-read-requested plumbing', () => {
 // assertions deterministic (vitest fakes `Date.now()` alongside
 // `setTimeout`).
 
-const E = 'binary_sensor.meshcore_aa1234_ch_1_messages';
-const E2 = 'binary_sensor.meshcore_bb5678_ch_1_messages';
+const E = 'binary_sensor.hivefw_aa1234_ch_1_messages';
+const E2 = 'binary_sensor.hivefw_bb5678_ch_1_messages';
 
 // Render-item fixtures. `groupMessages` (message-parser.ts) splits on
 // sender change, so a render group is single-sender and `isOutgoing`
